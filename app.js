@@ -10,12 +10,11 @@ let advantagesDisplayList = typeof ADVANTAGES_LIST !== 'undefined' ? [...ADVANTA
 
 
 // --- EFFECT TYPE TO ALLOWED MODIFIERS FILTER ---
-const PROGRESSION_MODS = [
+const PROGRESSION_EXTRAS = [
   "Progression", "Progression (Area)", "Progression (Duration)", "Progression (Mass)", "Progression (Range)", "Progression (Targets)"
 ];
 
 const UNIVERSAL_FEATS = [
-  ...PROGRESSION_MODS,
   "Innate", "Precise", "Reversible", "Slow Fade", "Subtle", "Transmutation", "Triggered", "Variable Descriptor"
 ];
 
@@ -24,41 +23,48 @@ const MODIFIER_CATEGORY_MAP = {
     "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Insubstantial", "Affects Objects", "Alternate Save", "Area", "Aura", "Autofire", "Contagious", "Disease", "Duration (Extra)", "Duration (Flaw)", "Linked", "No Saving Throw", "Penetrating", "Poison", "Range (Extra)", "Range (Flaw)", "Reaction", "Secondary Effect", "Selective Attack", "Sleep", "Targeted", "Vampiric", "Continuous", "Sustained",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Full Power", "Grab-Based", "Inaccurate", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
     "Accurate", "Dimensional", "Extended Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Tether", "Thrown",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Defense: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
     "Affects Insubstantial", "Dimensional",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Movement: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
     "Accurate", "Dimensional", "Extended Reach", "Terminal Velocity",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Sensory: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Range (Extra)", "Range (Flaw)", "Reaction", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
     "Dimensional", "Extended Reach",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Control: [
     "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Insubstantial", "Affects Objects", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Range (Extra)", "Range (Flaw)", "Reaction", "Secondary Effect", "Selective Attack", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Limited", "Noticeable", "Permanent", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
     "Accurate", "Dimensional", "Extended Reach", "Homing", "Improved Range", "Indirect", "Ricochet", "Split Attack", "Tether",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Alteration: [
     "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
     "Accurate", "Affects Insubstantial", "Dimensional", "Extended Reach", "Incurable", "Mighty",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   General: [
     "Action (Extra)", "Action (Flaw)", "Check Required", "Continuous", "Distracting", "Duration (Extra)", "Duration (Flaw)", "Fades", "Independent", "Linked", "Noticeable", "Permanent", "Personal", "Reaction", "Require Material", "Sense-Dependent", "Side-Effect", "Sustained", "Tiring", "Total Fade", "Touch", "Unreliable", "Limited",
     "Accurate", "Affects Insubstantial", "Dimensional", "Extended Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Terminal Velocity", "Tether", "Thrown",
+    ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ]
 };
@@ -2295,24 +2301,9 @@ function buildPowersUI() {
             return specificNames.some(sn => sn === genericName || sn.startsWith(genericName + " ("));
         };
 
-        let availableRootExtras = allowedRootMods.filter(m => (m.category === 'extra' || m.name.startsWith("Progression")) && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
+        let availableRootExtras = allowedRootMods.filter(m => m.category === 'extra' && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
         let availableRootFlaws = allowedRootMods.filter(m => m.category === 'flaw' && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
-        let availableRootFeats = allowedRootMods.filter(m => (m.category === 'feat' || m.name.startsWith("Progression")) && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
-
-        // Deduplicate in case a modifier is defined under both extra and feat
-        const seenExtraSet = new Set();
-        availableRootExtras = availableRootExtras.filter(m => {
-          if (seenExtraSet.has(m.name)) return false;
-          seenExtraSet.add(m.name);
-          return true;
-        });
-
-        const seenFeatSet = new Set();
-        availableRootFeats = availableRootFeats.filter(m => {
-          if (seenFeatSet.has(m.name)) return false;
-          seenFeatSet.add(m.name);
-          return true;
-        });
+        let availableRootFeats = allowedRootMods.filter(m => m.category === 'feat' && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
 
         let smartMods = window.generateSmartModifiers(effect);
         smartMods.extras.forEach(sm => {
@@ -3359,7 +3350,7 @@ window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
     ranks: 1,
     cost: modData.cost,
     costType: modData.costType,
-    category: modName.startsWith("Progression") ? (selectElemId.includes("Extra") ? "extra" : "feat") : (modData.category || chosenCategory)
+    category: modData.category || chosenCategory
   });
   sel.value = "";
   if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("add_modifier");

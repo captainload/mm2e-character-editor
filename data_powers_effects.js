@@ -1853,7 +1853,7 @@ const POWER_EFFECTS_LIST = [
         "name": "Turnabout",
         "cost": 1,
         "costType": "flat",
-        "category": "feat",
+        "category": "extra",
         "hasRanks": false,
         "fullText": "<p>Teleport, take an action, and teleport back.</p>"
       },
@@ -1861,7 +1861,7 @@ const POWER_EFFECTS_LIST = [
         "name": "Change Direction",
         "cost": 1,
         "costType": "flat",
-        "category": "feat",
+        "category": "extra",
         "hasRanks": false,
         "fullText": "<p>Change orientation upon arrival.</p>"
       },
@@ -1869,7 +1869,7 @@ const POWER_EFFECTS_LIST = [
         "name": "Change Velocity",
         "cost": 1,
         "costType": "flat",
-        "category": "feat",
+        "category": "extra",
         "hasRanks": false,
         "fullText": "<p>Arrive at rest.</p>"
       },

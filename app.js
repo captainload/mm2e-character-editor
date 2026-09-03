@@ -2321,9 +2321,35 @@ function buildPowersUI() {
         availableRootFlaws.sort((a, b) => a.name.localeCompare(b.name));
         availableRootFeats.sort((a, b) => a.name.localeCompare(b.name));
         
-        let availableSpecificExtras = specificExtras.filter(m => !existingModNames.includes(m.name));
-        let availableSpecificFlaws = specificFlaws.filter(m => !existingModNames.includes(m.name));
-        let availableSpecificFeats = specificFeats.filter(m => !existingModNames.includes(m.name));
+        const seenSpecExtra = new Set();
+        let availableSpecificExtras = [];
+        for (const m of specificExtras) {
+            if (!existingModNames.includes(m.name) && !seenSpecExtra.has(m.name)) {
+                seenSpecExtra.add(m.name);
+                availableSpecificExtras.push(m);
+            }
+        }
+        availableSpecificExtras.sort((a, b) => a.name.localeCompare(b.name));
+
+        const seenSpecFlaw = new Set();
+        let availableSpecificFlaws = [];
+        for (const m of specificFlaws) {
+            if (!existingModNames.includes(m.name) && !seenSpecFlaw.has(m.name)) {
+                seenSpecFlaw.add(m.name);
+                availableSpecificFlaws.push(m);
+            }
+        }
+        availableSpecificFlaws.sort((a, b) => a.name.localeCompare(b.name));
+
+        const seenSpecFeat = new Set();
+        let availableSpecificFeats = [];
+        for (const m of specificFeats) {
+            if (!existingModNames.includes(m.name) && !seenSpecFeat.has(m.name)) {
+                seenSpecFeat.add(m.name);
+                availableSpecificFeats.push(m);
+            }
+        }
+        availableSpecificFeats.sort((a, b) => a.name.localeCompare(b.name));
 
         let rootModifiersHtml = "";
         if (effect.modifiers && effect.modifiers.length > 0) {
@@ -2332,9 +2358,10 @@ function buildPowersUI() {
             if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
               modData = POWER_MODIFIERS_LIST.find(m => m.name === mod.name);
             }
+            if (!modData && effectData && effectData.uniqueModifiers) modData = effectData.uniqueModifiers.find(m => m.name === mod.name);
             if (!modData && effectData && effectData.specificExtras) modData = effectData.specificExtras.find(m => m.name === mod.name);
             if (!modData && effectData && effectData.specificFlaws) modData = effectData.specificFlaws.find(m => m.name === mod.name);
-            if (!modData) modData = { name: mod.name, cost: 1, costType: "flat", category: "extra", hasRanks: false };
+            if (!modData) modData = { name: mod.name, cost: mod.cost !== undefined ? mod.cost : 1, costType: mod.costType || "flat", category: mod.category || "extra", hasRanks: false };
 
             modData = JSON.parse(JSON.stringify(modData));
             const isPositive = (modData.category === "extra" || modData.category === "feat" || (effectData && effectData.specificExtras && effectData.specificExtras.some(e => e.name === mod.name)) || (effectData && effectData.specificFeats && effectData.specificFeats.some(e => e.name === mod.name)));
@@ -3344,13 +3371,13 @@ window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
   if (!modData) modData = { name: modName, cost: 1, costType: "flat", category: "extra" };
 
   if (!effect.modifiers) effect.modifiers = [];
-  const chosenCategory = selectElemId.includes("Extra") ? "extra" : (selectElemId.includes("Flaw") ? "flaw" : (modData ? modData.category : "feat"));
+  const chosenCategory = selectElemId.includes("Extra") ? "extra" : (selectElemId.includes("Flaw") ? "flaw" : "feat");
   effect.modifiers.push({
     name: modName,
     ranks: 1,
-    cost: modData.cost,
-    costType: modData.costType,
-    category: modData.category || chosenCategory
+    cost: modData.cost !== undefined ? modData.cost : 1,
+    costType: modData.costType || "flat",
+    category: chosenCategory
   });
   sel.value = "";
   if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("add_modifier");

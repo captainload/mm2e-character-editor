@@ -1841,7 +1841,7 @@ const POWER_EFFECTS_LIST = [
         "costType": "flat",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>You and a willing subject trade places.</p>"
+        "fullText": "<p>You and a willing subject within your teleport range instantly trade places when you teleport.</p>"
       },
       {
         "name": "Portal",
@@ -1849,7 +1849,7 @@ const POWER_EFFECTS_LIST = [
         "costType": "per_rank",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>Creates a portal others can pass through.</p>"
+        "fullText": "<p>You open a portal or gateway between two points as a free action. The portal is 5-ft.-by-5.ft. in size. Anyone stepping through (a move action) is transported. The portal remains open as long as you concentrate. You can apply Progression feats to increase the size of your portal.</p>"
       },
       {
         "name": "Turnabout",
@@ -1857,7 +1857,7 @@ const POWER_EFFECTS_LIST = [
         "costType": "flat",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>Teleport, take an action, and teleport back.</p>"
+        "fullText": "<p>You can teleport, take a standard action (such as an attack or skill check), and teleport back to your starting point in a single round, so long as the total distance traveled does not exceed your maximum range. This is Teleport’s version of the Move-by Action feat.</p>"
       },
       {
         "name": "Change Direction",
@@ -1865,7 +1865,7 @@ const POWER_EFFECTS_LIST = [
         "costType": "flat",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>Change orientation upon arrival.</p>"
+        "fullText": "<p>You can change your direction or orientation after a teleport, allowing you to arrive facing any direction you choose.</p>"
       },
       {
         "name": "Change Velocity",
@@ -1873,15 +1873,15 @@ const POWER_EFFECTS_LIST = [
         "costType": "flat",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>Arrive at rest.</p>"
+        "fullText": "<p>You can teleport “at rest” to your destination. Among other things, this means you can teleport out of a free fall and suffer no damage.</p>"
       },
       {
         "name": "Easy",
         "cost": 1,
-        "costType": "per_rank",
+        "costType": "flat",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>You are not dazed after an extended teleport.</p>"
+        "fullText": "<p>You are not disoriented when making full-round extended teleports; you retain your dodge bonus to Defense for the round after arriving at your destination.</p>"
       },
       {
         "name": "Extended",
@@ -1889,15 +1889,15 @@ const POWER_EFFECTS_LIST = [
         "costType": "per_rank",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>You can make extended teleports.</p>"
+        "fullText": "<p>You can take a full-round action and teleport the distance shown on the Extended Range Table. Ranks in Progression can further increase this extended distance.</p>"
       },
       {
         "name": "Long-Range",
-        "cost": 1,
+        "cost": -1,
         "costType": "per_rank",
-        "category": "extra",
+        "category": "flaw",
         "hasRanks": false,
-        "fullText": "<p>Base range is multiplied by 10.</p>"
+        "fullText": "<p>You can only teleport your extended range distance as a full-round action. You can’t make ranged teleports as a move action.</p>"
       },
       {
         "name": "Short-Range",
@@ -1905,7 +1905,7 @@ const POWER_EFFECTS_LIST = [
         "costType": "per_rank",
         "category": "flaw",
         "hasRanks": false,
-        "fullText": "<p>You can only teleport short distances.</p>"
+        "fullText": "<p>You can’t make extended range teleports; you can only teleport short distances as a move action.</p>"
       },
       {
         "name": "Medium",
@@ -1913,7 +1913,7 @@ const POWER_EFFECTS_LIST = [
         "costType": "per_rank",
         "category": "flaw",
         "hasRanks": false,
-        "fullText": "<p>You require a medium to teleport.</p>"
+        "fullText": "<p>You require a medium for your teleportation, such as electrical or telephone wires, root structures, waterways, shadows, flames, mirrors, and so forth. You can only teleport from and to locations where your medium exists.</p>"
       }
     ]
   },

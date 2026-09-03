@@ -26,10 +26,12 @@ function generatePrintSheet() {
         { key: 'CHA', name: 'Charisma' }
     ];
     abilities.forEach(ab => {
-        let total = char.getAbilityTotal ? char.getAbilityTotal(ab.key) : (parseInt(char.abilities[ab.key]) || 0); 
-        let isAbsent = char.absentAbilities[ab.key];
+        let total = char.getAbilityRank ? char.getAbilityRank(ab.key) : (parseInt(char.abilities[ab.key]) || 0); 
+        let enhVal = (char.enhancedTraits && char.enhancedTraits.abilities && char.enhancedTraits.abilities[ab.key]) || 0;
+        let isAbsent = char.absentAbilities && char.absentAbilities[ab.key];
         let displayTotal = isAbsent ? "—" : total;
-        let breakdown = isAbsent ? "Absent / Disabled" : "Base points only";
+        let baseVal = char.getBaseAbilityRank ? char.getBaseAbilityRank(ab.key) : (parseInt(char.abilities[ab.key]) || 0);
+        let breakdown = isAbsent ? "Absent / Disabled" : (enhVal > 0 ? `Base ${baseVal} + Enhanced ${enhVal}` : "Base points only");
 
         html += `
             <div class="print-row" style="padding: 4px 0;">
@@ -48,9 +50,10 @@ function generatePrintSheet() {
     html += `<div class="print-box">`;
     html += `<div class="print-box-title">Combat & Initiative</div>`;
     
-    const impInit = char.feats["Improved Initiative"] || 0;
-    const dexRank = parseInt(char.abilities.DEX) || 0;
-    let initTotal = char.getInitiativeTotal ? char.getInitiativeTotal() : (dexRank + (impInit * 4));
+    const derived = char.derivedStats || {};
+    const impInit = (char.effectiveFeats || char.feats)["Improved Initiative"] || 0;
+    const dexRank = char.getAbilityRank ? (char.getAbilityRank("DEX") || 0) : (parseInt(char.abilities.DEX) || 0);
+    let initTotal = derived.initiative !== undefined ? derived.initiative : (dexRank + (impInit * 4));
     let initBreakdown = `DEX (${dexRank}) + Imp Initiative (+${impInit * 4})`;
 
     html += `
@@ -63,12 +66,13 @@ function generatePrintSheet() {
     `;
     
     html += `<div class="print-col-header" style="margin-top: 8px;"><span>Attack</span><span>Bonus</span></div>`;
-    let derived = char.derivedStats || {};
-    let atkMod = parseInt(char.combat.ATK) || 0;
+    let baseAtk = char.getBaseCombatRank ? char.getBaseCombatRank("ATK") : (parseInt(char.combat.ATK) || 0);
+    let enhAtk = (char.enhancedTraits && char.enhancedTraits.combat && char.enhancedTraits.combat.ATK) || 0;
+    let atkMod = baseAtk + enhAtk;
     let meleeBonus = derived.meleeAttack !== undefined ? derived.meleeAttack : atkMod;
     let rangedBonus = derived.rangedAttack !== undefined ? derived.rangedAttack : atkMod;
-    let meleeBreakdown = `ATK (${atkMod})` + (derived.meleeAtkFeat ? ` + Attack Focus: Melee (${derived.meleeAtkFeat})` : '');
-    let rangedBreakdown = `ATK (${atkMod})` + (derived.rangedAtkFeat ? ` + Attack Focus: Ranged (${derived.rangedAtkFeat})` : '');
+    let meleeBreakdown = `ATK (${baseAtk}${enhAtk > 0 ? ` + Enhanced ${enhAtk}` : ''})` + (derived.meleeAtkFeat ? ` + Attack Focus: Melee (${derived.meleeAtkFeat})` : '');
+    let rangedBreakdown = `ATK (${baseAtk}${enhAtk > 0 ? ` + Enhanced ${enhAtk}` : ''})` + (derived.rangedAtkFeat ? ` + Attack Focus: Ranged (${derived.rangedAtkFeat})` : '');
 
     html += `
         <div class="print-row" style="padding: 4px 0;">
@@ -112,17 +116,20 @@ function generatePrintSheet() {
     html += `<div class="print-box-title">Defenses</div>`;
     html += `<div class="print-col-header"><span>Defense</span><span>Total</span></div>`;
     
+    const effFeats = char.effectiveFeats || char.feats || {};
     const pMods = char.powerTraitModifiers || { protectionToughness: 0 };
-    const defRoll = char.feats["Defensive Roll"] || 0;
-    const dodgeFocus = char.feats["Dodge Focus"] || 0;
-    const defRank = char.combat.DEF || 0;
+    const defRoll = effFeats["Defensive Roll"] || 0;
+    const dodgeFocus = derived.dodgeFocusRanks || effFeats["Dodge Focus"] || 0;
+    const baseDef = char.getBaseCombatRank ? char.getBaseCombatRank("DEF") : (char.combat.DEF || 0);
+    const enhDef = (char.enhancedTraits && char.enhancedTraits.combat && char.enhancedTraits.combat.DEF) || 0;
+    const defRank = baseDef + enhDef;
 
     let defClass = derived.defenseClass || (10 + defRank + dodgeFocus);
     let totalDef = derived.totalDefense !== undefined ? derived.totalDefense : (defRank + dodgeFocus);
     let flatDef = derived.flatFootedDefense !== undefined ? derived.flatFootedDefense : defRank;
 
-    let conRank = parseInt(char.abilities.CON) || 0;
-    let wisRank = parseInt(char.abilities.WIS) || 0;
+    let conRank = char.getAbilityRank ? (char.getAbilityRank("CON") || 0) : (parseInt(char.abilities.CON) || 0);
+    let wisRank = char.getAbilityRank ? (char.getAbilityRank("WIS") || 0) : (parseInt(char.abilities.WIS) || 0);
     let isAbsentCon = char.absentAbilities && char.absentAbilities.CON;
     let isAbsentWis = char.absentAbilities && char.absentAbilities.WIS;
 
@@ -130,27 +137,27 @@ function generatePrintSheet() {
     let refBought = parseInt(char.purchasedResistances.Reflex) || 0;
     let willBought = parseInt(char.purchasedResistances.Will) || 0;
 
-    let fortTotal = isAbsentCon ? "—" : (conRank + fortBought);
-    let fortBreakdown = isAbsentCon ? "Absent CON" : `CON (${conRank}) + Bought (${fortBought})`;
+    let fortTotal = derived.fortitude !== undefined ? (derived.fortitude === null ? "—" : derived.fortitude) : (isAbsentCon ? "—" : (conRank + fortBought));
+    let fortBreakdown = isAbsentCon ? "Absent CON" : `CON (${conRank}) + Bought (${fortBought})${pMods.enhancedFortitude ? ` + Enhanced (${pMods.enhancedFortitude})` : ''}`;
 
-    let refTotal = dexRank + refBought;
-    let refBreakdown = `DEX (${dexRank}) + Bought (${refBought})`;
+    let refTotal = derived.reflex !== undefined ? (derived.reflex === null ? "—" : derived.reflex) : (dexRank + refBought);
+    let refBreakdown = `DEX (${dexRank}) + Bought (${refBought})${pMods.enhancedReflex ? ` + Enhanced (${pMods.enhancedReflex})` : ''}`;
 
-    let willTotal = isAbsentWis ? "—" : (wisRank + willBought);
-    let willBreakdown = isAbsentWis ? "Absent WIS" : `WIS (${wisRank}) + Bought (${willBought})`;
+    let willTotal = derived.will !== undefined ? (derived.will === null ? "—" : derived.will) : (isAbsentWis ? "—" : (wisRank + willBought));
+    let willBreakdown = isAbsentWis ? "Absent WIS" : `WIS (${wisRank}) + Bought (${willBought})${pMods.enhancedWill ? ` + Enhanced (${pMods.enhancedWill})` : ''}`;
 
-    const hasUncannyDodge = derived.hasUncannyDodge || (char.feats["Uncanny Dodge"] || 0) > 0;
+    const hasUncannyDodge = derived.hasUncannyDodge || effFeats["Uncanny Dodge"] > 0;
     let flatDefBreakdown = hasUncannyDodge 
-        ? `DEF (${defRank}) + Dodge Focus (${dodgeFocus}) [Retained via Uncanny Dodge]` 
-        : `DEF (${defRank}) [No Dodge bonus]`;
+        ? `DEF (${baseDef}${enhDef > 0 ? ` + Enh ${enhDef}` : ''}) + Dodge Focus (${dodgeFocus}) [Retained via Uncanny Dodge]` 
+        : `DEF (${baseDef}${enhDef > 0 ? ` + Enh ${enhDef}` : ''}) [No Dodge bonus]`;
 
-    let toughTotal = isAbsentCon ? "—" : (conRank + defRoll + (pMods.protectionToughness || 0));
+    let toughTotal = derived.toughness !== undefined ? derived.toughness : (isAbsentCon ? "—" : (conRank + defRoll + (pMods.protectionToughness || 0)));
     let defRollNote = defRoll > 0 ? (hasUncannyDodge ? " [Retained via Uncanny Dodge]" : "") : "";
     let toughBreakdown = isAbsentCon ? "Absent CON" : `CON (${conRank}) + Def Roll (${defRoll}${defRollNote}) + Protection (${pMods.protectionToughness || 0})`;
 
     const printDefenses = [
         { name: 'Defense Class', total: defClass, breakdown: `Base (10 + Total Defense ${totalDef}) [Flat-Footed: ${derived.flatFootedDefenseClass || (10 + flatDef)}]` },
-        { name: 'Total Defense', total: totalDef, breakdown: `DEF (${defRank}) + Dodge Focus (${dodgeFocus})` },
+        { name: 'Total Defense', total: totalDef, breakdown: `DEF (${baseDef}${enhDef > 0 ? ` + Enh ${enhDef}` : ''}) + Dodge Focus (${dodgeFocus})` },
         { name: 'Flat-Footed Defense', total: flatDef, breakdown: flatDefBreakdown },
         { name: 'Toughness', total: toughTotal, breakdown: toughBreakdown },
         { name: 'Fortitude', total: fortTotal, breakdown: fortBreakdown },
@@ -181,15 +188,18 @@ function generatePrintSheet() {
     html += `<div class="print-box">`;
     html += `<div class="print-box-title">Feats</div>`;
     let advsHtml = "";
-    if (char.feats && Object.keys(char.feats).length > 0) {
-        Object.keys(char.feats).forEach(advName => {
-            let rank = parseInt(char.feats[advName]) || 0;
+    const allPrintFeats = char.effectiveFeats || char.feats || {};
+    if (allPrintFeats && Object.keys(allPrintFeats).length > 0) {
+        Object.keys(allPrintFeats).forEach(advName => {
+            let rank = parseInt(allPrintFeats[advName]) || 0;
             if (rank > 0) {
                 let rankStr = rank > 1 ? ` <span class="print-value">Rank ${rank}</span>` : '';
+                let isEnhanced = (char.enhancedTraits && char.enhancedTraits.feats && char.enhancedTraits.feats[advName]) > 0;
+                let enhTag = isEnhanced ? ` <span style="color:#10b981; font-weight:bold;">[Enhanced]</span>` : '';
                 let detail = char.featDetails[advName] ? ` - <span class="print-muted">${char.featDetails[advName]}</span>` : '';
                 advsHtml += `
                     <div style="border-bottom: 1px dotted #ccc; padding: 4px 0; font-size: 13px; break-inside: avoid-column; page-break-inside: avoid;">
-                        <strong>${advName}</strong>${rankStr}${detail}
+                        <strong>${advName}</strong>${rankStr}${enhTag}${detail}
                     </div>
                 `;
             }
@@ -219,17 +229,18 @@ function generatePrintSheet() {
     };
 
     let skillsHtml = "";
-    if (char.skills && Object.keys(char.skills).length > 0) {
-        Object.keys(char.skills).forEach(skName => {
+    const allSkillsToCheck = new Set([...Object.keys(char.skills || {}), ...Object.keys((char.enhancedTraits && char.enhancedTraits.skills) || {})]);
+    if (allSkillsToCheck.size > 0) {
+        Array.from(allSkillsToCheck).sort().forEach(skName => {
             let sR = parseInt(char.skills[skName]) || 0;
-            if (sR > 0) {
+            let enhSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skName]) || 0;
+            if (sR > 0 || enhSkill > 0) {
                 let abKey = abMap[skName] || 'INT';
-                let abMod = char.getAbilityTotal ? char.getAbilityTotal(abKey) : (parseInt(char.abilities[abKey]) || 0);
-                let total = sR + abMod;
+                let abMod = char.getAbilityRank ? (char.getAbilityRank(abKey) || 0) : (parseInt(char.abilities[abKey]) || 0);
+                let total = sR + enhSkill + abMod;
                 let displayName = skName + (char.skillDetails[skName] ? ` (${char.skillDetails[skName]})` : '');
-                
-                // Add skill rank breakdown on the same line
-                let breakdown = `Base ${sR} + ${abKey} ${abMod}`;
+                let enhStr = enhSkill > 0 ? ` + Enh ${enhSkill}` : '';
+                let breakdown = `Base ${sR}${enhStr} + ${abKey} ${abMod}`;
 
                 skillsHtml += `
                     <div class="print-row" style="padding: 4px 0; break-inside: avoid-column; page-break-inside: avoid;">

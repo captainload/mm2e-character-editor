@@ -85,7 +85,42 @@ const POWER_MODIFIERS_LIST = [
   { name: "Thrown", cost: 1, costType: "flat", category: "feat", fullText: "<p>A close range damage power can be thrown as a ranged attack.</p>" },
   { name: "Transmutation", cost: 1, costType: "flat", category: "feat", fullText: "<p>Adds a new descriptor to your power.</p>" },
   { name: "Triggered", cost: 1, costType: "flat", category: "feat", hasRanks: true, maxRanks: 5, fullText: "<p>You can set the power to activate under a specific condition or trigger.</p>" },
-  { name: "Variable Descriptor", cost: 1, costType: "flat", category: "feat", hasRanks: true, maxRanks: 2, tiers: ["Rank 1: Narrow group of descriptors", "Rank 2: Any descriptor"], fullText: "<p>You can change the power's descriptor on the fly as a free action.</p>" }
+  { name: "Variable Descriptor", cost: 1, costType: "flat", category: "feat", hasRanks: true, maxRanks: 2, tiers: ["Rank 1: Narrow group of descriptors", "Rank 2: Any descriptor"], fullText: "<p>You can change the power's descriptor on the fly as a free action.</p>" },
+  
+  // Range & Reach Modifiers
+  { name: "Extended Range", cost: 1, costType: "flat", category: "feat", hasRanks: true, maxRanks: 10, fullText: "<p>Each rank of Extended Range doubles your power’s range increments (moving the short, medium, and long range distances one step up the range progression). For example, a power with base range 25/50/100 ft. becomes 50/100/250 ft. with 1 rank, 100/250/500 ft. with 2 ranks, and so forth.</p>" },
+  { name: "Diminished Range", cost: -1, costType: "flat", category: "flaw", hasRanks: true, maxRanks: 3, fullText: "<p>Each rank of Diminished Range reduces your power’s range increments by one step down the range progression (e.g. standard 25/50/100 ft. becomes 10/25/50 ft. at rank 1, 5/10/25 ft. at rank 2, and 2/5/10 ft. at rank 3). You cannot reduce a power's range below rank 3.</p>" },
+  { name: "Reach", cost: 1, costType: "flat", category: "feat", hasRanks: true, maxRanks: 20, fullText: "<p>Each rank of Reach extends your reach with a touch or close range power by 5 feet. For example, 1 rank allows you to touch or strike a target up to 10 feet away without moving, 2 ranks up to 15 feet away, and so on.</p>" },
+  { name: "Increased Range", cost: 1, costType: "per_rank", category: "extra", hasRanks: true, maxRanks: 2, tiers: ["Rank 1: Close to Ranged", "Rank 2: Ranged to Perception"], fullText: "<p>Increases the operational range of a power by one step per rank: from Personal to Touch/Close, from Touch/Close to Ranged, or from Ranged to Perception range.</p>" },
+  { name: "Reduced Range", cost: -1, costType: "per_rank", category: "flaw", hasRanks: true, maxRanks: 2, tiers: ["Rank 1: Perception to Ranged", "Rank 2: Ranged to Touch"], fullText: "<p>Decreases the operational range of a power by one step per rank: from Perception to Ranged, or from Ranged to Touch/Close range.</p>" },
+  { name: "Perception Range", cost: 1, costType: "per_rank", category: "extra", fullText: "<p>The power operates at Perception range: anywhere you can accurately perceive the target with an accurate sense (such as normal sight), with no range penalties and no attack roll required for attack powers.</p>" },
+  { name: "Ranged", cost: 1, costType: "per_rank", category: "extra", fullText: "<p>Converts a touch or close range power into a ranged power (with standard range increments of rank × 25 ft. / rank × 50 ft. / rank × 100 ft.).</p>" },
+  { name: "Close", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>Reduces a ranged power to close (touch) range, requiring you to touch or enter melee combat with the target to affect them.</p>" },
+  
+  // Movement & Teleport Modifiers
+  { name: "Extended", cost: 1, costType: "per_rank", category: "extra", fullText: "<p>For sensory effects: each rank increases the sense's range increment by a factor of 10 (-1 Notice penalty per 100 ft. at rank 1, per 1,000 ft. at rank 2, etc.). For movement effects (such as Teleport): allows travel over massive distances using the Extended Range Table as a full-round action.</p>" },
+  { name: "Long-Range", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>You can only use your movement or teleportation effect across your extended range distance as a full-round action. You cannot make short-range tactical teleports or movements as a move action.</p>" },
+  { name: "Short-Range", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>You can only make short-range tactical movements or teleports as a move action; you cannot make extended-range movements or teleports.</p>" },
+  { name: "Medium", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>You require a specific medium to use your power (such as electrical or telephone wires, root structures, waterways, shadows, flames, mirrors, etc.). You can only project from and to locations where your medium exists.</p>" },
+  { name: "Easy", cost: 1, costType: "flat", category: "extra", fullText: "<p>You are not disoriented when making full-round extended movements or teleports; you retain your dodge bonus to Defense for the round after arriving at your destination.</p>" },
+  { name: "Turnabout", cost: 1, costType: "flat", category: "extra", fullText: "<p>You can teleport or move, take a standard action (such as an attack or skill check), and teleport or move back to your starting point in a single round, so long as the total distance traveled does not exceed your maximum range.</p>" },
+  { name: "Change Direction", cost: 1, costType: "flat", category: "extra", fullText: "<p>You can change your facing or orientation after a movement or teleportation action, allowing you to face any direction when arriving at your destination.</p>" },
+  { name: "Change Velocity", cost: 1, costType: "flat", category: "extra", fullText: "<p>You arrive “at rest” when you teleport or move. Among other things, this allows you to teleport out of a free fall and suffer no impact or falling damage.</p>" },
+  { name: "Castling", cost: 0, costType: "flat", category: "extra", fullText: "<p>You and a willing subject within your teleport range instantly trade places when you activate this power.</p>" },
+  
+  // Parametric Action & Duration Modifiers
+  { name: "Action (Move)", cost: 1, costType: "per_rank", category: "extra", fullText: "<p>Decreases the action required to activate or use the power to a Move action.</p>" },
+  { name: "Action (Free)", cost: 2, costType: "per_rank", category: "extra", fullText: "<p>Decreases the action required to activate or use the power to a Free action.</p>" },
+  { name: "Action (Reaction)", cost: 3, costType: "per_rank", category: "extra", fullText: "<p>Decreases the action required to activate or use the power to a Reaction in response to a specified trigger.</p>" },
+  { name: "Action (Standard)", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>Increases the action required to activate or use the power to a Standard action.</p>" },
+  { name: "Activation (Move)", cost: -1, costType: "flat", category: "flaw", fullText: "<p>Requires a Move action to activate before the power can be used.</p>" },
+  { name: "Activation (Standard)", cost: -2, costType: "flat", category: "flaw", fullText: "<p>Requires a Standard action to activate before the power can be used.</p>" },
+  { name: "Increased Duration (Concentration)", cost: 1, costType: "per_rank", category: "extra", fullText: "<p>Increases the power’s duration from Instant to Concentration.</p>" },
+  { name: "Increased Duration (Sustained)", cost: 1, costType: "per_rank", category: "extra", fullText: "<p>Increases the power’s duration to Sustained, requiring only a free action each round to maintain.</p>" },
+  { name: "Increased Duration (Continuous)", cost: 2, costType: "per_rank", category: "extra", fullText: "<p>Increases the power’s duration to Continuous; it remains in effect even if you are stunned or rendered unconscious.</p>" },
+  { name: "Decreased Duration (Instant)", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>Decreases the power’s duration to Instant.</p>" },
+  { name: "Decreased Duration (Concentration)", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>Decreases the power’s duration to Concentration, requiring a standard action each round to maintain.</p>" },
+  { name: "Decreased Duration (Sustained)", cost: -1, costType: "per_rank", category: "flaw", fullText: "<p>Decreases the power’s duration from Continuous to Sustained.</p>" }
 ];
 
 if (typeof module !== 'undefined' && module.exports) {

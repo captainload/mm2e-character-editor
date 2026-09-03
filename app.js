@@ -455,20 +455,28 @@ window.showPowerEffectInfo = function(effectName) {
 };
 
 window.showModifierInfo = function(modName) {
+  if (!modName) return;
   let mod = null;
-  let baseName = modName.replace(/\s*\([^)]*\)/g, '').trim(); 
-  
+  const clean = modName.replace(/\s*\[.*?\]/g, '').trim();
+  const baseName = clean.replace(/\s*\([+–-]?\d+[^)]*\)/g, '').trim();
+  const normalize = (s) => (s || "").toLowerCase().replace(/[–—]/g, '-').replace(/[^a-z0-9]/g, '');
+  const normTarget = normalize(baseName);
+
   if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
-    mod = POWER_MODIFIERS_LIST.find(m => m.name === modName) || POWER_MODIFIERS_LIST.find(m => m.name === baseName);
+    mod = POWER_MODIFIERS_LIST.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
   }
   if (!mod && typeof POWER_EFFECTS_LIST !== 'undefined') {
     for (const eff of POWER_EFFECTS_LIST) {
+      if (eff.uniqueModifiers) {
+        mod = eff.uniqueModifiers.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
+        if (mod) break;
+      }
       if (eff.specificExtras) {
-        mod = eff.specificExtras.find(m => m.name === modName) || eff.specificExtras.find(m => m.name === baseName);
+        mod = eff.specificExtras.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
         if (mod) break;
       }
       if (eff.specificFlaws) {
-        mod = eff.specificFlaws.find(m => m.name === modName) || eff.specificFlaws.find(m => m.name === baseName);
+        mod = eff.specificFlaws.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
         if (mod) break;
       }
     }
@@ -482,8 +490,9 @@ window.showModifierInfo = function(modName) {
     if (mod.tiers && mod.tiers.length > 0) {
       tierHtml = `<ul style="margin-top: 8px; padding-left: 16px;">${mod.tiers.map(t => `<li style="margin-bottom: 4px;"><strong>${t}</strong></li>`).join('')}</ul>`;
     }
-    titleEl.textContent = `Modifier: ${modName}`;
-    bodyEl.innerHTML = `${mod.fullText || '<p>No detailed rules text available for this modifier.</p>'}${tierHtml}`;
+    titleEl.textContent = `Modifier: ${mod.name || modName}`;
+    const descText = mod.fullText || (mod.desc ? `<p>${mod.desc}</p>` : '<p>No detailed rules text available for this modifier.</p>');
+    bodyEl.innerHTML = `${descText}${tierHtml}`;
   } else {
     titleEl.textContent = `Modifier: ${modName}`;
     bodyEl.innerHTML = "<p>Modifier rules not found.</p>";
@@ -1060,21 +1069,26 @@ function buildSkillsUI() {
     }
 
     let advTagsHtml = "";
+    const enhSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skill.name]) ? char.enhancedTraits.skills[skill.name] : 0;
+    const effFeats = char.effectiveFeats || char.feats;
+    const tagsList = [];
+    if (enhSkill > 0) {
+      tagsList.push(`<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;" title="Enhanced Trait">+${enhSkill} Enhanced</span>`);
+    }
     if (featsArray.length > 0) {
-      const activeFeats = featsArray.filter(advName => (char.feats[advName] || 0) > 0);
-      if (activeFeats.length > 0) {
-        advTagsHtml = activeFeats.map(advName => {
-          const advRanks = char.feats[advName] || 0;
-          const rankText = advRanks > 0 ? ` (${advRanks})` : "";
-          return `
-            <span class="skill-adv-tag active-adv-tag" style="cursor: pointer;" onclick="window.showAdvantageInfo('${advName}')" title="View description">
-              ${advName}${rankText}
-            </span>
-          `;
-        }).join(" ");
-      } else {
-        advTagsHtml = `<span class="secondary-text">—</span>`;
-      }
+      const activeFeats = featsArray.filter(advName => (effFeats[advName] || 0) > 0);
+      activeFeats.forEach(advName => {
+        const advRanks = effFeats[advName] || 0;
+        const rankText = advRanks > 0 ? ` (${advRanks})` : "";
+        tagsList.push(`
+          <span class="skill-adv-tag active-adv-tag" style="cursor: pointer;" onclick="window.showAdvantageInfo('${advName}')" title="View description">
+            ${advName}${rankText}
+          </span>
+        `);
+      });
+    }
+    if (tagsList.length > 0) {
+      advTagsHtml = tagsList.join(" ");
     } else {
       advTagsHtml = `<span class="secondary-text">—</span>`;
     }
@@ -1126,10 +1140,13 @@ function buildAdvantagesUI() {
   tbody.innerHTML = advantagesDisplayList.map(adv => {
     const idSafe = adv.name.replace(/[^a-zA-Z0-9]/g, "_");
     const val = char.feats[adv.name] || 0;
+    const enhFeat = (char.enhancedTraits && char.enhancedTraits.feats && char.enhancedTraits.feats[adv.name]) ? char.enhancedTraits.feats[adv.name] : 0;
+    const effVal = val + enhFeat;
     const maxRank = char.getAdvantageMaxRank(adv);
     const detailVal = char.featDetails[adv.name] || "";
 
-    const advNameStyle = val > 0 ? 'color: #f59e0b;' : '';
+    const advNameStyle = effVal > 0 ? 'color: #f59e0b;' : '';
+    const enhBadge = enhFeat > 0 ? ` <span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600; font-size: 0.85em; padding: 1px 5px;" title="Enhanced Trait">[+${enhFeat} Enhanced]</span>` : '';
 
     let detailCellHTML = `<span class="secondary-text">-</span>`;
     if (adv.name === "Skill Mastery" && val > 0) {
@@ -1151,7 +1168,7 @@ function buildAdvantagesUI() {
 
     return `
       <tr>
-        <td><strong style="${advNameStyle}">${adv.name}</strong></td>
+        <td><strong style="${advNameStyle}">${adv.name}</strong>${enhBadge}</td>
         <td class="secondary-text">${adv.types ? adv.types.join(", ") : adv.category}</td>
         <td>
           <div class="stepper-group">
@@ -2315,22 +2332,16 @@ function buildPowersUI() {
             "Will [1 pt/r]"
           ];
           let advChoices = ["- Select Feat -"];
-          if (char.feats) {
-            Object.keys(char.feats).sort().forEach(featName => {
-              if (char.feats[featName] > 0) {
-                 let featData = typeof ADVANTAGES_LIST !== 'undefined' ? ADVANTAGES_LIST.find(a => a.name === featName) : null;
-                 let hasRanks = featData ? (featData.hasRanks || featData.ranked) : false;
-                 advChoices.push(`${featName} [1 pt${hasRanks ? '/r' : ''}]`);
-              }
-            });
-          }
+          const featSource = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+          featSource.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(featData => {
+            let hasRanks = featData ? (featData.hasRanks || featData.ranked) : false;
+            advChoices.push(`${featData.name} [1 pt${hasRanks ? '/r' : ''}]`);
+          });
 
           let skillChoices = ["- Select Skill -"];
-          if (char.skills) {
-            Object.keys(char.skills).sort().forEach(skName => {
-              if (char.skills[skName] > 0) {
-                 skillChoices.push(`${skName} [1 pt/r]`);
-              }
+          if (typeof SKILLS_LIST !== 'undefined') {
+            SKILLS_LIST.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(sk => {
+              skillChoices.push(`${sk.name} [1 pt/r]`);
             });
           }
 
@@ -4051,19 +4062,35 @@ function refreshUI() {
   const atk = char.getCombatRank("ATK");
   const meleeAtkFeat = derived.meleeAtkFeat || 0;
   const rangedAtkFeat = derived.rangedAtkFeat || 0;
+  
+  const enhAtk = (char.enhancedTraits && char.enhancedTraits.combat) ? char.enhancedTraits.combat.ATK || 0 : 0;
+  const enhDef = (char.enhancedTraits && char.enhancedTraits.combat) ? char.enhancedTraits.combat.DEF || 0 : 0;
+  const enhTough = (char.enhancedTraits && char.enhancedTraits.saves) ? char.enhancedTraits.saves.Toughness || 0 : 0;
+  const enhFort = (char.enhancedTraits && char.enhancedTraits.saves) ? char.enhancedTraits.saves.Fortitude || 0 : 0;
+  const enhRef = (char.enhancedTraits && char.enhancedTraits.saves) ? char.enhancedTraits.saves.Reflex || 0 : 0;
+  const enhWill = (char.enhancedTraits && char.enhancedTraits.saves) ? char.enhancedTraits.saves.Will || 0 : 0;
+  const enhStr = (char.enhancedTraits && char.enhancedTraits.abilities) ? char.enhancedTraits.abilities.STR || 0 : 0;
+  const enhDex = (char.enhancedTraits && char.enhancedTraits.abilities) ? char.enhancedTraits.abilities.DEX || 0 : 0;
+  const enhCon = (char.enhancedTraits && char.enhancedTraits.abilities) ? char.enhancedTraits.abilities.CON || 0 : 0;
+  const enhWis = (char.enhancedTraits && char.enhancedTraits.abilities) ? char.enhancedTraits.abilities.WIS || 0 : 0;
+
+  const baseAtk = char.getBaseCombatRank ? char.getBaseCombatRank("ATK") : char.combat.ATK;
+  const baseDef = char.getBaseCombatRank ? char.getBaseCombatRank("DEF") : char.combat.DEF;
+
   const generateCombatTags = (featList) => {
     if (!featList || featList.length === 0) return "";
     const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+    const effFeats = char.effectiveFeats || char.feats;
     
     const matched = [];
     featList.forEach(prefix => {
-      if ((char.feats[prefix] || 0) > 0) {
-        matched.push({ name: prefix, rank: char.feats[prefix] });
+      if ((effFeats[prefix] || 0) > 0) {
+        matched.push({ name: prefix, rank: effFeats[prefix] });
       }
-      Object.keys(char.feats).forEach(k => {
-        if (k !== prefix && k.startsWith(prefix) && (char.feats[k] || 0) > 0) {
+      Object.keys(effFeats).forEach(k => {
+        if (k !== prefix && k.startsWith(prefix) && (effFeats[k] || 0) > 0) {
           if (!matched.some(m => m.name === k)) {
-            matched.push({ name: k, rank: char.feats[k] });
+            matched.push({ name: k, rank: effFeats[k] });
           }
         }
       });
@@ -4075,9 +4102,11 @@ function refreshUI() {
       const featInfo = listRef.find(a => a.name === item.name || item.name.startsWith(a.name));
       const rankText = (item.rank > 0 && featInfo?.ranked) ? ` (${item.rank})` : "";
       const baseName = featInfo ? featInfo.name : item.name;
+      const isEnhanced = (char.enhancedTraits && char.enhancedTraits.feats && char.enhancedTraits.feats[item.name]) > 0;
       const clickFn = window.showFeatInfo ? `window.showFeatInfo('${baseName}')` : `window.showAdvantageInfo('${baseName}')`;
-      return `<span class="skill-adv-tag active-adv-tag" style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; padding: 2px 6px;" onclick="${clickFn}" title="View description">
-          ${item.name}${rankText}
+      const enhBadge = isEnhanced ? `<span style="color:#10b981; font-weight: bold; margin-left: 2px;" title="Enhanced Trait">▲</span>` : '';
+      return `<span class="skill-adv-tag active-adv-tag" style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; padding: 2px 6px;" onclick="${clickFn}" title="${isEnhanced ? 'Enhanced Feat' : 'View description'}">
+          ${item.name}${rankText}${enhBadge}
         </span>`;
     }).join(" ");
   };
@@ -4087,7 +4116,9 @@ function refreshUI() {
   const elCloseBreakdown = document.getElementById("lblCloseAtkBreakdown");
   if (elCloseBreakdown) {
     const featBonusStr = meleeAtkFeat > 0 ? ` + Feat ${meleeAtkFeat}` : "";
-    elCloseBreakdown.innerHTML = `(ATK ${atk}${featBonusStr})` + generateCombatTags(["Attack Focus", "Attack Focus (Melee)", "Attack Specialization", "Favored Environment", "Favored Opponent", "Accurate Attack", "All-Out Attack", "Power Attack", "Sneak Attack"]);
+    const enhAtkStr = enhAtk > 0 ? ` + Enhanced ${enhAtk}` : "";
+    const enhTag = enhAtk > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced ATK +${enhAtk}]</span>` : "";
+    elCloseBreakdown.innerHTML = `(ATK ${baseAtk}${enhAtkStr}${featBonusStr})` + enhTag + generateCombatTags(["Attack Focus", "Attack Focus (Melee)", "Attack Specialization", "Favored Environment", "Favored Opponent", "Accurate Attack", "All-Out Attack", "Power Attack", "Sneak Attack"]);
   }
 
   const elRangedAtk = document.getElementById("lblRangedAttack");
@@ -4095,14 +4126,17 @@ function refreshUI() {
   const elRangedBreakdown = document.getElementById("lblRangedAtkBreakdown");
   if (elRangedBreakdown) {
     const featBonusStr = rangedAtkFeat > 0 ? ` + Feat ${rangedAtkFeat}` : "";
-    elRangedBreakdown.innerHTML = `(ATK ${atk}${featBonusStr})` + generateCombatTags(["Attack Focus", "Attack Focus (Ranged)", "Attack Specialization", "Favored Environment", "Favored Opponent", "Accurate Attack", "All-Out Attack", "Power Attack", "Precise Shot", "Sneak Attack"]);
+    const enhAtkStr = enhAtk > 0 ? ` + Enhanced ${enhAtk}` : "";
+    const enhTag = enhAtk > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced ATK +${enhAtk}]</span>` : "";
+    elRangedBreakdown.innerHTML = `(ATK ${baseAtk}${enhAtkStr}${featBonusStr})` + enhTag + generateCombatTags(["Attack Focus", "Attack Focus (Ranged)", "Attack Specialization", "Favored Environment", "Favored Opponent", "Accurate Attack", "All-Out Attack", "Power Attack", "Precise Shot", "Sneak Attack"]);
   }
 
   const elDefClass = document.getElementById("resDefenseClass");
   if (elDefClass) elDefClass.textContent = derived.defenseClass;
   const elAdjDefClass = document.getElementById("adjDefenseClass");
   if (elAdjDefClass) {
-    elAdjDefClass.innerHTML = `Base (10 + Total Defense ${derived.totalDefense}) [Flat-Footed DC: ${derived.flatFootedDefenseClass}]` + generateCombatTags(["Dodge Focus", "Uncanny Dodge", "Elusive Target", "Improved Defense", "Defensive Attack", "All-Out Attack"]);
+    const enhDefTag = enhDef > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced DEF +${enhDef}]</span>` : "";
+    elAdjDefClass.innerHTML = `Base (10 + Total Defense ${derived.totalDefense}) [Flat-Footed DC: ${derived.flatFootedDefenseClass}]` + enhDefTag + generateCombatTags(["Dodge Focus", "Uncanny Dodge", "Elusive Target", "Improved Defense", "Defensive Attack", "All-Out Attack"]);
   }
 
   const elReflex = document.getElementById("resReflex");
@@ -4128,17 +4162,20 @@ function refreshUI() {
   const sta = char.getAbilityRank("CON");
   const awe = char.getAbilityRank("WIS");
   const defRank = char.getCombatRank("DEF");
-  const defRoll = char.feats["Defensive Roll"] || 0;
-  const dodgeFocusRanks = derived.dodgeFocusRanks || (char.feats["Dodge Focus"] || 0);
-  const impInit = char.feats["Improved Initiative"] || 0;
+  const defRoll = (char.effectiveFeats || char.feats)["Defensive Roll"] || 0;
+  const dodgeFocusRanks = derived.dodgeFocusRanks || ((char.effectiveFeats || char.feats)["Dodge Focus"] || 0);
+  const impInit = (char.effectiveFeats || char.feats)["Improved Initiative"] || 0;
   const pMods = char.powerTraitModifiers;
   const dexRank = char.getAbilityRank("DEX") || 0;
 
   const elAdjReflex = document.getElementById("adjReflex");
   if (elAdjReflex) {
-    const lrRanks = char.feats["Lightning Reflexes"] || 0;
+    const lrRanks = (char.effectiveFeats || char.feats)["Lightning Reflexes"] || 0;
     const lrStr = lrRanks > 0 ? ` + Lightning Reflexes (+${lrRanks * 2})` : "";
-    elAdjReflex.innerHTML = `DEX (${dexRank}) + Bought (${char.purchasedResistances.Reflex || 0})${lrStr}` + generateCombatTags(["Evasion", "Lightning Reflexes", "Instant Up", "Acrobatic Bluff"]);
+    const enhRefStr = enhRef > 0 ? ` + Enhanced (${enhRef})` : "";
+    const enhRefTag = enhRef > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Reflex +${enhRef}]</span>` : "";
+    const enhDexTag = enhDex > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced DEX +${enhDex}]</span>` : "";
+    elAdjReflex.innerHTML = `DEX (${dexRank}) + Bought (${char.purchasedResistances.Reflex || 0})${enhRefStr}${lrStr}` + enhRefTag + enhDexTag + generateCombatTags(["Evasion", "Lightning Reflexes", "Instant Up", "Acrobatic Bluff"]);
   }
 
   const elAdjToughness = document.getElementById("adjToughness");
@@ -4147,32 +4184,48 @@ function refreshUI() {
     if (defRoll > 0) {
       toughNote = derived.hasUncannyDodge ? ` [Def Roll retained via Uncanny Dodge]` : ` [Flat-Footed: ${derived.flatFootedToughness}]`;
     }
-    elAdjToughness.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Def Roll (${defRoll}) + Protection (${pMods.protectionToughness})${toughNote}`) + generateCombatTags(["Defensive Roll", "Uncanny Dodge"]);
+    const protOnly = Math.max(0, (pMods.protectionToughness || 0) - enhTough);
+    const enhToughStr = enhTough > 0 ? ` + Enhanced (${enhTough})` : "";
+    const enhToughTag = enhTough > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Toughness +${enhTough}]</span>` : "";
+    const enhConTag = enhCon > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced CON +${enhCon}]</span>` : "";
+    elAdjToughness.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Def Roll (${defRoll}) + Protection (${protOnly})${enhToughStr}${toughNote}`) + enhToughTag + enhConTag + generateCombatTags(["Defensive Roll", "Uncanny Dodge"]);
   }
 
   const elAdjFort = document.getElementById("adjFort");
   if (elAdjFort) {
-    const gfRanks = char.feats["Great Fortitude"] || 0;
+    const gfRanks = (char.effectiveFeats || char.feats)["Great Fortitude"] || 0;
     const gfStr = gfRanks > 0 ? ` + Great Fortitude (+${gfRanks * 2})` : "";
-    elAdjFort.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Bought (${char.purchasedResistances.Fortitude || 0})${gfStr}`) + generateCombatTags(["Endurance", "Diehard", "Great Fortitude"]);
+    const enhFortStr = enhFort > 0 ? ` + Enhanced (${enhFort})` : "";
+    const enhFortTag = enhFort > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Fortitude +${enhFort}]</span>` : "";
+    const enhConTag = enhCon > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced CON +${enhCon}]</span>` : "";
+    elAdjFort.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Bought (${char.purchasedResistances.Fortitude || 0})${enhFortStr}${gfStr}`) + enhFortTag + enhConTag + generateCombatTags(["Endurance", "Diehard", "Great Fortitude"]);
   }
 
   const elAdjWill = document.getElementById("adjWill");
   if (elAdjWill) {
-    const iwRanks = char.feats["Iron Will"] || 0;
+    const iwRanks = (char.effectiveFeats || char.feats)["Iron Will"] || 0;
     const iwStr = iwRanks > 0 ? ` + Iron Will (+${iwRanks * 2})` : "";
-    elAdjWill.innerHTML = (awe === null ? "Absent WIS" : `WIS (${awe}) + Bought (${char.purchasedResistances.Will || 0})${iwStr}`) + generateCombatTags(["Fearless", "Iron Will", "Trance"]);
+    const enhWillStr = enhWill > 0 ? ` + Enhanced (${enhWill})` : "";
+    const enhWillTag = enhWill > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Will +${enhWill}]</span>` : "";
+    const enhWisTag = enhWis > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced WIS +${enhWis}]</span>` : "";
+    elAdjWill.innerHTML = (awe === null ? "Absent WIS" : `WIS (${awe}) + Bought (${char.purchasedResistances.Will || 0})${enhWillStr}${iwStr}`) + enhWillTag + enhWisTag + generateCombatTags(["Fearless", "Iron Will", "Trance"]);
   }
 
   const elAdjTotalDef = document.getElementById("adjTotalDef");
-  if (elAdjTotalDef) elAdjTotalDef.innerHTML = `DEF (${defRank}) + Dodge Focus (${dodgeFocusRanks})` + generateCombatTags(["Dodge Focus", "Elusive Target", "Improved Defense", "Defensive Attack", "Favored Environment"]);
+  if (elAdjTotalDef) {
+    const enhDefStr = enhDef > 0 ? ` + Enhanced DEF (${enhDef})` : "";
+    const enhDefTag = enhDef > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced DEF +${enhDef}]</span>` : "";
+    elAdjTotalDef.innerHTML = `DEF (${baseDef})${enhDefStr} + Dodge Focus (${dodgeFocusRanks})` + enhDefTag + generateCombatTags(["Dodge Focus", "Elusive Target", "Improved Defense", "Defensive Attack", "Favored Environment"]);
+  }
 
   const elAdjFlatFootedDef = document.getElementById("adjFlatFootedDef");
   if (elAdjFlatFootedDef) {
+    const enhDefStr = enhDef > 0 ? ` + Enhanced DEF (${enhDef})` : "";
+    const enhDefTag = enhDef > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced DEF +${enhDef}]</span>` : "";
     if (derived.hasUncannyDodge) {
-      elAdjFlatFootedDef.innerHTML = `DEF (${defRank}) + Dodge Focus (${dodgeFocusRanks}) [Retained via Uncanny Dodge]` + generateCombatTags(["Uncanny Dodge"]);
+      elAdjFlatFootedDef.innerHTML = `DEF (${baseDef})${enhDefStr} + Dodge Focus (${dodgeFocusRanks}) [Retained via Uncanny Dodge]` + enhDefTag + generateCombatTags(["Uncanny Dodge"]);
     } else {
-      elAdjFlatFootedDef.innerHTML = `DEF (${defRank}) [No Dodge bonus]` + generateCombatTags(["Uncanny Dodge"]);
+      elAdjFlatFootedDef.innerHTML = `DEF (${baseDef})${enhDefStr} [No Dodge bonus]` + enhDefTag + generateCombatTags(["Uncanny Dodge"]);
     }
   }
 
@@ -4184,7 +4237,10 @@ function refreshUI() {
 
   document.getElementById("resInitiative").textContent = derived.initiative;
   const elAdjInit = document.getElementById("adjInitiative");
-  if (elAdjInit) elAdjInit.innerHTML = `DEX (${char.getAbilityRank("DEX") || 0}) + Imp Initiative (+${impInit * 4})` + generateCombatTags(["Improved Initiative", "Seize the Initiative"]);
+  if (elAdjInit) {
+    const enhDexTag = enhDex > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced DEX +${enhDex}]</span>` : "";
+    elAdjInit.innerHTML = `DEX (${dexRank}) + Imp Initiative (+${impInit * 4})` + enhDexTag + generateCombatTags(["Improved Initiative", "Seize the Initiative"]);
+  }
 
   if (typeof CharacterModel !== 'undefined') {
     const groundDist = CharacterModel.getSpeedDistance(derived.groundSpeed);
@@ -4243,7 +4299,7 @@ function refreshUI() {
   if (typeof ADVANTAGES_LIST !== 'undefined') {
     ADVANTAGES_LIST.forEach(adv => {
       if ((adv.category === "Combat" || (adv.types && adv.types.includes("Combat"))) && adv.conditionalSummary) {
-        const ranks = char.feats[adv.name] || 0;
+        const ranks = (char.effectiveFeats || char.feats)[adv.name] || 0;
         if (ranks > 0) {
           const detail = char.featDetails[adv.name] ? ` (${char.featDetails[adv.name]})` : "";
           const rankLabel = adv.ranked ? ` [Rank ${ranks}]` : "";
@@ -4251,7 +4307,7 @@ function refreshUI() {
             <div class="combat-conditional-row">
               <span class="combat-conditional-name">
                 ${adv.name}${rankLabel}${detail}
-                <button type="button" class="btn-info-circle" onclick="showAdvantageInfo('${adv.name}')" title="View Full Rule">?</button>
+                <button type="button" class="btn-info-circle" onclick="showAdvantageInfo('${adv.name}')" title="View Feat Rules">?</button>
               </span>
               <span class="combat-conditional-desc">${adv.conditionalSummary}</span>
             </div>
@@ -4274,6 +4330,7 @@ function refreshUI() {
 
   ["STR", "CON", "DEX", "INT", "WIS", "CHA"].forEach(k => {
     const val = char.getAbilityRank(k);
+    const enhVal = (char.enhancedTraits && char.enhancedTraits.abilities[k]) ? char.enhancedTraits.abilities[k] : 0;
     const totalElem = document.getElementById(`total_rank_${k}`);
     const adjElem = document.getElementById(`adj_${k}`);
 
@@ -4284,17 +4341,25 @@ function refreshUI() {
       if (totalElem) totalElem.textContent = val;
       if (adjElem) {
         let adjHTML = "";
-        const activeFeats = (abilityRelatedFeats[k] || []).filter(advName => (char.feats[advName] || 0) > 0);
+        const effFeats = char.effectiveFeats || char.feats;
+        const activeFeats = (abilityRelatedFeats[k] || []).filter(advName => (effFeats[advName] || 0) > 0);
+        const tags = [];
+        if (enhVal > 0) {
+          tags.push(`<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;" title="Enhanced Trait">+${enhVal} Enhanced Trait</span>`);
+        }
         if (activeFeats.length > 0) {
-          adjHTML = activeFeats.map(advName => {
-            const advRanks = char.feats[advName] || 0;
+          activeFeats.forEach(advName => {
+            const advRanks = effFeats[advName] || 0;
             const rankText = (advRanks > 0 && typeof ADVANTAGES_LIST !== 'undefined' && ADVANTAGES_LIST.find(a => a.name === advName)?.ranked) ? ` (${advRanks})` : "";
-            return `
+            tags.push(`
               <span class="skill-adv-tag active-adv-tag" style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="window.showAdvantageInfo('${advName}')" title="View description">
                 ${advName}${rankText}
               </span>
-            `;
-          }).join(" ");
+            `);
+          });
+        }
+        if (tags.length > 0) {
+          adjHTML = tags.join(" ");
         } else {
           adjHTML = "<em>Base points only</em>";
         }
@@ -4316,7 +4381,8 @@ function refreshUI() {
       }
 
       const bought = char.skills[skill.name] || 0;
-      const total = base + bought;
+      const enhancedSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skill.name]) ? char.enhancedTraits.skills[skill.name] : 0;
+      const total = base + bought + enhancedSkill;
 
       const baseElem = document.getElementById(`skill_base_${idSafe}`);
       const totalElem = document.getElementById(`skill_total_${idSafe}`);

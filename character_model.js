@@ -226,13 +226,94 @@ class CharacterModel {
     return null;
   }
 
-  getAbilityRank(key) {
+  get enhancedTraits() {
+    const res = {
+      abilities: { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 },
+      combat: { ATK: 0, DEF: 0 },
+      saves: { Toughness: 0, Fortitude: 0, Reflex: 0, Will: 0 },
+      skills: {},
+      feats: {}
+    };
+
+    const powerContainers = this.powers || [];
+    powerContainers.forEach(container => {
+      const effects = Array.isArray(container.effects) ? container.effects : [container];
+      effects.forEach(eff => {
+        if ((eff.effectName === "Enhanced Trait" || eff.effectName === "Enhance Trait") && eff.subPowers) {
+          eff.subPowers.forEach(sub => {
+            const r = (parseInt(sub.rank) || 0) * (sub.isReduced ? -1 : 1);
+            const raw = (sub.type || sub.name || "").trim();
+            const clean = raw.replace(/\s*\[.*?\]/g, '').trim();
+
+            if (/^Strength\b/i.test(clean) || clean === "STR" || clean.includes("(STR)")) {
+              res.abilities.STR += r;
+            } else if (/^Dexterity\b/i.test(clean) || clean === "DEX" || clean.includes("(DEX)")) {
+              res.abilities.DEX += r;
+            } else if (/^Constitution\b/i.test(clean) || clean === "CON" || clean.includes("(CON)")) {
+              res.abilities.CON += r;
+            } else if (/^Intelligence\b/i.test(clean) || clean === "INT" || clean.includes("(INT)")) {
+              res.abilities.INT += r;
+            } else if (/^Wisdom\b/i.test(clean) || clean === "WIS" || clean.includes("(WIS)")) {
+              res.abilities.WIS += r;
+            } else if (/^Charisma\b/i.test(clean) || clean === "CHA" || clean.includes("(CHA)")) {
+              res.abilities.CHA += r;
+            } else if (/^Attack\b/i.test(clean) || clean === "ATK") {
+              res.combat.ATK += r;
+            } else if (/^Defense\b/i.test(clean) || clean === "DEF") {
+              res.combat.DEF += r;
+            } else if (/^Toughness\b/i.test(clean)) {
+              res.saves.Toughness += r;
+            } else if (/^Fortitude\b/i.test(clean)) {
+              res.saves.Fortitude += r;
+            } else if (/^Reflex\b/i.test(clean)) {
+              res.saves.Reflex += r;
+            } else if (/^Will\b/i.test(clean)) {
+              res.saves.Will += r;
+            } else if (typeof SKILLS_LIST !== 'undefined' && SKILLS_LIST.some(s => s.name.toLowerCase() === clean.toLowerCase())) {
+              const sk = SKILLS_LIST.find(s => s.name.toLowerCase() === clean.toLowerCase());
+              const skName = sk ? sk.name : clean;
+              res.skills[skName] = (res.skills[skName] || 0) + r;
+            } else {
+              res.feats[clean] = (res.feats[clean] || 0) + r;
+            }
+          });
+        }
+      });
+    });
+
+    return res;
+  }
+
+  get effectiveFeats() {
+    const combined = { ...(this.feats || {}) };
+    if (this.enhancedTraits && this.enhancedTraits.feats) {
+      for (const [k, v] of Object.entries(this.enhancedTraits.feats)) {
+        combined[k] = (combined[k] || 0) + v;
+      }
+    }
+    return combined;
+  }
+
+  getBaseAbilityRank(key) {
     if (this.absentAbilities[key]) return null;
     return Number(this.abilities[key]) || 0;
   }
 
-  getCombatRank(key) {
+  getAbilityRank(key) {
+    if (this.absentAbilities[key]) return null;
+    const base = Number(this.abilities[key]) || 0;
+    const enh = (this.enhancedTraits && this.enhancedTraits.abilities[key]) ? this.enhancedTraits.abilities[key] : 0;
+    return base + enh;
+  }
+
+  getBaseCombatRank(key) {
     return Number(this.combat[key]) || 0;
+  }
+
+  getCombatRank(key) {
+    const base = Number(this.combat[key]) || 0;
+    const enh = (this.enhancedTraits && this.enhancedTraits.combat[key]) ? this.enhancedTraits.combat[key] : 0;
+    return base + enh;
   }
 
   getFeatMaxRank(feat) {
@@ -472,6 +553,9 @@ class CharacterModel {
     let swimRank = 0;
     let extraLifting = 0;
 
+    const enhSaves = (this.enhancedTraits && this.enhancedTraits.saves) ? this.enhancedTraits.saves : { Toughness: 0, Fortitude: 0, Reflex: 0, Will: 0 };
+    protectionToughness += (enhSaves.Toughness || 0);
+
     if (this.powers && Array.isArray(this.powers)) {
       this.powers.forEach(container => {
         const effects = Array.isArray(container.effects) ? container.effects : [container];
@@ -491,7 +575,11 @@ class CharacterModel {
       speedBonus,
       flightRank,
       swimRank,
-      extraLifting
+      extraLifting,
+      enhancedToughness: enhSaves.Toughness || 0,
+      enhancedFortitude: enhSaves.Fortitude || 0,
+      enhancedReflex: enhSaves.Reflex || 0,
+      enhancedWill: enhSaves.Will || 0
     };
   }
 
@@ -507,37 +595,38 @@ class CharacterModel {
     const def = this.getCombatRank("DEF");
 
     const pMods = this.powerTraitModifiers;
+    const effFeats = this.effectiveFeats || this.feats;
 
-    const defensiveRollRanks = this.feats["Defensive Roll"] || 0;
-    const dodgeFocusRanks = (this.feats["Dodge Focus"] || 0) +
-      Object.keys(this.feats).reduce((sum, k) => (k.startsWith("Dodge Focus") && k !== "Dodge Focus") ? sum + (this.feats[k] || 0) : sum, 0);
-    const improvedInitRanks = this.feats["Improved Initiative"] || 0;
+    const defensiveRollRanks = effFeats["Defensive Roll"] || 0;
+    const dodgeFocusRanks = (effFeats["Dodge Focus"] || 0) +
+      Object.keys(effFeats).reduce((sum, k) => (k.startsWith("Dodge Focus") && k !== "Dodge Focus") ? sum + (effFeats[k] || 0) : sum, 0);
+    const improvedInitRanks = effFeats["Improved Initiative"] || 0;
 
     // 2E Uncanny Dodge feat: Retain dodge bonus (and Defensive Roll) when flat-footed
-    const uncannyDodgeRanks = (this.feats["Uncanny Dodge"] || 0) +
-      Object.keys(this.feats).reduce((sum, k) => (k.startsWith("Uncanny Dodge") && k !== "Uncanny Dodge") ? sum + (this.feats[k] || 0) : sum, 0);
+    const uncannyDodgeRanks = (effFeats["Uncanny Dodge"] || 0) +
+      Object.keys(effFeats).reduce((sum, k) => (k.startsWith("Uncanny Dodge") && k !== "Uncanny Dodge") ? sum + (effFeats[k] || 0) : sum, 0);
     const hasUncannyDodge = uncannyDodgeRanks > 0;
 
     // 2E Attack Focus feats
-    let meleeAtkFeat = (this.feats["Attack Focus (Melee)"] || 0) + (this.feats["Attack Focus (melee)"] || 0) + (this.feats["Close Attack"] || 0);
-    let rangedAtkFeat = (this.feats["Attack Focus (Ranged)"] || 0) + (this.feats["Attack Focus (ranged)"] || 0) + (this.feats["Ranged Attack"] || 0);
+    let meleeAtkFeat = (effFeats["Attack Focus (Melee)"] || 0) + (effFeats["Attack Focus (melee)"] || 0) + (effFeats["Close Attack"] || 0);
+    let rangedAtkFeat = (effFeats["Attack Focus (Ranged)"] || 0) + (effFeats["Attack Focus (ranged)"] || 0) + (effFeats["Ranged Attack"] || 0);
 
-    if (this.feats["Attack Focus"]) {
+    if (effFeats["Attack Focus"]) {
       const detail = (this.featDetails["Attack Focus"] || "").toLowerCase();
       if (detail.includes("melee") || detail.includes("close")) {
-        meleeAtkFeat += this.feats["Attack Focus"];
+        meleeAtkFeat += effFeats["Attack Focus"];
       } else if (detail.includes("ranged")) {
-        rangedAtkFeat += this.feats["Attack Focus"];
+        rangedAtkFeat += effFeats["Attack Focus"];
       }
     }
 
-    Object.keys(this.feats).forEach(k => {
+    Object.keys(effFeats).forEach(k => {
       const lower = k.toLowerCase();
       if (lower.startsWith("attack focus") && k !== "Attack Focus (Melee)" && k !== "Attack Focus (melee)" && k !== "Attack Focus (Ranged)" && k !== "Attack Focus (ranged)" && k !== "Attack Focus") {
         if (lower.includes("melee") || lower.includes("close")) {
-          meleeAtkFeat += (this.feats[k] || 0);
+          meleeAtkFeat += (effFeats[k] || 0);
         } else if (lower.includes("ranged")) {
-          rangedAtkFeat += (this.feats[k] || 0);
+          rangedAtkFeat += (effFeats[k] || 0);
         }
       }
     });
@@ -559,19 +648,19 @@ class CharacterModel {
 
     const initiative = (dex === null ? -5 : dex) + (improvedInitRanks * 4);
 
-    const lightningReflexesRanks = (this.feats["Lightning Reflexes"] || 0);
-    const greatFortitudeRanks = (this.feats["Great Fortitude"] || 0);
-    const ironWillRanks = (this.feats["Iron Will"] || 0);
+    const lightningReflexesRanks = (effFeats["Lightning Reflexes"] || 0);
+    const greatFortitudeRanks = (effFeats["Great Fortitude"] || 0);
+    const ironWillRanks = (effFeats["Iron Will"] || 0);
 
-    const reflex = (dex === null) ? null : (dex + (this.purchasedResistances.Reflex || 0) + (lightningReflexesRanks * 2));
-    const fortitude = (con === null) ? null : (con + (this.purchasedResistances.Fortitude || 0) + (greatFortitudeRanks * 2));
+    const reflex = (dex === null) ? null : (dex + (this.purchasedResistances.Reflex || 0) + (pMods.enhancedReflex || 0) + (lightningReflexesRanks * 2));
+    const fortitude = (con === null) ? null : (con + (this.purchasedResistances.Fortitude || 0) + (pMods.enhancedFortitude || 0) + (greatFortitudeRanks * 2));
     
     // Defensive Roll is lost when flat-footed unless the character has Uncanny Dodge
     const flatDefensiveRoll = hasUncannyDodge ? defensiveRollRanks : 0;
-    const toughness = (con === null) ? 0 : (con + defensiveRollRanks + (this.feats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0));
-    const flatFootedToughness = (con === null) ? 0 : (con + flatDefensiveRoll + (this.feats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0));
+    const toughness = (con === null) ? 0 : (con + defensiveRollRanks + (effFeats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0));
+    const flatFootedToughness = (con === null) ? 0 : (con + flatDefensiveRoll + (effFeats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0));
 
-    const will = (wis === null) ? null : (wis + (this.purchasedResistances.Will || 0) + (ironWillRanks * 2));
+    const will = (wis === null) ? null : (wis + (this.purchasedResistances.Will || 0) + (pMods.enhancedWill || 0) + (ironWillRanks * 2));
     const knockback = -Math.floor(toughness / 2);
 
     const baseSpeed = (sizeData.speed || 0) + pMods.speedBonus;

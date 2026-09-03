@@ -1783,12 +1783,14 @@ const POWER_EFFECTS_LIST = [
         "name": "Accurate",
         "cost": 1,
         "costType": "per_rank",
+        "category": "extra",
         "desc": "Accurate (+1): You don’t need to be able to accurately sense your destination to teleport there, just be able to generally describe it, such as “inside the capitol building lobby” or “atop the Goodman Building’s roof.”"
       },
       {
         "name": "Portal",
         "cost": 2,
         "costType": "per_rank",
+        "category": "extra",
         "desc": "Portal (+2): You open a portal or gateway between two points as a free action. The portal is 5-ft.-by-5.ft. in size. Anyone stepping through (a move action) is transported. The portal remains open as long as you concentrate. You can apply Progression feats to increase the size of your portal."
       }
     ],
@@ -1826,12 +1828,12 @@ const POWER_EFFECTS_LIST = [
     ],
     "uniqueModifiers": [
       {
-        "name": "Accurate (Teleport)",
+        "name": "Accurate",
         "cost": 1,
         "costType": "per_rank",
         "category": "extra",
         "hasRanks": false,
-        "fullText": "<p>You do not need to accurately sense your destination.</p>"
+        "fullText": "<p>You don’t need to be able to accurately sense your destination to teleport there, just be able to generally describe it, such as “inside the capitol building lobby” or “atop the Goodman Building’s roof.”</p>"
       },
       {
         "name": "Castling",

@@ -36,7 +36,7 @@ const MODIFIER_CATEGORY_MAP = {
   Movement: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
-    "Accurate", "Dimensional", "Extended Reach", "Terminal Velocity",
+    "Dimensional", "Extended Reach", "Terminal Velocity",
     ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
@@ -57,13 +57,13 @@ const MODIFIER_CATEGORY_MAP = {
   Alteration: [
     "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
-    "Accurate", "Affects Insubstantial", "Dimensional", "Extended Reach", "Incurable", "Mighty",
+    "Affects Insubstantial", "Dimensional", "Extended Reach", "Incurable", "Mighty",
     ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   General: [
     "Action (Extra)", "Action (Flaw)", "Check Required", "Continuous", "Distracting", "Duration (Extra)", "Duration (Flaw)", "Fades", "Independent", "Linked", "Noticeable", "Permanent", "Personal", "Reaction", "Require Material", "Sense-Dependent", "Side-Effect", "Sustained", "Tiring", "Total Fade", "Touch", "Unreliable", "Limited",
-    "Accurate", "Affects Insubstantial", "Dimensional", "Extended Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Terminal Velocity", "Tether", "Thrown",
+    "Affects Insubstantial", "Dimensional", "Extended Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Terminal Velocity", "Tether", "Thrown",
     ...PROGRESSION_EXTRAS,
     ...UNIVERSAL_FEATS
   ]
@@ -179,6 +179,19 @@ function getFilteredModifiersForEffect(effectType, effectOrSub) {
       }
       return allowedNames.includes(m.name);
     });
+  }
+
+  const effName = effectOrSub ? (effectOrSub.effectName || effectOrSub.name) : "";
+  const effectData = effName ? ((typeof POWER_EFFECTS_LIST !== 'undefined') ? POWER_EFFECTS_LIST.find(e => e.name === effName) : null) : null;
+  const isAttack = effectOrSub ? (
+    effectType === "Attack" ||
+    (effectData && (effectData.type === "Attack" || effectData.check === "Attack" || effectData.check === "Melee Attack" || effectData.check === "Ranged Attack")) ||
+    ["Strike", "Blast", "Damage", "Snare", "Stun", "Nauseate", "Suffocate", "Trip", "Paralyze", "Corrosion", "Disintegrate", "Drain"].includes(effName) ||
+    (effectOrSub.modifiers && effectOrSub.modifiers.some(m => m.name === "Attack"))
+  ) : (effectType === "Attack");
+
+  if (!isAttack) {
+    available = available.filter(m => m.name !== "Accurate");
   }
 
   if (effectOrSub && (effectOrSub.effectName === "Super-Senses" || (effectOrSub.name && effectOrSub.name.includes("Senses")))) {
@@ -1632,6 +1645,33 @@ function buildPowersUI() {
 
         const baseRange = effectData ? (effectData.range || "Close") : "Close";
         const effectiveRange = calculateEffectiveRange(effect, baseRange);
+        const rankNum = Math.max(1, parseInt(effect.rank) || 1);
+
+        const PROGRESSION_VALUES = [
+          1, 2, 5, 10, 25, 50, 100, 250, 500, 1000,
+          2500, 5000, 10000, 25000, 50000, 100000,
+          250000, 500000, 1000000, 2500000, 5000000,
+          10000000, 25000000, 50000000, 100000000
+        ];
+        const getProgMult = (r) => PROGRESSION_VALUES[Math.min(Math.max(0, r), PROGRESSION_VALUES.length - 1)] || 1;
+
+        const hasAreaMod = effect.modifiers ? effect.modifiers.some(m => m.name === "Area" || m.name.startsWith("Area (") || m.name.includes("Area")) : false;
+        const hasPortalMod = effect.modifiers ? effect.modifiers.some(m => m.name === "Portal") : false;
+
+        const progAreaMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Area)" || (m.name === "Progression" && (hasAreaMod || hasPortalMod || effect.effectName === "Environmental Control" || effect.effectName === "Obscure" || effect.effectName === "Illusion"))) : null;
+        const progAreaRanks = progAreaMod ? (parseInt(progAreaMod.ranks) || 1) : 0;
+
+        const progRangeMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Range)" || (m.name === "Progression" && (effectiveRange === "Ranged" || effect.effectName === "Teleport" || (effectData && effectData.type === "Movement")))) : null;
+        const progRangeRanks = progRangeMod ? (parseInt(progRangeMod.ranks) || 1) : 0;
+
+        const progMassMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Mass)" || (m.name === "Progression" && ["Teleport", "Dimensional Pocket", "Super-Movement", "Move Object", "Super-Strength"].includes(effect.effectName))) : null;
+        const progMassRanks = progMassMod ? (parseInt(progMassMod.ranks) || 1) : 0;
+
+        const progTargetsMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Targets)" || (m.name === "Progression" && ((effect.modifiers && effect.modifiers.some(x => x.name === "Affects Others" || x.name === "Split Attack")) || ["Summon", "Duplication", "Animate Objects"].includes(effect.effectName)))) : null;
+        const progTargetsRanks = progTargetsMod ? (parseInt(progTargetsMod.ranks) || 1) : 0;
+
+        const progDurMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Duration)") : null;
+        const progDurRanks = progDurMod ? (parseInt(progDurMod.ranks) || 1) : 0;
 
         let reachRanks = 0;
         const reachMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Reach") : null;
@@ -1643,18 +1683,18 @@ function buildPowersUI() {
 
         const dimRangeMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Diminished Range") : null;
         if (dimRangeMod) rangeShift -= (parseInt(dimRangeMod.ranks) || 1);
+        rangeShift += progRangeRanks;
 
         let rangeDisplay = effectiveRange;
 
-        if (effectiveRange === "Close") {
+        if (effectiveRange === "Close" || effectiveRange === "Touch") {
           if (reachRanks > 0) {
             let reachDist = (typeof MEASUREMENT_TABLE !== 'undefined' && MEASUREMENT_TABLE[reachRanks.toString()]) ? MEASUREMENT_TABLE[reachRanks.toString()].dist_imp : (5 + reachRanks * 5) + " ft.";
             rangeDisplay = `Close (Reach: Rank ${reachRanks} / ${reachDist})`;
           } else {
-            rangeDisplay = `Close (Adjacent / 6 ft.)`;
+            rangeDisplay = `Close (Adjacent / 5 ft.)`;
           }
         } else if (effectiveRange === "Ranged") {
-          let r = parseInt(effect.rank) || 1;
           const multipliers = [
             { s: 2, m: 5, l: 10 },      // Shift -3 (Diminished Range 3)
             { s: 5, m: 10, l: 25 },     // Shift -2 (Diminished Range 2)
@@ -1671,53 +1711,161 @@ function buildPowersUI() {
           if (shiftIndex < 0) shiftIndex = 0;
           if (shiftIndex >= multipliers.length) shiftIndex = multipliers.length - 1;
           let mults = multipliers[shiftIndex];
-          rangeDisplay = `Ranged (Short: ${r * mults.s} ft. / Med: ${r * mults.m} ft. / Long: ${r * mults.l} ft.)`;
+          rangeDisplay = `Ranged (Short: ${rankNum * mults.s} ft. / Med: ${rankNum * mults.m} ft. / Long: ${rankNum * mults.l} ft.)`;
         } else if (effectiveRange === "Perception") {
           rangeDisplay = "Perception (Line of sight / Accurate Sense)";
         } else if (effectiveRange === "Personal") {
           rangeDisplay = "Personal";
         } else if (effectiveRange === "Rank") {
-          let effRank = Math.max(-5, effect.rank + rangeShift);
+          let effRank = Math.max(-5, rankNum + rangeShift);
           let dist = (typeof MEASUREMENT_TABLE !== 'undefined' && MEASUREMENT_TABLE[effRank.toString()]) ? MEASUREMENT_TABLE[effRank.toString()].dist_imp : "Special";
           rangeDisplay = `Rank ${effRank} (${dist})`;
         }
 
+        // Distance & Speed
+        let distanceDisplay = "";
+        if (effect.effectName === "Teleport") {
+          const moveMult = getProgMult(progRangeRanks);
+          const moveDistFt = rankNum * 100 * moveMult;
+          const moveDistStr = moveDistFt >= 5280 ? `${(moveDistFt / 5280).toFixed(1)} miles` : `${moveDistFt.toLocaleString()} ft.`;
+          
+          const extTable = [
+            "None", "None", "50 miles", "100 miles", "250 miles", "500 miles",
+            "1,000 miles", "2,500 miles", "5,000 miles", "10,000 miles", "25,000 miles", "50,000 miles",
+            "100,000 miles", "250,000 miles", "500,000 miles", "1,000,000 miles", "2,500,000 miles",
+            "5,000,000 miles", "10,000,000 miles", "25,000,000 miles", "50,000,000 miles"
+          ];
+          let extDistStr = "None";
+          if (rankNum >= 3) {
+            const extIdx = Math.min(extTable.length - 1, (rankNum - 1) + progRangeRanks);
+            extDistStr = extTable[extIdx] || `${extTable[extTable.length - 1]}+`;
+          }
+          distanceDisplay = `Move: ${moveDistStr} | Extended (Rank 3+): ${extDistStr}`;
+        } else if (effect.effectName === "Flight" || effect.effectName === "Speed") {
+          const speedMphTable = [
+            "10 MPH", "25 MPH", "50 MPH", "100 MPH", "250 MPH", "500 MPH",
+            "1,000 MPH", "2,500 MPH", "5,000 MPH", "10,000 MPH", "25,000 MPH", "50,000 MPH",
+            "100,000 MPH", "250,000 MPH", "500,000 MPH", "1,000,000 MPH", "2,500,000 MPH",
+            "5,000,000 MPH", "Near Light Speed", "Light Speed"
+          ];
+          const sIdx = Math.min(speedMphTable.length - 1, (rankNum - 1) + progRangeRanks);
+          distanceDisplay = speedMphTable[sIdx] || "Special";
+        } else if (effect.effectName === "Burrowing") {
+          const burrowTable = [
+            "1 MPH", "2.5 MPH", "5 MPH", "10 MPH", "25 MPH", "50 MPH",
+            "100 MPH", "250 MPH", "500 MPH", "1,000 MPH", "2,500 MPH", "5,000 MPH"
+          ];
+          const bIdx = Math.min(burrowTable.length - 1, (rankNum - 1) + progRangeRanks);
+          distanceDisplay = burrowTable[bIdx] || "Special";
+        } else if (effect.effectName === "Swimming") {
+          const swimTable = [
+            "2.5 MPH", "5 MPH", "10 MPH", "25 MPH", "50 MPH", "100 MPH",
+            "250 MPH", "500 MPH", "1,000 MPH", "2,500 MPH", "5,000 MPH"
+          ];
+          const swIdx = Math.min(swimTable.length - 1, (rankNum - 1) + progRangeRanks);
+          distanceDisplay = swimTable[swIdx] || "Special";
+        } else if (effect.effectName === "Leaping") {
+          const leapMult = getProgMult(rankNum - 1 + progRangeRanks);
+          distanceDisplay = `×${leapMult.toLocaleString()} normal jumping distance`;
+        }
+
+        // Area
+        let areaDisplay = "";
+        const areaProgMult = getProgMult(progAreaRanks);
+        if (hasPortalMod) {
+          const pSize = 5 * areaProgMult;
+          areaDisplay = `${pSize.toLocaleString()} ft. × ${pSize.toLocaleString()} ft. gateway`;
+        } else if (hasAreaMod) {
+          const areaObj = effect.modifiers.find(m => m.name === "Area" || m.name.startsWith("Area (") || m.name.includes("Area"));
+          const areaName = areaObj ? areaObj.name : "Area";
+          if (areaName.includes("Line")) {
+            const lLen = rankNum * 20 * areaProgMult;
+            areaDisplay = `${lLen.toLocaleString()} ft. long × 5 ft. wide line`;
+          } else if (areaName.includes("Cone")) {
+            const cLen = rankNum * 10 * areaProgMult;
+            areaDisplay = `${cLen.toLocaleString()} ft. cone`;
+          } else if (areaName.includes("Shapeable")) {
+            const cubes = rankNum * areaProgMult;
+            areaDisplay = `${cubes.toLocaleString()} continuous 5-ft. cubes`;
+          } else {
+            const rad = rankNum * 5 * areaProgMult;
+            areaDisplay = rad >= 5280 ? `${(rad / 5280).toFixed(1)} miles radius` : `${rad.toLocaleString()} ft. radius`;
+          }
+        } else if (effect.effectName === "Environmental Control" || effect.effectName === "Obscure") {
+          const baseRadIdx = Math.max(0, (rankNum - 1) + progAreaRanks);
+          const rad = 5 * getProgMult(baseRadIdx);
+          areaDisplay = rad >= 5280 ? `${(rad / 5280).toFixed(1)} miles radius` : `${rad.toLocaleString()} ft. radius`;
+        } else if (effect.effectName === "Illusion") {
+          const rad = 5 * areaProgMult;
+          areaDisplay = `${rad.toLocaleString()} ft. radius`;
+        }
+
+        // Cargo / Mass
+        let massDisplay = "";
+        const MASS_STEPS = [
+          "100 lbs.", "250 lbs.", "500 lbs.", "1,000 lbs. (1/2 ton)", "2,500 lbs. (1.25 tons)",
+          "5,000 lbs. (2.5 tons)", "10,000 lbs. (5 tons)", "25,000 lbs. (12.5 tons)", "50,000 lbs. (25 tons)",
+          "100,000 lbs. (50 tons)", "250,000 lbs. (125 tons)", "500,000 lbs. (250 tons)", "1,000,000 lbs. (500 tons)",
+          "2,500,000 lbs. (1,250 tons)", "5,000,000 lbs. (2,500 tons)", "10,000,000 lbs. (5,000 tons)",
+          "25,000,000 lbs. (12,500 tons)", "50,000,000 lbs. (25,000 tons)", "100,000,000 lbs. (50,000 tons)",
+          "250,000,000 lbs. (125,000 tons)", "500,000,000 lbs. (250,000 tons)"
+        ];
+        if (effect.effectName === "Teleport" || effect.effectName === "Dimensional Pocket" || (effect.modifiers && effect.modifiers.some(m => m.name.startsWith("Progression (Mass)"))) || (effect.effectName === "Super-Movement" && (effect.descriptors || "").includes("Dimensional"))) {
+          massDisplay = MASS_STEPS[Math.min(progMassRanks, MASS_STEPS.length - 1)] || `${MASS_STEPS[MASS_STEPS.length - 1]}+`;
+        }
+
+        // Targets
+        let targetsDisplay = "";
+        if (progTargetsRanks > 0 || (effect.modifiers && effect.modifiers.some(m => m.name === "Affects Others" || m.name === "Split Attack")) || ["Summon", "Duplication", "Animate Objects"].includes(effect.effectName)) {
+          const tCount = getProgMult(progTargetsRanks);
+          targetsDisplay = `${tCount.toLocaleString()} subject${tCount > 1 ? 's' : ''}`;
+        }
+
+        // Save DC / Check
+        let saveDcDisplay = effectiveTraits.check || "None";
+        if (effect.effectName === "Teleport") {
+          saveDcDisplay = `Reflex DC ${10 + rankNum} (unwilling passenger)`;
+        } else if (["Strike", "Blast", "Damage", "Corrosion", "Disintegrate"].includes(effect.effectName)) {
+          saveDcDisplay = `Toughness DC ${15 + rankNum}`;
+        } else if (["Snare", "Trip"].includes(effect.effectName)) {
+          saveDcDisplay = `Reflex DC ${10 + rankNum}`;
+        } else if (["Stun", "Nauseate", "Suffocate", "Drain", "Fatigue"].includes(effect.effectName)) {
+          saveDcDisplay = `Fortitude DC ${10 + rankNum}`;
+        } else if (["Paralyze", "Mind Control", "Mind Reading", "Emotion Control", "Illusion", "Confuse"].includes(effect.effectName)) {
+          saveDcDisplay = `Will DC ${10 + rankNum}`;
+        } else if (effectData && effectData.type === "Attack") {
+          saveDcDisplay = `DC ${10 + rankNum} ${effectiveTraits.check && effectiveTraits.check !== 'None' ? effectiveTraits.check : 'Save'}`;
+        }
+
         let measurementHtml = "";
         if (typeof MEASUREMENT_TABLE !== 'undefined') {
-          const mData = MEASUREMENT_TABLE[effect.rank.toString()] || MEASUREMENT_TABLE["20"];
+          const effRankStr = Math.min(30, Math.max(1, rankNum + progDurRanks)).toString();
+          const mData = MEASUREMENT_TABLE[effRankStr] || MEASUREMENT_TABLE["20"];
           
-          let effMassRank = parseInt(effect.rank) || 1;
-          const increasedMassMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Increased Mass") : null;
-          if (increasedMassMod) {
-              effMassRank += parseInt(increasedMassMod.ranks) || 1;
-          }
-          const massData = MEASUREMENT_TABLE[effMassRank.toString()] || MEASUREMENT_TABLE["20"];
+          let effMassRank = rankNum + progMassRanks;
+          const massData = MEASUREMENT_TABLE[Math.min(30, Math.max(1, effMassRank)).toString()] || MEASUREMENT_TABLE["20"];
 
-          let effDistRank = parseInt(effect.rank) || 1;
+          let effDistRank = rankNum + progRangeRanks;
           if (effectiveRange === "Rank") {
               effDistRank = Math.max(-5, effDistRank + rangeShift);
           }
-          
-          let effVolRank = effDistRank;
-          const areaMod = effect.modifiers ? effect.modifiers.find(m => m.name && m.name.includes("Area Effect")) : null;
-          if (areaMod) {
-             const areaRanks = parseInt(areaMod.ranks) || 1;
-             effDistRank = areaRanks - 1; 
-             effVolRank = areaRanks - 1;
+          if (hasAreaMod || hasPortalMod) {
+             effDistRank = rankNum + progAreaRanks;
           }
           
-          const distData = MEASUREMENT_TABLE[effDistRank.toString()] || MEASUREMENT_TABLE["20"];
-          const volData = MEASUREMENT_TABLE[effVolRank.toString()] || MEASUREMENT_TABLE["20"];
+          const distData = MEASUREMENT_TABLE[Math.min(30, Math.max(1, effDistRank)).toString()] || MEASUREMENT_TABLE["20"];
 
           if (mData && effect.effectName) {
-            const showDist = (effectiveRange === "Rank" || areaMod || effectData.type === "Movement");
-            const showTable = showDist || ["Move Object", "Create", "Insubstantial"].includes(effect.effectName);
+            const showDist = (effectiveRange === "Rank" || hasAreaMod || hasPortalMod || (effectData && effectData.type === "Movement") || effect.effectName === "Teleport");
+            const showMass = (massDisplay !== "" || ["Move Object", "Super-Strength"].includes(effect.effectName));
+            const showTable = showDist || showMass || ["Move Object", "Create", "Insubstantial"].includes(effect.effectName);
             
             if (showTable && effect.effectName !== "Enhanced Movement") {
                 measurementHtml = `
                   <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); display: flex; gap: 16px; flex-wrap: wrap; font-size: calc(var(--font-size-secondary) * 0.95); font-family: monospace;">
                     <strong style="color: var(--accent-primary);">Table Equivalents:</strong>
                     ${showDist ? `<span><strong>Dist:</strong> ${distData ? distData.dist_imp : 'Special'}</span>` : ''}
+                    ${showMass ? `<span><strong>Mass:</strong> ${massData ? massData.dist_imp : 'Special'}</span>` : ''}
                     <span><strong>Time:</strong> ${mData ? mData.time : 'Special'}</span>
                   </div>
                 `;
@@ -2609,12 +2757,16 @@ function buildPowersUI() {
               ${measurementHtml}
             </div>
 
-            <div class="power-meta-row">
+            <div class="power-meta-row" style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; font-size: calc(var(--font-size-secondary) * 0.95);">
               <span><strong>Type:</strong> ${effectData ? effectData.type : '—'}</span>
               <span><strong>Action:</strong> ${effectiveTraits.action}</span>
               <span><strong>Range:</strong> ${rangeDisplay}</span>
+              ${distanceDisplay ? `<span><strong>Distance/Speed:</strong> ${distanceDisplay}</span>` : ''}
+              ${areaDisplay ? `<span style="color: var(--accent-primary); font-weight: 600;"><strong>Area:</strong> ${areaDisplay}</span>` : ''}
+              ${massDisplay ? `<span><strong>Cargo / Mass:</strong> ${massDisplay}</span>` : ''}
+              ${targetsDisplay ? `<span><strong>Targets:</strong> ${targetsDisplay}</span>` : ''}
               <span><strong>Duration:</strong> ${effectiveTraits.duration}</span>
-              <span><strong>Check:</strong> ${effectiveTraits.check}</span>
+              <span><strong>Save DC / Check:</strong> ${saveDcDisplay}</span>
             </div>
 
             <div class="power-notes-row" style="margin-top: 8px;">

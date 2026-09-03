@@ -1,0 +1,21 @@
+# OS & Explorer files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Development & Scratch
+.vscode/
+scratch/
+refactor.js
+backup.js
+
+# Local Backups & Alternate Editions
+_backups/
+backup_*/
+M&M4E files/
+Nightengale_extracted/
+*.zip
+
+# Copyrighted Rulebook PDFs & Reference Dumps
+*.pdf
+Mutants & Masterminds - CORE Rules 2nd ed - *.txt

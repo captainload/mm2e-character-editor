@@ -1,0 +1,18 @@
+{
+  "name": "Mutants & Masterminds 2E Hero Builder",
+  "short_name": "M&M 2E Builder",
+  "description": "Character Generator and Sheet Manager for Mutants & Masterminds 2nd Edition",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
-const char = new CharacterModel();
+let char = new CharacterModel();
 window.char = char;
+window.primaryHero = null;
+window.activeCompanionId = null;
 char.powers = [];
 
 let skillSort = { col: "name", asc: true };
@@ -14,57 +16,61 @@ const PROGRESSION_EXTRAS = [
   "Progression", "Progression (Area)", "Progression (Duration)", "Progression (Mass)", "Progression (Range)", "Progression (Targets)"
 ];
 
+const UNIVERSAL_EXTRAS = [
+  ...PROGRESSION_EXTRAS
+];
+
 const UNIVERSAL_FEATS = [
   "Innate", "Precise", "Reversible", "Slow Fade", "Subtle", "Transmutation", "Triggered", "Variable Descriptor"
 ];
 
 const MODIFIER_CATEGORY_MAP = {
   Attack: [
-    "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Insubstantial", "Affects Objects", "Alternate Save", "Area", "Aura", "Autofire", "Contagious", "Disease", "Duration (Extra)", "Duration (Flaw)", "Linked", "No Saving Throw", "Penetrating", "Poison", "Range (Extra)", "Range (Flaw)", "Reaction", "Secondary Effect", "Selective Attack", "Sleep", "Targeted", "Vampiric", "Continuous", "Sustained",
+    "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Insubstantial", "Affects Objects", "Alternate Save", "Area", "Aura", "Autofire", "Contagious", "Disease", "Duration (Extra)", "Duration (Flaw)", "Extended Range", "Linked", "No Saving Throw", "Penetrating", "Poison", "Range (Extra)", "Range (Flaw)", "Reaction", "Secondary Effect", "Selective Attack", "Sleep", "Targeted", "Vampiric", "Continuous", "Sustained",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Full Power", "Grab-Based", "Inaccurate", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
-    "Accurate", "Dimensional", "Extended Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Tether", "Thrown",
-    ...PROGRESSION_EXTRAS,
+    "Accurate", "Dimensional", "Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Tether", "Thrown",
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Defense: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
     "Affects Insubstantial", "Dimensional",
-    ...PROGRESSION_EXTRAS,
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Movement: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
-    "Dimensional", "Extended Reach", "Terminal Velocity",
-    ...PROGRESSION_EXTRAS,
+    "Dimensional", "Extended", "Reach",
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Sensory: [
     "Action (Extra)", "Action (Flaw)", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Range (Extra)", "Range (Flaw)", "Reaction", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Limited", "Noticeable", "Permanent", "Require Material", "Sense-Dependent", "Side-Effect", "Tiring", "Unreliable",
-    "Dimensional", "Extended Reach",
-    ...PROGRESSION_EXTRAS,
+    "Dimensional", "Extended", "Reach",
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Control: [
-    "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Insubstantial", "Affects Objects", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Range (Extra)", "Range (Flaw)", "Reaction", "Secondary Effect", "Selective Attack", "Sustained", "Targeted", "Total Fade",
+    "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Insubstantial", "Affects Objects", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Extended Range", "Independent", "Linked", "Range (Extra)", "Range (Flaw)", "Reaction", "Secondary Effect", "Selective Attack", "Sustained", "Targeted", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Limited", "Noticeable", "Permanent", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
-    "Accurate", "Dimensional", "Extended Reach", "Homing", "Improved Range", "Indirect", "Ricochet", "Split Attack", "Tether",
-    ...PROGRESSION_EXTRAS,
+    "Accurate", "Dimensional", "Reach", "Homing", "Improved Range", "Indirect", "Ricochet", "Split Attack", "Tether",
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   Alteration: [
     "Action (Extra)", "Action (Flaw)", "Affects Corporeal", "Affects Others", "Area", "Continuous", "Duration (Extra)", "Duration (Flaw)", "Independent", "Linked", "Reaction", "Sustained", "Total Fade",
     "Check Required", "Concentration", "Distracting", "Fades", "Feedback", "Limited", "Noticeable", "Permanent", "Personal", "Require Material", "Resistible", "Sense-Dependent", "Side-Effect", "Tiring", "Touch", "Unreliable",
-    "Affects Insubstantial", "Dimensional", "Extended Reach", "Incurable", "Mighty",
-    ...PROGRESSION_EXTRAS,
+    "Affects Insubstantial", "Dimensional", "Reach", "Incurable", "Mighty",
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ],
   General: [
-    "Action (Extra)", "Action (Flaw)", "Check Required", "Continuous", "Distracting", "Duration (Extra)", "Duration (Flaw)", "Fades", "Independent", "Linked", "Noticeable", "Permanent", "Personal", "Reaction", "Require Material", "Sense-Dependent", "Side-Effect", "Sustained", "Tiring", "Total Fade", "Touch", "Unreliable", "Limited",
-    "Affects Insubstantial", "Dimensional", "Extended Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Terminal Velocity", "Tether", "Thrown",
-    ...PROGRESSION_EXTRAS,
+    "Action (Extra)", "Action (Flaw)", "Check Required", "Continuous", "Distracting", "Duration (Extra)", "Duration (Flaw)", "Extended Range", "Fades", "Independent", "Linked", "Noticeable", "Permanent", "Personal", "Reaction", "Require Material", "Sense-Dependent", "Side-Effect", "Sustained", "Tiring", "Total Fade", "Touch", "Unreliable", "Limited",
+    "Affects Insubstantial", "Dimensional", "Extended", "Reach", "Homing", "Improved Critical", "Improved Range", "Incurable", "Indirect", "Mighty", "Ricochet", "Sedation", "Split Attack", "Tether", "Thrown",
+    ...UNIVERSAL_EXTRAS,
     ...UNIVERSAL_FEATS
   ]
 };
@@ -103,11 +109,10 @@ window.generateSmartModifiers = function(effect) {
         extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: true, maxRanks: 2, category: "extra" });
         extras.push({ name: "Ranged", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
         extras.push({ name: "Perception Range", cost: 2, costType: "per_rank", hasRanks: false, category: "extra" });
-        extras.push({ name: "Reach", cost: 1, costType: "flat", hasRanks: true, maxRanks: 20, category: "extra" });
     } else if (baseRange === "Ranged") {
+        extras.push({ name: "Extended Range", cost: 1, costType: "flat", hasRanks: true, maxRanks: 10, category: "extra" });
         extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
         extras.push({ name: "Perception Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
-        extras.push({ name: "Extended Range", cost: 1, costType: "flat", hasRanks: true, maxRanks: 10, category: "extra" });
         flaws.push({ name: "Reduced Range", cost: 1, costType: "per_rank", hasRanks: false, category: "flaw" });
         flaws.push({ name: "Close", cost: 1, costType: "per_rank", hasRanks: false, category: "flaw" });
         flaws.push({ name: "Diminished Range", cost: 1, costType: "flat", hasRanks: true, maxRanks: 3, category: "flaw" });
@@ -173,8 +178,9 @@ function getFilteredModifiersForEffect(effectType, effectOrSub) {
   if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
     available = POWER_MODIFIERS_LIST.filter(m => {
       if (m.name.includes("Alternate Effect")) return false;
-      // Universal Power Feats are always allowed on all powers
-      if (m.category === "feat" && (m.name.startsWith("Progression") || m.name === "Subtle" || m.name === "Innate" || m.name === "Precise" || m.name === "Reversible" || m.name === "Slow Fade" || m.name === "Variable Descriptor" || m.name === "Triggered" || m.name === "Transmutation")) {
+      // Universal Extras and Feats always allowed
+      if (m.name.startsWith("Progression")) return true;
+      if (m.category === "feat" && (m.name === "Subtle" || m.name === "Innate" || m.name === "Precise" || m.name === "Reversible" || m.name === "Slow Fade" || m.name === "Variable Descriptor" || m.name === "Triggered" || m.name === "Transmutation")) {
         return true;
       }
       return allowedNames.includes(m.name);
@@ -211,7 +217,7 @@ char.calculateEffectCost = function(effect) {
       pBaseCost = profile.baseCost;
     }
   }
-  const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Immunity", "Super-Senses"].includes(effect.effectName);
+  const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Immunity", "Super-Senses", "Super-Movement", "Senses", "Movement"].includes(effect.effectName);
 
   if (isComposite) {
     let totalRank = 0;
@@ -248,11 +254,14 @@ char.calculateEffectCost = function(effect) {
         }
 
         let netSubRate = sBaseCost + sPerRankMod;
-        if (netSubRate < 1 && cType === "per_rank") netSubRate = 1;
-
         let sCost = 0;
         if (cType === "per_rank") {
-            sCost = (netSubRate * sRank) + sFlatMod;
+            if (netSubRate >= 1 || effect.effectName === "Enhanced Trait") {
+              sCost = (netSubRate * sRank) + sFlatMod;
+            } else {
+              const ranksPerPoint = 2 - netSubRate;
+              sCost = Math.ceil(sRank / (ranksPerPoint > 1 ? ranksPerPoint : 2)) + sFlatMod;
+            }
         } else {
             sCost = sBaseCost + (sPerRankMod * sRank) + sFlatMod;
         }
@@ -262,7 +271,7 @@ char.calculateEffectCost = function(effect) {
             sCost -= discount;
         }
 
-        if (sCost < 1) sCost = 1;
+        if (sCost < 1 && effect.effectName !== "Enhanced Trait") sCost = 1;
         
         if (sub.isReduced) {
             sCost = -sCost;
@@ -270,6 +279,9 @@ char.calculateEffectCost = function(effect) {
         
         totalSubCost += sCost;
       });
+      if (effect.effectName === "Enhanced Trait") {
+        totalSubCost = Math.ceil(totalSubCost);
+      }
     } else {
       totalRank = 1; 
     }
@@ -287,7 +299,15 @@ char.calculateEffectCost = function(effect) {
         });
     }
 
-    let finalCost = totalSubCost + (pPerRank * effect.rank) + pFlat;
+    let parentBaseRate = effect.rank > 0 ? (totalSubCost / effect.rank) : 1;
+    let netParentRate = parentBaseRate + pPerRank;
+    let finalCost = 0;
+    if (netParentRate >= 1 || effect.effectName === "Enhanced Trait") {
+      finalCost = totalSubCost + (pPerRank * effect.rank) + pFlat;
+    } else {
+      const ranksPerPoint = 2 - Math.round(netParentRate);
+      finalCost = Math.ceil(effect.rank / (ranksPerPoint > 1 ? ranksPerPoint : 2)) + pFlat;
+    }
     if(pRemovable > 0) finalCost -= Math.floor(finalCost / 5) * pRemovable;
     return finalCost < 1 ? 1 : finalCost;
 
@@ -303,8 +323,15 @@ char.calculateEffectCost = function(effect) {
         });
     }
     let netRate = pBaseCost + pPerRank;
-    if(netRate < 1) netRate = 1;
-    let finalCost = (netRate * (parseInt(effect.rank)||1)) + pFlat;
+    let rank = parseInt(effect.rank) || 1;
+    let baseCostTotal = 0;
+    if (netRate >= 1) {
+      baseCostTotal = netRate * rank;
+    } else {
+      const ranksPerPoint = 2 - netRate;
+      baseCostTotal = Math.ceil(rank / (ranksPerPoint > 1 ? ranksPerPoint : 2));
+    }
+    let finalCost = baseCostTotal + pFlat;
     if(pRemovable > 0) finalCost -= Math.floor(finalCost / 5) * pRemovable;
     return finalCost < 1 ? 1 : finalCost;
   }
@@ -419,29 +446,51 @@ window.stepVal = function(elemId, delta, minVal, maxVal) {
 };
 
 window.showAdvantageInfo = function(advName) {
-  const adv = ADVANTAGES_LIST.find(a => a.name === advName);
+  const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+  const baseName = advName.includes(" (") ? advName.split(" (")[0].trim() : advName.trim();
+  const adv = listRef.find(a => a.name.toLowerCase() === advName.toLowerCase() || a.name.toLowerCase() === baseName.toLowerCase());
   if (!adv) return;
-  document.getElementById("modalRuleTitle").textContent = adv.name + ` [${adv.category}]`;
+  document.getElementById("modalRuleTitle").textContent = adv.name + ` [${adv.category || (adv.types ? adv.types.join(", ") : "General")}]`;
   document.getElementById("modalRuleBody").innerHTML = adv.fullText || adv.description;
   document.getElementById("ruleInfoModal").classList.add("active");
 };
 
 window.showSkillInfo = function(skillName) {
-  const skill = SKILLS_LIST.find(s => s.name === skillName);
+  const baseName = skillName.includes(" (") ? skillName.split(" (")[0].trim() : skillName.trim();
+  const skill = typeof SKILLS_LIST !== 'undefined' ? SKILLS_LIST.find(s => s.name.toLowerCase() === skillName.toLowerCase() || s.name.toLowerCase() === baseName.toLowerCase()) : null;
   if (!skill) return;
-  document.getElementById("modalRuleTitle").textContent = skill.name + ` (${skill.ability})`;
+  document.getElementById("modalRuleTitle").textContent = (skillName !== skill.name ? `${skillName} [${skill.name}]` : skill.name) + ` (${skill.ability})`;
   document.getElementById("modalRuleBody").innerHTML = skill.fullText;
   document.getElementById("ruleInfoModal").classList.add("active");
 };
 
 let COMPLETE_FULL_TEXT_MAP = {};
 
-window.showPowerEffectInfo = function(effectName) {
-  const effect = POWER_EFFECTS_LIST.find(e => e.name === effectName);
+window.showPowerEffectInfo = function(effectName, profileName) {
+  let effect = null;
+  if (profileName) {
+    if (typeof POWER_PROFILES_LIST !== 'undefined') {
+      effect = POWER_PROFILES_LIST.find(p => p.name === profileName);
+    }
+    if (!effect && typeof POWER_EFFECTS_LIST !== 'undefined') {
+      for (const eff of POWER_EFFECTS_LIST) {
+        if (eff.profiles) {
+          const prof = eff.profiles.find(p => p.name === profileName);
+          if (prof) {
+            effect = prof;
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (!effect && typeof POWER_EFFECTS_LIST !== 'undefined') {
+    effect = POWER_EFFECTS_LIST.find(e => e.name === effectName);
+  }
   if (!effect) return;
   
-  document.getElementById("modalRuleTitle").textContent = `${effect.name} [${effect.type}]`;
-  const textToDisplay = effect.fullText || effect.shortDesc || "No description available.";
+  document.getElementById("modalRuleTitle").textContent = `${effect.name} [${effect.type || 'Power'}]`;
+  const textToDisplay = effect.fullText || effect.shortDesc || effect.description || "No description available.";
 
   const modalBody = document.getElementById("modalRuleBody");
   if (modalBody) {
@@ -454,29 +503,45 @@ window.showPowerEffectInfo = function(effectName) {
   }
 };
 
-window.showModifierInfo = function(modName) {
+window.showModifierInfo = function(modName, effectContextName) {
   if (!modName) return;
   let mod = null;
   const clean = modName.replace(/\s*\[.*?\]/g, '').trim();
   const baseName = clean.replace(/\s*\([+–-]?\d+[^)]*\)/g, '').trim();
   const normalize = (s) => (s || "").toLowerCase().replace(/[–—]/g, '-').replace(/[^a-z0-9]/g, '');
   const normTarget = normalize(baseName);
+  const cleanMod = (s) => (s || "").replace(/\s*\[.*?\]/g, '').replace(/\s*\([+–-]?\d+[^)]*\)/g, '').trim();
+  const matchMod = (m) => m && (m.name === modName || m.name === baseName || m.name === clean || cleanMod(m.name) === baseName || normalize(m.name) === normTarget || normalize(cleanMod(m.name)) === normTarget);
 
-  if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
-    mod = POWER_MODIFIERS_LIST.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
+  if (effectContextName && typeof POWER_EFFECTS_LIST !== 'undefined') {
+    const ctxEff = POWER_EFFECTS_LIST.find(e => e.name === effectContextName);
+    if (ctxEff) {
+      if (ctxEff.specificFeats) mod = ctxEff.specificFeats.find(matchMod);
+      if (!mod && ctxEff.specificExtras) mod = ctxEff.specificExtras.find(matchMod);
+      if (!mod && ctxEff.specificFlaws) mod = ctxEff.specificFlaws.find(matchMod);
+      if (!mod && ctxEff.uniqueModifiers) mod = ctxEff.uniqueModifiers.find(matchMod);
+    }
+  }
+
+  if (!mod && typeof POWER_MODIFIERS_LIST !== 'undefined') {
+    mod = POWER_MODIFIERS_LIST.find(matchMod);
   }
   if (!mod && typeof POWER_EFFECTS_LIST !== 'undefined') {
     for (const eff of POWER_EFFECTS_LIST) {
       if (eff.uniqueModifiers) {
-        mod = eff.uniqueModifiers.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
+        mod = eff.uniqueModifiers.find(matchMod);
         if (mod) break;
       }
       if (eff.specificExtras) {
-        mod = eff.specificExtras.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
+        mod = eff.specificExtras.find(matchMod);
         if (mod) break;
       }
       if (eff.specificFlaws) {
-        mod = eff.specificFlaws.find(m => m.name === modName || m.name === baseName || m.name === clean || normalize(m.name) === normTarget);
+        mod = eff.specificFlaws.find(matchMod);
+        if (mod) break;
+      }
+      if (eff.specificFeats) {
+        mod = eff.specificFeats.find(matchMod);
         if (mod) break;
       }
     }
@@ -612,6 +677,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupThemeAndFontControls();
   setupBackgroundHandlers();
   setupFileHandlers();
+  setupCompanionModalHandlers();
   setupSortingHeaders();
   setupDefenseSteppers();
   setupPowerHandlers();
@@ -622,12 +688,19 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function setupTabs() {
+  let previousActiveTab = "tab-basics";
+
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
       btn.classList.add("active");
-      document.getElementById(btn.dataset.tab).classList.add("active");
+      const targetContent = document.getElementById(btn.dataset.tab);
+      if (targetContent) targetContent.classList.add("active");
+
+      // Hide back button when any normal tab is clicked
+      const btnBack = document.getElementById("btnBackFromTables");
+      if (btnBack) btnBack.style.display = "none";
       
       // Update power context for shared UI logic
       if (btn.dataset.tab === "tab-blueprints") {
@@ -636,9 +709,81 @@ function setupTabs() {
       } else if (btn.dataset.tab === "tab-powers") {
           window.activePowerContext = 'powers';
           buildPowersUI();
+      } else if (btn.dataset.tab === "tab-companions") {
+          buildCompanionsUI();
       }
     });
   });
+
+  const btnOpenTables = document.getElementById("btnOpenTables");
+  const btnBackFromTables = document.getElementById("btnBackFromTables");
+
+  if (btnOpenTables) {
+    btnOpenTables.addEventListener("click", () => {
+      const tablesContent = document.getElementById("tab-tables");
+      // If tables are already active, toggle back to previous view
+      if (tablesContent && tablesContent.classList.contains("active")) {
+        if (btnBackFromTables) {
+          btnBackFromTables.click();
+        }
+        return;
+      }
+
+      // Record which tab was active before opening tables
+      const currentActiveBtn = document.querySelector(".tab-btn.active");
+      if (currentActiveBtn && currentActiveBtn.dataset.tab) {
+        previousActiveTab = currentActiveBtn.dataset.tab;
+      }
+
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+      if (tablesContent) tablesContent.classList.add("active");
+
+      if (btnBackFromTables) {
+        btnBackFromTables.style.display = "inline-flex";
+        const prevBtn = document.querySelector(`.tab-btn[data-tab="${previousActiveTab}"]`);
+        const prevName = prevBtn ? prevBtn.textContent.trim() : "Previous View";
+        btnBackFromTables.title = `Return to ${prevName}`;
+      }
+    });
+  }
+
+  if (btnBackFromTables) {
+    btnBackFromTables.addEventListener("click", () => {
+      const targetTab = previousActiveTab || "tab-basics";
+      const targetBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+      if (targetBtn) {
+        targetBtn.click();
+      } else {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+        const targetContent = document.getElementById(targetTab);
+        if (targetContent) targetContent.classList.add("active");
+        btnBackFromTables.style.display = "none";
+      }
+    });
+  }
+
+  const btnReturn = document.getElementById("btnReturnToPrimaryHero");
+  if (btnReturn) {
+    btnReturn.addEventListener("click", () => {
+      returnToPrimaryHero();
+    });
+  }
+
+  const selChar = document.getElementById("selActiveCharacterContext");
+  if (selChar) {
+    selChar.addEventListener("change", (e) => {
+      if (e.target.value === "__add_new__") {
+        openCreateCompanionModal();
+        e.target.value = window.activeCompanionId || "main";
+      } else if (e.target.value === "main") {
+        returnToPrimaryHero();
+      } else {
+        switchToCompanion(e.target.value);
+      }
+    });
+  }
 }
 
 function setupCollapsibles() {
@@ -652,44 +797,31 @@ function setupCollapsibles() {
 function setupOptionsModal() {
   const btn = document.getElementById("btnToggleOptions");
   const modal = document.getElementById("optionsModal");
-  const modalContent = modal ? modal.querySelector(".modal-content") || modal : null;
 
-  if (modalContent && !document.getElementById("chkDisableWarnings")) {
-      const warningsDiv = document.createElement("div");
-      warningsDiv.style.marginTop = "16px";
-      warningsDiv.style.paddingTop = "16px";
-      warningsDiv.style.borderTop = "1px solid var(--border-color)";
-      
-      const isChecked = (localStorage.getItem("mm2e_disable_warnings") ?? localStorage.getItem("mm4e_disable_warnings")) === "true";
-      const isResWarningDisabled = (localStorage.getItem("mm2e_disable_res_warning") ?? localStorage.getItem("mm4e_disable_res_warning")) === "true";
-      const isDeleteWarningDisabled = (localStorage.getItem("mm2e_disable_delete_warning") ?? localStorage.getItem("mm4e_disable_delete_warning")) === "true";
+  const chkWarn = document.getElementById("chkDisableWarnings");
+  const chkDelWarn = document.getElementById("chkDisableDeleteWarning");
+  const chkResWarn = document.getElementById("chkDisableResWarning");
 
-      warningsDiv.innerHTML = `
-          <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-labels); cursor: pointer; margin-bottom: 8px;">
-              <input type="checkbox" id="chkDisableWarnings" ${isChecked ? "checked" : ""}>
-              Disable non-critical power option alerts
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-labels); cursor: pointer; margin-bottom: 8px;">
-              <input type="checkbox" id="chkDisableDeleteWarning" ${isDeleteWarningDisabled ? "checked" : ""}>
-              Disable power container deletion warnings
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-labels); cursor: pointer;">
-              <input type="checkbox" id="chkDisableResWarning" ${isResWarningDisabled ? "checked" : ""}>
-              Disable screen resolution warning
-          </label>
-      `;
-      modalContent.appendChild(warningsDiv);
-
-      document.getElementById("chkDisableWarnings").addEventListener("change", (e) => {
-          localStorage.setItem("mm2e_disable_warnings", e.target.checked);
-      });
-      document.getElementById("chkDisableDeleteWarning").addEventListener("change", (e) => {
-          localStorage.setItem("mm2e_disable_delete_warning", e.target.checked);
-      });
-      document.getElementById("chkDisableResWarning").addEventListener("change", (e) => {
-          localStorage.setItem("mm2e_disable_res_warning", e.target.checked);
-          window.checkScreenResolution(); 
-      });
+  if (chkWarn) {
+    chkWarn.checked = (localStorage.getItem("mm2e_disable_warnings") ?? localStorage.getItem("mm4e_disable_warnings")) === "true";
+    chkWarn.addEventListener("change", (e) => {
+      localStorage.setItem("mm2e_disable_warnings", e.target.checked);
+    });
+  }
+  if (chkDelWarn) {
+    chkDelWarn.checked = (localStorage.getItem("mm2e_disable_delete_warning") ?? localStorage.getItem("mm4e_disable_delete_warning")) === "true";
+    chkDelWarn.addEventListener("change", (e) => {
+      localStorage.setItem("mm2e_disable_delete_warning", e.target.checked);
+    });
+  }
+  if (chkResWarn) {
+    chkResWarn.checked = (localStorage.getItem("mm2e_disable_res_warning") ?? localStorage.getItem("mm4e_disable_res_warning")) === "true";
+    chkResWarn.addEventListener("change", (e) => {
+      localStorage.setItem("mm2e_disable_res_warning", e.target.checked);
+      if (typeof window.checkScreenResolution === "function") {
+        window.checkScreenResolution();
+      }
+    });
   }
 
   btn.addEventListener("click", (e) => {
@@ -710,13 +842,98 @@ function setupInfoModalHandlers() {
   const overlay = document.getElementById("ruleInfoModal");
   const closeBtn = document.getElementById("modalRuleClose");
 
-  closeBtn.addEventListener("click", () => {
-    overlay.classList.remove("active");
-  });
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
+  if (closeBtn && overlay) {
+    closeBtn.addEventListener("click", () => {
       overlay.classList.remove("active");
+    });
+  }
+
+  if (overlay) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        overlay.classList.remove("active");
+      }
+    });
+  }
+
+  // Power Points Breakdown Modal
+  const ppModal = document.getElementById("ppBreakdownModal");
+  const ppCloseBtn = document.getElementById("modalPPBreakdownClose");
+  const ppCloseBtn2 = document.getElementById("btnClosePPModal");
+  const btnTogglePP = document.getElementById("btnTogglePPBreakdown");
+
+  if (btnTogglePP && ppModal) {
+    btnTogglePP.addEventListener("click", () => {
+      ppModal.classList.toggle("active");
+    });
+  }
+
+  if (ppCloseBtn && ppModal) {
+    ppCloseBtn.addEventListener("click", () => {
+      ppModal.classList.remove("active");
+    });
+  }
+
+  if (ppCloseBtn2 && ppModal) {
+    ppCloseBtn2.addEventListener("click", () => {
+      ppModal.classList.remove("active");
+    });
+  }
+
+  if (ppModal) {
+    ppModal.addEventListener("click", (e) => {
+      if (e.target === ppModal) {
+        ppModal.classList.remove("active");
+      }
+    });
+  }
+
+  // Mecha Mode Toggle
+  const btnToggleMecha = document.getElementById("btnToggleMechaMode");
+  if (btnToggleMecha) {
+    btnToggleMecha.addEventListener("click", () => {
+      window.toggleMechaMode();
+    });
+  }
+
+  // Mecha AI toggle checkbox
+  const chkMechaAI = document.getElementById("chkMechaHasAI");
+  if (chkMechaAI) {
+    chkMechaAI.addEventListener("change", (e) => {
+      if (typeof char !== 'undefined' && char.isMecha) {
+        char.setMechaMode(true, e.target.checked);
+        populateUIFromCharacter();
+        refreshUI();
+        showToast(e.target.checked ? "🤖 Onboard AI Equipped (Mental Abilities Enabled)" : "Onboard AI Unequipped (INT/WIS/CHA Disabled)", "info");
+      }
+    });
+  }
+
+  const featModal = document.getElementById("addFeatModal");
+  if (featModal) {
+    featModal.addEventListener("click", (e) => {
+      if (e.target === featModal) window.closeAddFeatModal();
+    });
+  }
+
+  const skillModal = document.getElementById("addSkillModal");
+  if (skillModal) {
+    skillModal.addEventListener("click", (e) => {
+      if (e.target === skillModal) window.closeAddSkillModal();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (ppModal && ppModal.classList.contains("active")) {
+        ppModal.classList.remove("active");
+      }
+      if (featModal && featModal.classList.contains("active")) {
+        window.closeAddFeatModal();
+      }
+      if (skillModal && skillModal.classList.contains("active")) {
+        window.closeAddSkillModal();
+      }
     }
   });
 }
@@ -734,11 +951,11 @@ function setupThemeAndFontControls() {
   const themeNames = { light: "Light", dark: "Dark", kitty: "Kitty", parchment: "Parchment" };
 
   const savedTheme = localStorage.getItem("mm2e_theme") || "light";
-  const savedLabelFont = localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16";
-  const savedControlFont = localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14";
-  const savedLinkFont = localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "14";
-  const savedSecondaryFont = localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14";
-  const savedMinorControlFont = localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "14";
+  const savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
+  const savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
+  const savedLinkFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "14", 10));
+  const savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
+  const savedMinorControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "14", 10));
   
   root.setAttribute("data-theme", savedTheme);
 
@@ -994,6 +1211,16 @@ function buildAbilitiesUI() {
     });
   });
 
+  const chkMechaAI = document.getElementById("chkMechaHasAI");
+  if (chkMechaAI) {
+    chkMechaAI.addEventListener("change", (e) => {
+      char.setMechaMode(char.isMecha, e.target.checked);
+      populateUIFromCharacter();
+      refreshUI();
+      showToast(e.target.checked ? "Onboard AI equipped: Mental abilities enabled." : "Onboard AI removed: Unconscious machine construct.", "info");
+    });
+  }
+
   document.getElementById("heroNameInput").addEventListener("input", (e) => {
     char.name = e.target.value;
     refreshUI();
@@ -1003,7 +1230,9 @@ function buildAbilitiesUI() {
   });
   document.getElementById("heroPLInput").addEventListener("input", (e) => {
     char.powerLevel = parseInt(e.target.value) || 10;
-    char.totalPointsAllowed = char.powerLevel * 15;
+    if (!window.activeCompanionId) {
+      char.totalPointsAllowed = char.powerLevel * 15;
+    }
     buildAdvantagesUI();
     refreshUI();
   });
@@ -1040,36 +1269,99 @@ function setupDefenseSteppers() {
   });
 }
 
+function getSkillMetadata(skillName) {
+  if (!skillName) return { baseName: "", ability: "INT", untrained: false, relatedFeats: [], fullText: "" };
+  const baseName = skillName.includes(" (") ? skillName.split(" (")[0].trim() : skillName.trim();
+  const found = typeof SKILLS_LIST !== 'undefined' ? SKILLS_LIST.find(s => s.name.toLowerCase() === baseName.toLowerCase()) : null;
+  if (found) {
+    return {
+      baseName: found.name,
+      ability: found.ability,
+      untrained: found.untrained,
+      relatedFeats: found.relatedFeats || [],
+      fullText: found.fullText || ""
+    };
+  }
+  let ability = "INT";
+  if (/^(acrobatics|drive|escape artist|pilot|ride|sleight of hand|stealth)$/i.test(baseName)) ability = "DEX";
+  else if (/^(bluff|diplomacy|disguise|gather information|handle animal|intimidate|perform)$/i.test(baseName)) ability = "CHA";
+  else if (/^(climb|swim)$/i.test(baseName)) ability = "STR";
+  else if (/^(concentration|medicine|notice|profession|sense motive|survival)$/i.test(baseName)) ability = "WIS";
+  else if (/^(language)$/i.test(baseName)) ability = "None";
+  return { baseName, ability, untrained: false, relatedFeats: [], fullText: "" };
+}
+
 function buildSkillsUI() {
   const tbody = document.querySelector("#skillsTable tbody");
   if (!tbody) return;
-  tbody.innerHTML = skillsDisplayList.map(skill => {
-    const idSafe = skill.name.replace(/[^a-zA-Z0-9]/g, "_");
-    const val = char.skills[skill.name] || 0;
-    const focusVal = char.skillDetails ? (char.skillDetails[skill.name] || "") : "";
 
+  const purchasedSkills = char.skills || {};
+  const enhancedSkills = (char.enhancedTraits && char.enhancedTraits.skills) || {};
+  const allSkillKeys = new Set();
+
+  Object.keys(purchasedSkills).forEach(k => {
+    if ((purchasedSkills[k] || 0) > 0) allSkillKeys.add(k);
+  });
+  Object.keys(enhancedSkills).forEach(k => {
+    if ((enhancedSkills[k] || 0) > 0) allSkillKeys.add(k);
+  });
+
+  let activeList = Array.from(allSkillKeys).map(name => {
+    const meta = getSkillMetadata(name);
+    return {
+      name,
+      baseName: meta.baseName,
+      ability: meta.ability,
+      untrained: meta.untrained,
+      relatedFeats: meta.relatedFeats
+    };
+  });
+
+  activeList.sort((a, b) => {
+    let valA = a[skillSort.col] || a.name;
+    let valB = b[skillSort.col] || b.name;
+    if (typeof valA === "boolean") { valA = valA ? 1 : 0; valB = valB ? 1 : 0; }
+    if (valA < valB) return skillSort.asc ? -1 : 1;
+    if (valA > valB) return skillSort.asc ? 1 : -1;
+    return 0;
+  });
+
+  if (activeList.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">
+          No skills added yet. Click <button type="button" class="btn btn-sm" onclick="window.openAddSkillModal()" style="margin: 0 4px; padding: 2px 8px;">+ Add Skill</button> to add skills or specializations.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = activeList.map(item => {
+    const idSafe = item.name.replace(/[^a-zA-Z0-9]/g, "_");
+    const val = char.skills[item.name] || 0;
+    const enhSkill = enhancedSkills[item.name] || 0;
+    const isEnhancedOnly = val === 0 && enhSkill > 0;
     const skillNameStyle = val > 0 ? 'color: #f59e0b;' : '';
 
-    let featsArray = skill.relatedFeats ? [...skill.relatedFeats] : [];
+    let featsArray = item.relatedFeats ? [...item.relatedFeats] : [];
     
     // Skill Mastery check
     const smRanks = char.feats["Skill Mastery"] || 0;
     if (smRanks > 0) {
       try {
         const mastered = JSON.parse(char.featDetails["Skill Mastery"] || "[]");
-        if (mastered.includes(skill.name) && !featsArray.includes("Skill Mastery")) {
+        if ((mastered.includes(item.name) || mastered.includes(item.baseName)) && !featsArray.includes("Skill Mastery")) {
           featsArray.push("Skill Mastery");
         }
       } catch(e) {}
     }
 
-    // Favored Opponent applies to Sense Motive
-    if (skill.name === "Sense Motive" && !featsArray.includes("Favored Opponent")) {
+    if (item.name === "Sense Motive" && !featsArray.includes("Favored Opponent")) {
       featsArray.push("Favored Opponent");
     }
 
     let advTagsHtml = "";
-    const enhSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skill.name]) ? char.enhancedTraits.skills[skill.name] : 0;
     const effFeats = char.effectiveFeats || char.feats;
     const tagsList = [];
     if (enhSkill > 0) {
@@ -1093,26 +1385,28 @@ function buildSkillsUI() {
       advTagsHtml = `<span class="secondary-text">—</span>`;
     }
 
+    const removeBtnHtml = isEnhancedOnly 
+      ? `<button type="button" class="btn btn-sm btn-secondary" style="padding: 2px 6px; opacity: 0.5; cursor: not-allowed;" title="Granted by active power or alternate form" disabled>✕</button>`
+      : `<button type="button" class="btn btn-sm" style="padding: 2px 6px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="window.removeSkill('${item.name.replace(/'/g, "\\'")}')" title="Remove this skill">✕</button>`;
+
     return `
       <tr>
-        <td><strong style="${skillNameStyle}">${skill.name}</strong></td>
-        <td>${skill.ability}</td>
-        <td>${skill.untrained ? `<span style="color:#10b981; font-weight:600;">Yes</span>` : `<span style="color:#f59e0b; font-weight:600;">Trained Only</span>`}</td>
+        <td><strong style="${skillNameStyle}">${item.name}</strong></td>
+        <td>${item.ability}</td>
+        <td>${item.untrained ? `<span style="color:#10b981; font-weight:600;">Yes</span>` : `<span style="color:#f59e0b; font-weight:600;">Trained Only</span>`}</td>
         <td id="skill_base_${idSafe}">0</td>
         <td>
           <div class="stepper-group">
             <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('skill_input_${idSafe}', -1, 0, 20)">−</button>
-            <input type="number" id="skill_input_${idSafe}" class="stepper-input" min="0" max="20" value="${val}" data-skill="${skill.name}">
+            <input type="number" id="skill_input_${idSafe}" class="stepper-input" min="0" max="20" value="${val}" data-skill="${item.name}">
             <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('skill_input_${idSafe}', 1, 0, 20)">+</button>
           </div>
         </td>
         <td id="skill_total_${idSafe}"><strong>+0</strong></td>
-        <td>
-          ${skill.focused ? `<input type="text" class="skill-focus-input" data-skill="${skill.name}" value="${focusVal}" placeholder="e.g. ${skill.focuses ? skill.focuses.slice(0, 3).join(', ') : 'Specialization'}..." style="width: 100%; min-width: 130px;">` : `<span class="secondary-text">${skill.specializations ? skill.specializations.slice(0, 2).join(', ') : '—'}</span>`}
-        </td>
         <td>${advTagsHtml}</td>
-        <td style="text-align: center;">
-          <button type="button" class="btn-info-circle" onclick="showSkillInfo('${skill.name}')" title="View Full Skill Rules">?</button>
+        <td style="text-align: center; white-space: nowrap;">
+          <button type="button" class="btn-info-circle" onclick="window.showSkillInfo('${item.name.replace(/'/g, "\\'")}')" title="View Skill Rules">?</button>
+          ${removeBtnHtml}
         </td>
       </tr>
     `;
@@ -1120,36 +1414,385 @@ function buildSkillsUI() {
 
   tbody.querySelectorAll("input.stepper-input").forEach(input => {
     input.addEventListener("input", (e) => {
-      char.skills[e.target.dataset.skill] = parseInt(e.target.value) || 0;
-      buildSkillsUI();
+      const sk = e.target.dataset.skill;
+      const newV = parseInt(e.target.value) || 0;
+      if (newV <= 0 && (!enhancedSkills[sk] || enhancedSkills[sk] <= 0)) {
+        delete char.skills[sk];
+        buildSkillsUI();
+      } else {
+        char.skills[sk] = newV;
+      }
       refreshUI();
-    });
-  });
-
-  tbody.querySelectorAll("input.skill-focus-input").forEach(input => {
-    input.addEventListener("input", (e) => {
-      if (!char.skillDetails) char.skillDetails = {};
-      char.skillDetails[e.target.dataset.skill] = e.target.value;
     });
   });
 }
 
+window.removeSkill = function(skillName) {
+  if (confirm(`Remove "${skillName}" from your character sheet?`)) {
+    if (char.removeSkill) {
+      char.removeSkill(skillName);
+    } else {
+      delete char.skills[skillName];
+      if (char.skillDetails) delete char.skillDetails[skillName];
+    }
+    buildSkillsUI();
+    refreshUI();
+    showToast(`Removed skill "${skillName}"`, "info");
+  }
+};
+
+const MECHA_SUBOPTIONS_MAP = {
+  "Electromagnetic Seal": [
+    { value: "Base Seal (Radiation & Cosmic Rays)" },
+    { value: "Insubstantial: Rank 1 (Gaseous / Vaporous)" },
+    { value: "Insubstantial: Rank 2 (Liquid Forms)" },
+    { value: "Insubstantial: Rank 3 (Energy & Plasma Forms)" },
+    { value: "Insubstantial: Rank 4 (Incorporeal / Spirits)" },
+    { value: "Perception: Visual Dazzle / Blinding Flashes" },
+    { value: "Perception: Auditory Dazzle / Sonic Deafening" },
+    { value: "Perception: Mental Attacks / Psionic Blast" },
+    { value: "Perception: Sensory Overload" }
+  ],
+  "Environmental Seal": [
+    { value: "Vacuum & Deep Space" },
+    { value: "Oceanic Depths (High Pressure Aquatic)" },
+    { value: "Corrosive Acid & Chemical Gas" },
+    { value: "Toxic / Biological Alien Atmosphere" },
+    { value: "Volcanic / Superheated Plasma" },
+    { value: "Cryogenic / Sub-Zero Extreme" }
+  ],
+  "Ejector Seat": [
+    { value: "Leaping 5 Launch Distance" },
+    { value: "Parachute / Glider Thruster Flight Pack" },
+    { value: "Survival Pod Environmental Seal" },
+    { value: "Cockpit Capsule Electromagnetic Seal" },
+    { value: "Extended Booster Rocket (+1 Rank Leaping)" }
+  ],
+  "Equipment Mount": [
+    { value: "Right Shoulder Hardpoint" },
+    { value: "Left Shoulder Hardpoint" },
+    { value: "Dorsal / Backpack Rack" },
+    { value: "Right Forearm Pylon" },
+    { value: "Left Forearm Pylon" },
+    { value: "Wing / Aerodynamic Pylon" },
+    { value: "Hip / Waist Holster" },
+    { value: "Chest / Torso Heavy Mount" }
+  ],
+  "All-Terrain": [
+    { value: "Snow & Ice (Arctic / Glacial)" },
+    { value: "Mountain & Steep Scree (Cliffs / Rock)" },
+    { value: "Swamp & Marsh (Mud / Wetlands)" },
+    { value: "Desert & Sand Dunes (Loose Sand)" },
+    { value: "Urban Rubble & Collapsed Structures" },
+    { value: "Dense Jungle & Forest Undergrowth" },
+    { value: "Subterranean Caves & Loose Gravel" }
+  ],
+  "Countermeasures": [
+    { value: "Thermal Flares (Heat-Seeking / Infrared)" },
+    { value: "Chaff Dispensers (Radar / Radio Guided)" },
+    { value: "Aerosol & Smoke Screen (Laser / Optical)" },
+    { value: "Acoustic Decoy Pings (Sonar / Sonic)" },
+    { value: "EMP / Static Pulse (Magnetic / Electronic)" }
+  ],
+  "Jamming": [
+    { value: "Radar & Radio Frequency (Electronic Warfare)" },
+    { value: "Infrared & Thermal Scanners (Thermal Cloaking)" },
+    { value: "Optical & Visual Cameras (Holographic Distortion)" },
+    { value: "Acoustic & Sonar (Noise Scrambler)" },
+    { value: "Full Spectrum / Multi-Band Jamming" }
+  ],
+  "Reactive Armor": [
+    { value: "Ballistic & Kinetic Projectiles (Explosive Reactive Tiles)" },
+    { value: "Laser & Beam Weaponry (Reflective Ablative Tiles)" },
+    { value: "Plasma & Thermal Heat (Thermal Dissipation Tiles)" },
+    { value: "Concussive & Shockwave (Blast Venting Armor)" }
+  ],
+  "Improved Plating": [
+    { value: "Critical Hits (2 ranks)" },
+    { value: "Fire & Heat Damage (5 ranks)" },
+    { value: "Cold & Freezing Damage (5 ranks)" },
+    { value: "Electricity & Shock Damage (5 ranks)" },
+    { value: "Radiation & Cosmic Rays (5 ranks)" },
+    { value: "Corrosive Acid Damage (5 ranks)" },
+    { value: "Magnetic & EMP Attacks (5 ranks)" }
+  ],
+  "Channel (Trait)": [
+    { value: "Power Attack (Feat)" },
+    { value: "All-Out Attack (Feat)" },
+    { value: "Elusive Target (Feat)" },
+    { value: "Fascinate (Feat)" },
+    { value: "Takedown Attack (Feat)" },
+    { value: "Blast (Power - Energy blast via chassis)" },
+    { value: "Strike (Power - Melee channel)" },
+    { value: "Force Field (Power - Protective aura)" },
+    { value: "Teleport (Power - Tactical phase)" }
+  ],
+  "Target Tracking Interface": [
+    { value: "Primary Ranged Cannon / Heavy Rifle" },
+    { value: "Secondary Beam Guns / Head Vulcans" },
+    { value: "Melee Saber / Blade Weapon" },
+    { value: "Missile Pod / Micro-Rockets" },
+    { value: "Heavy Siege Artillery" }
+  ],
+  "Profile Entry": [
+    { value: "Enemy Mass-Production Grunt Mecha" },
+    { value: "Enemy Elite Commander Mecha" },
+    { value: "Kaiju & Giant Bio-Monsters" },
+    { value: "Alien Starfighters & Drones" },
+    { value: "Heavy Armored Ground Tanks" },
+    { value: "Submersible Naval Warships" }
+  ],
+  "Environmental Optimization": [
+    { value: "Space & Orbital Vacuum (Zero-G)" },
+    { value: "Urban Megacity & Industrial Ruins" },
+    { value: "Aerial & High Altitude Skies" },
+    { value: "Desert Dunes & Arid Wasteland" },
+    { value: "Deep Ocean & Submersible Aquatic" },
+    { value: "Subterranean Caverns & Tunnels" },
+    { value: "Arctic Tundra & Glacial Permafrost" }
+  ],
+  "Improved System Processor": [
+    { value: "Piloting & High-Speed Maneuvers (Pilot checks)" },
+    { value: "Countermeasures & Defense (Block checks)" },
+    { value: "Decoy Projection Module (Redirect checks)" },
+    { value: "Datalink & Electronic Warfare (Computers checks)" },
+    { value: "Sensor Arrays & Telemetry (Search/Notice checks)" }
+  ],
+  "Mechamorph": [
+    { value: "High-Speed Aero-Fighter Mode (Jet / Spacecraft)" },
+    { value: "Heavy Ground Vehicle Mode (Tank / Cruiser)" },
+    { value: "Cyber-Beast / Animal Form" },
+    { value: "Submersible Naval Mode (Submarine)" },
+    { value: "Mobile Artillery Fortress (Siege Emplacement)" },
+    { value: "Gerwalk / Hybrid Semi-Walker Mode" }
+  ],
+  "Composite (Gestalt)": [
+    { value: "Core Torso / Command Module" },
+    { value: "Right Arm / Primary Weapon Assembly" },
+    { value: "Left Arm / Shield Assembly" },
+    { value: "Right Leg / Main Thruster Assembly" },
+    { value: "Left Leg / Stabilizer Assembly" },
+    { value: "Heavy Wings / Booster Pack Assembly" }
+  ],
+  "Support Units": [
+    { value: "Remote Attack Bits / Funnels (Beam Turrets)" },
+    { value: "Scout & Recon Sensor Probes" },
+    { value: "Defensive Barrier Escort Pods" },
+    { value: "In-Flight Maintenance & Repair Drones" },
+    { value: "Decoy Automaton Drones" }
+  ],
+  "Base Sensors": [
+    { value: "Long-Range Radar Array (Radio Sense)" },
+    { value: "Thermal Infrared Imaging (Thermal Vision)" },
+    { value: "Low-Light & Night Vision Visor" },
+    { value: "Ladar / Laser Rangefinder" },
+    { value: "Lifeform / Bioscan Telemetry" },
+    { value: "Quantum / Subspace Telemetry Scanner" }
+  ],
+  "Base Comms": [
+    { value: "Tactical Military Radio Transceiver" },
+    { value: "Laser Burst / Directional Tightbeam" },
+    { value: "Satellite Uplink / Microwave Relay" },
+    { value: "Sub-Space / Quantum Entanglement Link" }
+  ],
+  "Top Gun": [
+    { value: "Avoid Collision & Shake Lock" },
+    { value: "High Speed Turn & Bootleg Reverse" },
+    { value: "Drop Prone (Duck) & Quick Stand" },
+    { value: "Jink & Barrel Roll" }
+  ],
+  "Quick Transformation": [
+    { value: "Mechamorph (Alternate Form)" },
+    { value: "Composite / Gestalt (Docking / Combining)" },
+    { value: "Special Movement Modes (Flight / Treads / Thrusters)" }
+  ],
+  "Cloak System": [
+    { value: "Visual Concealment (Active Camouflage)" },
+    { value: "Radar & Radio Concealment (Stealth Coating)" },
+    { value: "Thermal & Infrared Concealment (Cold Baffles)" },
+    { value: "Full Spectrum Cloak (Visual, Radar, Thermal)" }
+  ],
+  "Neural/Spirit Interface": [
+    { value: "Acrobatics (Substitute for Pilot checks)" },
+    { value: "Leaping (Channel physical jump power)" },
+    { value: "Speed (Channel physical sprint speed)" },
+    { value: "Flight (Channel physical flight power)" }
+  ],
+  "Multipede": [
+    { value: "Quadruped (4 Legs - Heavy Stability)" },
+    { value: "Hexapod (6 Legs - All-Direction Walking)" },
+    { value: "Octopod (8 Legs - Spider Mecha Chassis)" }
+  ],
+  "Extra Seat": [
+    { value: "Co-Pilot / Navigator Station" },
+    { value: "Gunner / Fire Control Station" },
+    { value: "Sensor / Electronic Warfare Officer Station" },
+    { value: "Passenger Cabin / Jump Seat" }
+  ],
+  "Mecha Attunement": [
+    { value: "Personal Defensive Power (Shield / Armor)" },
+    { value: "Touch-Range Melee Attack Power" },
+    { value: "Perception-Range Sensor Power" },
+    { value: "Movement Power (Flight / Teleport)" }
+  ]
+};
+
+window.MECHA_SUBOPTIONS_MAP = MECHA_SUBOPTIONS_MAP;
+
+window.getFeatSubOptionsList = function(featKey, expectedRank) {
+  if (!char) return [];
+  const baseKey = featKey.includes(" (") ? featKey.split(" (")[0].trim() : featKey.trim();
+  const raw = char.featDetails ? char.featDetails[featKey] : null;
+  let arr = [];
+  if (Array.isArray(raw)) {
+    arr = [...raw];
+  } else if (typeof raw === 'string' && raw.trim()) {
+    if (raw.startsWith("[") && raw.endsWith("]")) {
+      try { arr = JSON.parse(raw); } catch(e) { arr = [raw]; }
+    } else if (raw.includes("; ")) {
+      arr = raw.split("; ").map(s => s.trim());
+    } else if (raw.includes(" | ")) {
+      arr = raw.split(" | ").map(s => s.trim());
+    } else {
+      arr = [raw.trim()];
+    }
+  } else if (featKey.includes(" (") && featKey.endsWith(")")) {
+    const inside = featKey.substring(featKey.indexOf("(") + 1, featKey.lastIndexOf(")"));
+    if (inside.includes("; ")) {
+      arr = inside.split("; ").map(s => s.trim());
+    } else if (inside.includes(", ")) {
+      arr = inside.split(", ").map(s => s.trim());
+    } else {
+      arr = [inside.trim()];
+    }
+  }
+
+  const r = parseInt(expectedRank) || (char.feats ? (char.feats[featKey] || 1) : 1);
+  let neededSlots = 1;
+  if (baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat") {
+    neededSlots = Math.max(0, r - 1);
+  } else if (baseKey === "Environmental Seal") {
+    neededSlots = 1;
+  } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[baseKey]) {
+    neededSlots = Math.max(1, r);
+  }
+
+  let mapOpts = (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[baseKey]) ? MECHA_SUBOPTIONS_MAP[baseKey] : [];
+  if (baseKey === "Electromagnetic Seal") {
+    mapOpts = mapOpts.filter(o => !o.value.startsWith("Base Seal"));
+  } else if (baseKey === "Ejector Seat") {
+    mapOpts = mapOpts.filter(o => o.value !== "Leaping 5 Launch Distance");
+  }
+
+  if (mapOpts.length > 0) {
+    while (arr.length < neededSlots) {
+      const unused = mapOpts.find(o => !arr.includes(o.value));
+      if (unused) {
+        arr.push(unused.value);
+      } else {
+        arr.push(mapOpts[arr.length % mapOpts.length].value);
+      }
+    }
+    if (arr.length > neededSlots) {
+      arr = arr.slice(0, neededSlots);
+    }
+  }
+
+  return arr;
+};
+
+window.updateMechaSubOptionSlot = function(featKey, slotIdx, newSubOption) {
+  if (!char || !char.feats) return;
+  const rank = char.feats[featKey] || 1;
+  const baseName = featKey.includes(" (") ? featKey.split(" (")[0].trim() : featKey.trim();
+  const slots = window.getFeatSubOptionsList(featKey, rank);
+  slots[slotIdx] = newSubOption;
+
+  if (!char.featDetails) char.featDetails = {};
+  char.featDetails[featKey] = slots;
+
+  buildAdvantagesUI();
+  refreshUI();
+  showToast(`Updated "${baseName}" (#${slotIdx + 1}): ${newSubOption}`, "info");
+};
+
+window.updateMechaSubOption = function(featKey, newSubOption) {
+  window.updateMechaSubOptionSlot(featKey, 0, newSubOption);
+};
+
 function buildAdvantagesUI() {
   const tbody = document.querySelector("#advantagesTable tbody");
   if (!tbody) return;
-  tbody.innerHTML = advantagesDisplayList.map(adv => {
+
+  const purchasedFeats = char.feats || {};
+  const enhancedFeats = (char.enhancedTraits && char.enhancedTraits.feats) || {};
+  const allFeatKeys = new Set();
+
+  Object.keys(purchasedFeats).forEach(k => {
+    if ((purchasedFeats[k] || 0) > 0) allFeatKeys.add(k);
+  });
+  Object.keys(enhancedFeats).forEach(k => {
+    if ((enhancedFeats[k] || 0) > 0) allFeatKeys.add(k);
+  });
+
+  const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+
+  let activeList = Array.from(allFeatKeys).map(featName => {
+    const baseName = featName.includes(" (") ? featName.split(" (")[0].trim() : featName.trim();
+    const baseFeat = listRef.find(a => a.name.toLowerCase() === baseName.toLowerCase() || a.name.toLowerCase() === featName.toLowerCase()) || {
+      name: featName,
+      category: "General",
+      ranked: true,
+      description: "",
+      fullText: ""
+    };
+    return {
+      name: featName,
+      baseName: baseFeat.name,
+      category: baseFeat.category || (baseFeat.types ? baseFeat.types.join(", ") : "General"),
+      ranked: baseFeat.ranked !== false,
+      description: baseFeat.description || "",
+      baseFeat: baseFeat
+    };
+  });
+
+  activeList.sort((a, b) => {
+    let valA = a[advSort.col] || a.name;
+    let valB = b[advSort.col] || b.name;
+    if (valA < valB) return advSort.asc ? -1 : 1;
+    if (valA > valB) return advSort.asc ? 1 : -1;
+    return 0;
+  });
+
+  if (activeList.length === 0) {
+    const isMecha = typeof char !== 'undefined' && char.isMecha;
+    const addLabel = isMecha ? "+ Add Mecha Option" : "+ Add Feat";
+    const noun = isMecha ? "mecha options" : "feats";
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">
+          No ${noun} added yet. Click <button type="button" class="btn btn-sm" onclick="window.openAddFeatModal()" style="margin: 0 4px; padding: 2px 8px;">${addLabel}</button> to select and add ${noun}.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = activeList.map(adv => {
     const idSafe = adv.name.replace(/[^a-zA-Z0-9]/g, "_");
     const val = char.feats[adv.name] || 0;
-    const enhFeat = (char.enhancedTraits && char.enhancedTraits.feats && char.enhancedTraits.feats[adv.name]) ? char.enhancedTraits.feats[adv.name] : 0;
+    const enhFeat = enhancedFeats[adv.name] || 0;
     const effVal = val + enhFeat;
-    const maxRank = char.getAdvantageMaxRank(adv);
-    const detailVal = char.featDetails[adv.name] || "";
+    const isEnhancedOnly = val === 0 && enhFeat > 0;
+    const maxRank = char.getAdvantageMaxRank ? char.getAdvantageMaxRank(adv.baseFeat) : (adv.ranked ? 20 : 1);
+    const detailVal = char.featDetails ? (char.featDetails[adv.name] || "") : "";
+    const baseKey = adv.baseName || (adv.name.includes(" (") ? adv.name.split(" (")[0].trim() : adv.name.trim());
 
     const advNameStyle = effVal > 0 ? 'color: #f59e0b;' : '';
     const enhBadge = enhFeat > 0 ? ` <span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600; font-size: 0.85em; padding: 1px 5px;" title="Enhanced Trait">[+${enhFeat} Enhanced]</span>` : '';
 
-    let detailCellHTML = `<span class="secondary-text">-</span>`;
-    if (adv.name === "Skill Mastery" && val > 0) {
+    let detailCellHTML = `<span class="secondary-text">—</span>`;
+    if (adv.name === "Skill Mastery" && effVal > 0) {
       let selectedArr = [];
       try { selectedArr = JSON.parse(detailVal || "[]"); } catch(e) {}
       const selectedCount = selectedArr.length;
@@ -1159,30 +1802,160 @@ function buildAdvantagesUI() {
           <span class="secondary-text" style="font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCount > 0 ? selectedArr.join(", ") : ""}">
             ${displayStr}
           </span>
-          <button type="button" class="btn btn-sm" onclick="window.configureSkillMastery()">Configure (${selectedCount} / ${val * 4})</button>
+          <button type="button" class="btn btn-sm" onclick="window.configureSkillMastery()">Configure (${selectedCount} / ${effVal * 4})</button>
         </div>
       `;
-    } else if (adv.focused) {
-      detailCellHTML = `<input type="text" class="adv-detail-input" data-adv="${adv.name}" value="${detailVal}" placeholder="Specify focus / detail..." style="width: 100%; min-width: 140px;">`;
+    } else if (adv.name === "Sidekick" && effVal > 0) {
+      const budget = effVal * 5;
+      const rootHero = window.primaryHero || char;
+      const comps = (rootHero.companions || []).filter(c => c.type === "sidekick");
+      detailCellHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px; max-width: 190px;">
+          <span class="secondary-text" style="font-size: 0.85em;">Budget: <strong>${budget} PP</strong> (Max PL ${rootHero.powerLevel})</span>
+          ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit companion sheet">🤝 Edit "${c.name}"</button>`).join('')}
+          <button type="button" class="btn btn-sm btn-secondary" onclick="buildOrEditCompanionForSource('sidekick')">+ Build Sidekick</button>
+        </div>
+      `;
+    } else if (adv.name === "Minions" && effVal > 0) {
+      const budget = effVal * 15;
+      const rootHero = window.primaryHero || char;
+      const comps = (rootHero.companions || []).filter(c => c.type === "minion");
+      detailCellHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px; max-width: 190px;">
+          <span class="secondary-text" style="font-size: 0.85em;">Budget: <strong>${budget} PP</strong></span>
+          ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit minion sheet">👥 Edit "${c.name}"</button>`).join('')}
+          <button type="button" class="btn btn-sm btn-secondary" onclick="buildOrEditCompanionForSource('minion')">+ Build Minion</button>
+        </div>
+      `;
+    } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
+      const opts = MECHA_SUBOPTIONS_MAP[baseKey] || [];
+      const slots = window.getFeatSubOptionsList(adv.name, effVal);
+
+      const makeOptionsHTML = (currentVal, optionsList) => {
+        const hasVal = currentVal && optionsList.some(o => o.value === currentVal);
+        const listToRender = (currentVal && !hasVal) ? [...optionsList, { value: currentVal }] : optionsList;
+        return listToRender.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === currentVal ? 'selected' : ''}>${o.value}</option>`).join('');
+      };
+
+      if (baseKey === "Electromagnetic Seal") {
+        const upgradeOpts = opts.filter(o => !o.value.startsWith("Base Seal"));
+        detailCellHTML = `
+          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
+            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+              🛡️ Base Radiation &amp; Cosmic Ray Seal (Rank 1)
+            </div>
+            ${slots.map((slotVal, sIdx) => `
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 72px;">Upgrade #${sIdx + 1}:</span>
+                <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+                  ${makeOptionsHTML(slotVal, upgradeOpts)}
+                </select>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (baseKey === "Ejector Seat") {
+        const upgradeOpts = opts.filter(o => o.value !== "Leaping 5 Launch Distance");
+        detailCellHTML = `
+          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
+            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+              🚀 Base Leaping 5 Escape Launch (Rank 1)
+            </div>
+            ${slots.map((slotVal, sIdx) => `
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 72px;">Upgrade #${sIdx + 1}:</span>
+                <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+                  ${makeOptionsHTML(slotVal, upgradeOpts)}
+                </select>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (baseKey === "Environmental Seal") {
+        const dur = window.getEnvSealDuration(effVal);
+        const currentDetail = slots[0] || (opts[0] ? opts[0].value : "Vacuum & Deep Space");
+        detailCellHTML = `
+          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 280px;">
+            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+              ⏱️ Sealed Life Support Duration: ${dur}
+            </div>
+            <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', 0, this.value)" style="font-size: var(--font-size-controls); padding: 3px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+              ${makeOptionsHTML(currentDetail, opts)}
+            </select>
+          </div>
+        `;
+      } else if (baseKey === "Equipment Mount") {
+        const grade = window.getMountGradeText(effVal);
+        detailCellHTML = `
+          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
+            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+              🔧 ${grade}
+            </div>
+            ${slots.map((slotVal, sIdx) => `
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 65px;">Mount #${sIdx + 1}:</span>
+                <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+                  ${makeOptionsHTML(slotVal, opts)}
+                </select>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (slots.length <= 1) {
+        const currentDetail = slots[0] || (opts[0] ? opts[0].value : "");
+        detailCellHTML = `
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', 0, this.value)" style="font-size: var(--font-size-controls); padding: 3px 6px; width: 100%; max-width: 260px; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+              ${makeOptionsHTML(currentDetail, opts)}
+            </select>
+          </div>
+        `;
+      } else {
+        detailCellHTML = `
+          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
+            ${slots.map((slotVal, sIdx) => `
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 32px;">#${sIdx + 1}:</span>
+                <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+                  ${makeOptionsHTML(slotVal, opts)}
+                </select>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    } else if (detailVal) {
+      detailCellHTML = `<input type="text" class="adv-detail-input" data-adv="${adv.name}" value="${detailVal}" placeholder="Specification / detail..." style="width: 100%; min-width: 140px;">`;
+    } else if (adv.name.includes(" (")) {
+      const insideParen = adv.name.substring(adv.name.indexOf("(") + 1, adv.name.lastIndexOf(")"));
+      detailCellHTML = `<span style="font-weight: 500; color: var(--accent-primary);">${insideParen}</span>`;
+    } else if (adv.baseFeat && adv.baseFeat.focused) {
+      detailCellHTML = `<input type="text" class="adv-detail-input" data-adv="${adv.name}" value="${detailVal}" placeholder="Specify detail..." style="width: 100%; min-width: 140px;">`;
     }
+
+    const removeBtnHtml = isEnhancedOnly 
+      ? `<button type="button" class="btn btn-sm btn-secondary" style="padding: 2px 6px; opacity: 0.5; cursor: not-allowed;" title="Granted by active power or alternate form" disabled>✕</button>`
+      : `<button type="button" class="btn btn-sm" style="padding: 2px 6px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="window.removeFeat('${adv.name.replace(/'/g, "\\'")}')" title="Remove this feat">✕</button>`;
+
+    const stepperHtml = isEnhancedOnly
+      ? `<span class="secondary-text" style="font-size: 0.9em;">0 (Power)</span>`
+      : `<div class="stepper-group">
+          <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('adv_input_${idSafe}', -1, 0, ${maxRank})">−</button>
+          <input type="number" id="adv_input_${idSafe}" class="stepper-input" min="0" max="${maxRank}" value="${val}" data-adv="${adv.name}">
+          <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('adv_input_${idSafe}', 1, 0, ${maxRank})">+</button>
+        </div>`;
 
     return `
       <tr>
         <td><strong style="${advNameStyle}">${adv.name}</strong>${enhBadge}</td>
-        <td class="secondary-text">${adv.types ? adv.types.join(", ") : adv.category}</td>
-        <td>
-          <div class="stepper-group">
-            <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('adv_input_${idSafe}', -1, 0, ${maxRank})">−</button>
-            <input type="number" id="adv_input_${idSafe}" class="stepper-input" min="0" max="${maxRank}" value="${val}" data-adv="${adv.name}">
-            <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('adv_input_${idSafe}', 1, 0, ${maxRank})">+</button>
-          </div>
-        </td>
-        <td>
-          ${detailCellHTML}
-        </td>
-        <td class="secondary-text">${adv.description}</td>
-        <td style="text-align: center;">
-          <button type="button" class="btn-info-circle" onclick="showAdvantageInfo('${adv.name}')" title="View Full Description">?</button>
+        <td class="secondary-text">${adv.category}</td>
+        <td>${stepperHtml}</td>
+        <td><strong>${effVal}</strong></td>
+        <td>${detailCellHTML}</td>
+        <td class="secondary-text">${adv.description || adv.baseFeat.description || ""}</td>
+        <td style="text-align: center; white-space: nowrap;">
+          <button type="button" class="btn-info-circle" onclick="window.showAdvantageInfo('${adv.baseName.replace(/'/g, "\\'")}')" title="View Full Description">?</button>
+          ${removeBtnHtml}
         </td>
       </tr>
     `;
@@ -1190,13 +1963,31 @@ function buildAdvantagesUI() {
 
   tbody.querySelectorAll("input.stepper-input").forEach(input => {
     input.addEventListener("input", (e) => {
+      const featName = e.target.dataset.adv;
       const val = parseInt(e.target.value) || 0;
-      char.feats[e.target.dataset.adv] = val;
-      if (e.target.dataset.adv === "Skill Mastery") {
+      if (val <= 0 && (!enhancedFeats[featName] || enhancedFeats[featName] <= 0)) {
+        delete char.feats[featName];
+        if (char.featDetails) delete char.featDetails[featName];
+        buildAdvantagesUI();
+      } else {
+        char.feats[featName] = val;
+        const baseKey = featName.includes(" (") ? featName.split(" (")[0].trim() : featName.trim();
+        if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
+          const updatedSlots = window.getFeatSubOptionsList(featName, val);
+          if (!char.featDetails) char.featDetails = {};
+          char.featDetails[featName] = updatedSlots;
+        }
+      }
+      if (featName === "Skill Mastery") {
         let selected = [];
         try { selected = JSON.parse(char.featDetails["Skill Mastery"] || "[]"); } catch (ex) {}
         if (selected.length > val * 4) {
           window.configureSkillMastery();
+        }
+      }
+      if (featName && featName.startsWith("Electromagnetic Seal") && val >= 2) {
+        if (!char.featDetails[featName] || char.featDetails[featName].includes("Base Seal")) {
+          showToast("Electromagnetic Seal is now Rank 2+: You can select Insubstantial or Perception protection in the dropdown!", "info");
         }
       }
       buildAdvantagesUI(); 
@@ -1208,10 +1999,1461 @@ function buildAdvantagesUI() {
 
   tbody.querySelectorAll("input.adv-detail-input").forEach(input => {
     input.addEventListener("input", (e) => {
+      if (!char.featDetails) char.featDetails = {};
       char.featDetails[e.target.dataset.adv] = e.target.value;
     });
   });
 }
+
+window.removeFeat = function(featName) {
+  if (confirm(`Remove "${featName}" from your character sheet?`)) {
+    if (char.removeFeat) {
+      char.removeFeat(featName);
+    } else {
+      delete char.feats[featName];
+      if (char.featDetails) delete char.featDetails[featName];
+    }
+    buildAdvantagesUI();
+    buildSkillsUI();
+    buildEquipmentUI();
+    refreshUI();
+    showToast(`Removed feat "${featName}"`, "info");
+  }
+};
+
+/* ==========================================================================
+   ADD FEAT MODAL LOGIC & MULTI-FORM SPECIFICATIONS
+   ========================================================================== */
+
+window.updateTraitModalPosition = function() {
+  const pHeader = document.getElementById("persistentHeader");
+  let topPx = 130;
+  if (pHeader && !pHeader.classList.contains("disabled")) {
+    const rect = pHeader.getBoundingClientRect();
+    topPx = Math.max(10, Math.round(rect.bottom + 4));
+  } else {
+    topPx = 12;
+  }
+  document.documentElement.style.setProperty("--trait-modal-top", topPx + "px");
+};
+window.addEventListener("resize", window.updateTraitModalPosition);
+
+window.selectedFeatCheckboxes = new Set();
+window.selectedSkillCheckboxes = new Set();
+
+window.toggleFeatCheckbox = function(featName, isChecked, event) {
+  if (!window.selectedFeatCheckboxes) window.selectedFeatCheckboxes = new Set();
+  if (isChecked) {
+    window.selectedFeatCheckboxes.add(featName);
+    window.selectFeatTouchItem(featName);
+  } else {
+    window.selectedFeatCheckboxes.delete(featName);
+  }
+  window.updateFeatModalAddButtonText();
+};
+
+window.updateFeatModalAddButtonText = function() {
+  const btn = document.getElementById("btnAddFeatConfirm");
+  const count = window.selectedFeatCheckboxes ? window.selectedFeatCheckboxes.size : 0;
+  if (btn) {
+    btn.textContent = count > 1 ? `+ Add Checked (${count}) to Sheet` : "+ Add to Sheet";
+  }
+  const lbl = document.getElementById("lblFeatCheckedCount");
+  if (lbl) {
+    lbl.innerHTML = count > 0 ? `(${count} selected <a href="#" onclick="event.preventDefault(); window.clearFeatCheckboxes()" style="color: var(--accent-primary); margin-left: 4px; text-decoration: underline;">Clear</a>)` : "";
+  }
+};
+
+window.clearFeatCheckboxes = function() {
+  if (window.selectedFeatCheckboxes) window.selectedFeatCheckboxes.clear();
+  const listEl = document.getElementById("listFeatChoice");
+  if (listEl) {
+    listEl.querySelectorAll(".touch-trait-checkbox").forEach(cb => cb.checked = false);
+  }
+  window.updateFeatModalAddButtonText();
+};
+
+window.handleFeatItemClick = function(featName, event) {
+  const now = Date.now();
+  window.selectFeatTouchItem(featName);
+  if (window._lastFeatTap && window._lastFeatTap.name === featName && (now - window._lastFeatTap.time < 350)) {
+    window._lastFeatTap = null;
+    window.confirmAddFeat();
+  } else {
+    window._lastFeatTap = { name: featName, time: now };
+  }
+};
+
+window.handleFeatDblClick = function(featName, event) {
+  window.selectFeatTouchItem(featName);
+  window.confirmAddFeat();
+};
+
+window.openAddFeatModal = function(defaultCategory) {
+  const modal = document.getElementById("addFeatModal");
+  if (!modal) return;
+  window.updateTraitModalPosition();
+  if (window.selectedFeatCheckboxes) window.selectedFeatCheckboxes.clear();
+  window.updateFeatModalAddButtonText();
+
+  const isMecha = typeof char !== 'undefined' && !!char.isMecha;
+  const showMechaCat = isMecha || defaultCategory === "Mecha";
+  const titleEl = document.getElementById("addFeatModalTitle");
+  if (titleEl) {
+    titleEl.textContent = showMechaCat ? "Add Mecha Option" : "Add Feat";
+  }
+
+  const selFilter = document.getElementById("selFeatCategoryFilter");
+  if (selFilter) {
+    let optMecha = selFilter.querySelector('option[value="Mecha"]');
+    if (showMechaCat) {
+      if (!optMecha) {
+        optMecha = document.createElement("option");
+        optMecha.value = "Mecha";
+        optMecha.textContent = "🤖 Mecha Options";
+        const optAll = selFilter.querySelector('option[value="All"]');
+        if (optAll && optAll.nextSibling) {
+          selFilter.insertBefore(optMecha, optAll.nextSibling);
+        } else {
+          selFilter.appendChild(optMecha);
+        }
+      }
+    } else {
+      if (optMecha) {
+        optMecha.remove();
+      }
+    }
+
+    if (defaultCategory) {
+      selFilter.value = defaultCategory;
+    } else if (isMecha) {
+      selFilter.value = "Mecha";
+    } else {
+      if (selFilter.value === "Mecha" || !selFilter.value) {
+        selFilter.value = "All";
+      }
+    }
+  }
+
+  const txtSearch = document.getElementById("txtFeatSearch");
+  if (txtSearch) txtSearch.value = "";
+
+  const numRank = document.getElementById("numFeatInitialRank");
+  if (numRank && !numRank._hasMechaRankListener) {
+    numRank._hasMechaRankListener = true;
+    numRank.addEventListener("input", () => {
+      const selChoice = document.getElementById("selFeatChoice");
+      if (!selChoice) return;
+      const isMechaFeat = typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && !!MECHA_SUBOPTIONS_MAP[selChoice.value];
+      const rankSensitive = ["Electromagnetic Seal", "Environmental Seal", "Ejector Seat", "Equipment Mount"];
+      if (rankSensitive.includes(selChoice.value) || isMechaFeat) {
+        window.onFeatModalSelect();
+      }
+    });
+  }
+
+  window.filterFeatModalOptions();
+  modal.classList.add("active");
+};
+
+window.openMechaOptions = function() {
+  const featTabBtn = document.querySelector('.tab-btn[data-tab="tab-feats"]');
+  if (featTabBtn) featTabBtn.click();
+  window.openAddFeatModal("Mecha");
+};
+
+window.closeAddFeatModal = function() {
+  const modal = document.getElementById("addFeatModal");
+  if (modal) modal.classList.remove("active");
+};
+
+window.filterFeatModalOptions = function() {
+  const txtSearch = document.getElementById("txtFeatSearch");
+  const selFilter = document.getElementById("selFeatCategoryFilter");
+  const listEl = document.getElementById("listFeatChoice");
+  const selChoice = document.getElementById("selFeatChoice");
+  if (!selChoice) return;
+
+  const isMecha = typeof char !== 'undefined' && !!char.isMecha;
+  const query = txtSearch ? txtSearch.value.trim().toLowerCase() : "";
+  const cat = selFilter ? selFilter.value : (isMecha ? "Mecha" : "All");
+  const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+
+  const filtered = listRef.filter(adv => {
+    // If not in Mecha mode, mecha-specific options and feats are not available
+    if (!isMecha && adv.category === "Mecha") {
+      return false;
+    }
+    if (cat !== "All" && adv.category !== cat && (!adv.types || !adv.types.includes(cat))) {
+      return false;
+    }
+    if (query) {
+      const matchName = adv.name.toLowerCase().includes(query);
+      const matchDesc = (adv.description || adv.fullText || "").toLowerCase().includes(query);
+      return matchName || matchDesc;
+    }
+    return true;
+  });
+
+  filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+  if (filtered.length === 0) {
+    if (listEl) {
+      listEl.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary);">No matching feats found.</div>`;
+    }
+    selChoice.value = "";
+    window.onFeatModalSelect();
+    return;
+  }
+
+  let currentVal = selChoice.value;
+  if (!filtered.some(a => a.name === currentVal)) {
+    currentVal = filtered[0].name;
+    selChoice.value = currentVal;
+  }
+
+  if (listEl) {
+    listEl.innerHTML = filtered.map(adv => {
+      const isSelected = adv.name === currentVal;
+      const isChecked = window.selectedFeatCheckboxes && window.selectedFeatCheckboxes.has(adv.name);
+      const isRankedStr = adv.ranked ? " (Ranked)" : "";
+      const catLabel = adv.category || "General";
+      return `<div class="touch-trait-item ${isSelected ? 'selected' : ''}" data-feat="${adv.name.replace(/"/g, '&quot;')}" onclick="window.handleFeatItemClick('${adv.name.replace(/'/g, "\\'")}', event)" ondblclick="window.handleFeatDblClick('${adv.name.replace(/'/g, "\\'")}', event)">
+        <input type="checkbox" class="touch-trait-checkbox" data-feat="${adv.name.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleFeatCheckbox('${adv.name.replace(/'/g, "\\'")}', this.checked, event)">
+        <span class="touch-trait-title">${adv.name}${isRankedStr}</span>
+        <span class="touch-trait-badge">${catLabel}</span>
+      </div>`;
+    }).join("");
+  } else {
+    selChoice.innerHTML = filtered.map((adv, idx) => {
+      const isRankedStr = adv.ranked ? " (Ranked)" : "";
+      return `<option value="${adv.name}" ${idx === 0 ? "selected" : ""}>${adv.name} [${adv.category || "General"}]${isRankedStr}</option>`;
+    }).join("");
+  }
+
+  window.onFeatModalSelect();
+};
+
+window.selectFeatTouchItem = function(featName) {
+  const selChoice = document.getElementById("selFeatChoice");
+  const listEl = document.getElementById("listFeatChoice");
+  if (selChoice) selChoice.value = featName;
+  if (listEl) {
+    listEl.querySelectorAll(".touch-trait-item").forEach(item => {
+      if (item.dataset.feat === featName) {
+        item.classList.add("selected");
+        item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } else {
+        item.classList.remove("selected");
+      }
+    });
+  }
+  window.onFeatModalSelect();
+};
+
+window.onFeatModalSelect = function() {
+  const selChoice = document.getElementById("selFeatChoice");
+  const boxPreview = document.getElementById("boxFeatPreview");
+  const boxSpec = document.getElementById("boxFeatSpecContainer");
+  const numRank = document.getElementById("numFeatInitialRank");
+  const lblMaxRank = document.getElementById("lblFeatMaxRankNote");
+  if (!selChoice) return;
+
+  const featName = selChoice.value;
+  const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+  const adv = listRef.find(a => a.name === featName);
+  if (!adv) {
+    if (boxPreview) boxPreview.innerHTML = "<em>No feat selected.</em>";
+    if (boxSpec) boxSpec.style.display = "none";
+    return;
+  }
+
+  // Preview rules text
+  if (boxPreview) {
+    boxPreview.innerHTML = `<strong>${adv.name} [${adv.category || "General"}]</strong>: ` + (adv.fullText || adv.description || "<em>No description available.</em>");
+  }
+
+  const isNewFeatSelected = window._currentModalFeat !== featName;
+  window._currentModalFeat = featName;
+
+  // Max ranks
+  const maxRank = char.getAdvantageMaxRank ? char.getAdvantageMaxRank(adv) : (adv.ranked ? 20 : 1);
+  if (numRank) {
+    numRank.max = maxRank;
+    if (isNewFeatSelected) {
+      numRank.value = 1;
+    }
+  }
+  if (lblMaxRank) {
+    lblMaxRank.textContent = adv.ranked ? `(Ranked: max ${maxRank} ranks)` : `(Unranked: 1 rank maximum)`;
+  }
+
+  // Multi-Form / Specification Container
+  if (!boxSpec) return;
+
+  if (adv.name === "Attack Focus") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 6px;">Choose Attack Focus Type:</label>
+      <div style="display: flex; gap: 16px; font-size: var(--font-size-controls); flex-wrap: wrap;">
+        <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="radio" name="radAttackFocusType" value="Melee" checked> <strong>Melee Attacks</strong> (+1 close attack / rank)
+        </label>
+        <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="radio" name="radAttackFocusType" value="Ranged"> <strong>Ranged Attacks</strong> (+1 ranged attack / rank)
+        </label>
+      </div>
+      <div class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 6px;">
+        <em>In M&amp;M 2E rules, Attack Focus can be taken multiple times for Melee and Ranged attacks.</em>
+      </div>
+    `;
+  } else if (adv.name === "Attack Specialization") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Specific Attack or Weapon (+2 attack bonus / rank):</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Unarmed">Unarmed Combat</option>
+        <option value="Swords">Swords / Blades</option>
+        <option value="Bows">Bows / Archery</option>
+        <option value="Pistols">Pistols / Sidearms</option>
+        <option value="Rifles">Rifles / Longarms</option>
+        <option value="Blast Power">Blast Power</option>
+        <option value="Strike Power">Strike Power</option>
+        <option value="Throwing">Throwing Weapons</option>
+        <option value="Claws">Claws / Natural Weapons</option>
+        <option value="__custom__">Custom Weapon / Attack...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter weapon or attack power name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+      <div class="secondary-text" style="font-size: var(--font-size-secondary);">
+        <em>Can be taken multiple times for different weapons or attacks.</em>
+      </div>
+    `;
+  } else if (adv.name === "Favored Environment") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Environment (+1 attack or dodge bonus in environment):</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Airborne">Airborne / In Flight</option>
+        <option value="Aquatic">Aquatic / Underwater</option>
+        <option value="Space / Zero-G">Space / Zero-G</option>
+        <option value="Urban">Urban / Rooftops</option>
+        <option value="Forest / Jungle">Forest / Jungle</option>
+        <option value="Arctic">Arctic / Extreme Cold</option>
+        <option value="Underground">Underground / Caves</option>
+        <option value="__custom__">Custom Environment...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter environment name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+    `;
+  } else if (adv.name === "Favored Opponent") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Opponent Type (+1 damage &amp; interaction bonus):</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Aliens">Aliens / Extraterrestrials</option>
+        <option value="Animals">Animals / Beasts</option>
+        <option value="Criminals">Criminals / Underworld</option>
+        <option value="Demons / Fiends">Demons / Fiends</option>
+        <option value="Mutants">Mutants</option>
+        <option value="Psionics">Psionics / Mentalists</option>
+        <option value="Robots / Machines">Robots / Artificial Intelligences</option>
+        <option value="Spellcasters">Spellcasters / Sorcerers</option>
+        <option value="Undead">Undead / Vampires / Zombies</option>
+        <option value="__custom__">Custom Opponent Type...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter opponent category..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+    `;
+  } else if (adv.name === "Ultimate Effort") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Task or Check (Treat roll as 20 for 1 Hero Point):</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Toughness Save">Toughness Saving Throw</option>
+        <option value="Fortitude Save">Fortitude Saving Throw</option>
+        <option value="Reflex Save">Reflex Saving Throw</option>
+        <option value="Will Save">Will Saving Throw</option>
+        <option value="Aim">Aim (Attack Roll)</option>
+        <option value="Power Check">Power Check</option>
+        <option value="Skill Check">Skill Check</option>
+        <option value="__custom__">Custom Task...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter task or check name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+    `;
+  } else if (adv.name === "Benefit") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Social or Legal Benefit:</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Wealth">Wealth (Significant wealth and assets)</option>
+        <option value="Status">Status (High rank, aristocracy, fame)</option>
+        <option value="Security Clearance">Security Clearance</option>
+        <option value="Diplomatic Immunity">Diplomatic Immunity</option>
+        <option value="Alternate Identity">Alternate Identity</option>
+        <option value="__custom__">Custom Benefit...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter benefit description..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+    `;
+  } else if (adv.name === "Environmental Adaptation") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Environment (Ignore operating penalties):</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Underwater">Underwater / Aquatic</option>
+        <option value="Zero-G">Zero-G / Weightlessness</option>
+        <option value="Heavy Gravity">Heavy Gravity</option>
+        <option value="High Altitude">High Altitude / Thin Atmosphere</option>
+        <option value="Extreme Cold">Extreme Cold</option>
+        <option value="Extreme Heat">Extreme Heat</option>
+        <option value="__custom__">Custom Environment...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter environment name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+    `;
+  } else if (adv.name === "Skill Mastery") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <div class="secondary-text" style="font-size: var(--font-size-secondary); line-height: 1.4;">
+        <strong>Skill Mastery:</strong> Allows taking 10 on 4 chosen skills even when stressed or under pressure. You can configure the specific skills directly from the Feats tab after adding.
+      </div>
+    `;
+  } else if (adv.name === "Sidekick" || adv.name === "Minions") {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <div class="secondary-text" style="font-size: var(--font-size-secondary); line-height: 1.4;">
+        <strong>${adv.name}:</strong> Grants a PP budget to build independent companions. You can create and edit their full character sheets directly from the Feats tab or Companions &amp; Forms tab after adding.
+      </div>
+    `;
+  } else if (adv.name === "Electromagnetic Seal") {
+    boxSpec.style.display = "block";
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const existingSealBadge = document.getElementById("lblEMSealBadge");
+    if (!isNewFeatSelected && existingSealBadge) {
+      existingSealBadge.textContent = `Rank ${r}`;
+      const note = document.getElementById("emSealRankNote");
+      const rad = document.querySelector('input[name="radEMSealType"]:checked');
+      if (note) {
+        if (rad && rad.value === "base") {
+          note.textContent = "🛡️ Base Radiation & Cosmic Ray Seal selected (Rank 1 - 1 MP).";
+        } else if (rad && rad.value === "insubstantial") {
+          note.textContent = `⚡ Insubstantial Protection selected (Rank ${r} - ${r} MP).`;
+        } else if (rad && rad.value === "perception") {
+          note.textContent = `⚡ Perception Attack Protection selected (Rank ${r} - ${r} MP).`;
+        }
+      }
+      return;
+    }
+
+    boxSpec.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+          ⚙️ Electromagnetic Seal Protection Modes:
+        </label>
+        <span class="badge" id="lblEMSealBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+      </div>
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 6px;">
+        <!-- Option 1: Base Seal -->
+        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: var(--font-size-controls);">
+          <input type="radio" name="radEMSealType" value="base" ${r <= 1 ? "checked" : ""} onchange="window.toggleEMSealType();">
+          <div>
+            <strong>Rank 1: Base Radiation &amp; Cosmic Ray Seal</strong>
+            <div class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 2px;">
+              Protects cockpit and crew from radiation, cosmic rays, and extreme space energy conditions.
+            </div>
+          </div>
+        </label>
+
+        <!-- Option 2: Insubstantial Protection -->
+        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: var(--font-size-controls); border-top: 1px dashed var(--border-color); padding-top: 6px;">
+          <input type="radio" name="radEMSealType" value="insubstantial" ${r >= 2 ? "checked" : ""} onchange="window.toggleEMSealType();">
+          <div style="flex: 1;">
+            <strong>Rank 2+: Insubstantial Protection</strong>
+            <div class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 2px;">
+              Hardens seal against permeable physical, gaseous, or energy forms.
+            </div>
+            <div id="boxEMSealInsub" style="margin-top: 6px; display: ${r >= 2 ? 'block' : 'none'};">
+              <label style="font-size: var(--font-size-secondary); font-weight: 600; display: block; margin-bottom: 2px;">Form Protected Against:</label>
+              <select id="selEMSealInsub" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 6px;">
+                <option value="Rank 1 (Gaseous / Vaporous)">Rank 1: Gaseous &amp; Vaporous Forms</option>
+                <option value="Rank 2 (Liquid Forms)">Rank 2: Liquid Forms</option>
+                <option value="Rank 3 (Energy &amp; Plasma Forms)">Rank 3: Energy &amp; Plasma Forms</option>
+                <option value="Rank 4 (Incorporeal / Spirits)">Rank 4: Incorporeal &amp; Disembodied Spirits</option>
+              </select>
+            </div>
+          </div>
+        </label>
+
+        <!-- Option 3: Perception Attack Protection -->
+        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: var(--font-size-controls); border-top: 1px dashed var(--border-color); padding-top: 6px;">
+          <input type="radio" name="radEMSealType" value="perception" onchange="window.toggleEMSealType();">
+          <div style="flex: 1;">
+            <strong>Rank 2+: Perception Attack Protection</strong>
+            <div class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 2px;">
+              Frequency baffling protects against sensory overload and perception-range attacks.
+            </div>
+            <div id="boxEMSealPerception" style="margin-top: 6px; display: none;">
+              <label style="font-size: var(--font-size-secondary); font-weight: 600; display: block; margin-bottom: 2px;">Perception-Range Effect Protected Against:</label>
+              <select id="selEMSealPerception" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 6px;" onchange="window.onEMSealPerceptionChange();">
+                <option value="Visual Dazzle / Blinding Flashes">Visual Dazzle / Blinding Flashes</option>
+                <option value="Auditory Dazzle / Sonic Deafening">Auditory Dazzle / Sonic Deafening</option>
+                <option value="Mental Attacks / Psionic Blast">Mental Attacks / Psionic Blast</option>
+                <option value="Sensory Overload">Sensory Overload</option>
+                <option value="__custom__">Custom Perception Effect...</option>
+              </select>
+              <input type="text" id="txtEMSealPerceptionCustom" placeholder="Enter custom effect name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-top: 4px; display: none;">
+            </div>
+          </div>
+        </label>
+      </div>
+      <div id="emSealRankNote" style="margin-top: 4px; font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 500;">
+        ${r <= 1 ? "💡 Choose Base Seal (Rank 1) or select an Insubstantial / Perception upgrade (Rank 2+)." : `✨ Configured for Rank ${r}.`}
+      </div>
+    `;
+  } else if (adv.name === "Ejector Seat") {
+    boxSpec.style.display = "block";
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const existingEjectorBadge = document.getElementById("lblEjectorBadge");
+    if (!isNewFeatSelected && existingEjectorBadge) {
+      existingEjectorBadge.textContent = `Rank ${r}`;
+      return;
+    }
+    boxSpec.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+          ⚙️ Ejector Seat Sub-Options &amp; Upgrades:
+        </label>
+        <span class="badge" id="lblEjectorBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+      </div>
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 6px;">
+        <!-- Option 1: Base Launch -->
+        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: var(--font-size-controls);">
+          <input type="radio" name="radEjectorType" value="base" ${r <= 1 ? "checked" : ""} onchange="window.toggleEjectorType();">
+          <div>
+            <strong>Rank 1: Base Ejection Launch</strong>
+            <div class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 2px;">
+              Launches pilot and crew safely as a reaction with Leaping 5 distance (250 ft).
+            </div>
+          </div>
+        </label>
+
+        <!-- Option 2: Seat Upgrade -->
+        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: var(--font-size-controls); border-top: 1px dashed var(--border-color); padding-top: 6px;">
+          <input type="radio" name="radEjectorType" value="upgrade" ${r >= 2 ? "checked" : ""} onchange="window.toggleEjectorType();">
+          <div style="flex: 1;">
+            <strong>Rank 2+: Seat Upgrade Sub-Option</strong>
+            <div class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 2px;">
+              Equips the ejection pod with parachute/flight systems, life support, or booster rockets.
+            </div>
+            <div id="boxEjectorUpgrade" style="margin-top: 6px; display: ${r >= 2 ? 'block' : 'none'};">
+              <label style="font-size: var(--font-size-secondary); font-weight: 600; display: block; margin-bottom: 2px;">Choose Seat Upgrade:</label>
+              <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 4px;" onchange="window.onFeatSpecOptionChange();">
+                <option value="Parachute / Glider Thruster Flight Pack">Parachute / Glider Thruster Flight Pack (Flight Systems)</option>
+                <option value="Survival Pod Environmental Seal">Survival Pod Environmental Seal (Life Support)</option>
+                <option value="Cockpit Capsule Electromagnetic Seal">Cockpit Capsule Electromagnetic Seal (Radiation &amp; Energy)</option>
+                <option value="Extended Booster Rocket (+1 Rank Leaping)">Extended Booster Rocket (+1 Rank Leaping / 500 ft)</option>
+                <option value="Emergency Beacon &amp; Auto-Inflatable Life Raft">Emergency Beacon &amp; Auto-Inflatable Life Raft</option>
+                <option value="__custom__">Custom Seat Upgrade...</option>
+              </select>
+              <input type="text" id="txtFeatCustomSpec" placeholder="Enter upgrade specification..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+            </div>
+          </div>
+        </label>
+      </div>
+      <div id="ejectorRankNote" style="margin-top: 4px; font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 500;">
+        ${r <= 1 ? "💡 Choose Base Launch (Rank 1) or select a Seat Upgrade (Rank 2+)." : `✨ Configured for Rank ${r}.`}
+      </div>
+    `;
+  } else if (adv.name === "Environmental Seal") {
+    boxSpec.style.display = "block";
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const durText = window.getEnvSealDuration(r);
+    const existingEnvBadge = document.getElementById("lblEnvSealBadge");
+    if (!isNewFeatSelected && existingEnvBadge) {
+      existingEnvBadge.textContent = `Rank ${r}`;
+      const durEl = document.getElementById("lblEnvSealDuration");
+      if (durEl) durEl.textContent = durText;
+      return;
+    }
+    boxSpec.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+          ⚙️ Environmental Seal Sub-Options:
+        </label>
+        <span class="badge" id="lblEnvSealBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+      </div>
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Primary Operating Medium / Atmosphere:</label>
+      <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+        <option value="Vacuum &amp; Deep Space">Vacuum &amp; Deep Space</option>
+        <option value="Oceanic Depths (High Pressure Aquatic)">Oceanic Depths (High Pressure Aquatic)</option>
+        <option value="Corrosive Acid &amp; Chemical Gas">Corrosive Acid &amp; Chemical Gas</option>
+        <option value="Toxic / Biological Alien Atmosphere">Toxic / Biological Alien Atmosphere</option>
+        <option value="Volcanic / Superheated Plasma">Volcanic / Superheated Plasma</option>
+        <option value="Cryogenic / Sub-Zero Extreme">Cryogenic / Sub-Zero Extreme</option>
+        <option value="__custom__">Custom Operating Environment...</option>
+      </select>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Enter environment name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px; display: none;">
+      <div style="padding: 4px 8px; background: rgba(2, 132, 199, 0.1); border-radius: 4px; font-size: var(--font-size-secondary);">
+        ⏱️ <strong>Sealed Life Support Duration:</strong> <span id="lblEnvSealDuration">${durText}</span>
+      </div>
+    `;
+  } else if (adv.name === "Equipment Mount") {
+    boxSpec.style.display = "block";
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const gradeText = window.getMountGradeText(r);
+    const opts = (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP["Equipment Mount"]) ? MECHA_SUBOPTIONS_MAP["Equipment Mount"] : [];
+    const prevSelects = boxSpec.querySelectorAll(".modal-mecha-slot-select");
+    const prevValues = Array.from(prevSelects).map(s => s.value);
+
+    if (r <= 1) {
+      const selectedVal = prevValues[0] || (opts[0] ? opts[0].value : "Right Shoulder Hardpoint");
+      boxSpec.innerHTML = `
+        <div style="display: flex; gap: 6px; flex-direction: column;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+              ⚙️ Equipment Mount Sub-Options:
+            </label>
+            <span class="badge" id="lblMountBadge" style="background: var(--accent-primary); font-size: 11px;">Rank 1</span>
+          </div>
+          <div style="margin-bottom: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-labels);">Mount Capability:</span>
+            <span id="lblMountGrade" style="font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 600;">${gradeText}</span>
+          </div>
+          <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 2px;">Hardpoint Mounting Location:</label>
+          <select id="selFeatSpecOption" class="modal-mecha-slot-select" data-slot="0" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px;" onchange="window.onFeatSpecOptionChange()">
+            ${opts.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === selectedVal ? 'selected' : ''}>${o.value}</option>`).join('')}
+            <option value="__custom__">Custom Hardpoint Location...</option>
+          </select>
+          <input type="text" id="txtFeatCustomSpec" placeholder="Enter hardpoint location..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+        </div>
+      `;
+    } else {
+      boxSpec.innerHTML = `
+        <div style="display: flex; gap: 6px; flex-direction: column;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+              ⚙️ Equipment Mount Sub-Options (${r} Ranks = ${r} Mounts):
+            </label>
+            <span class="badge" id="lblMountBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+          </div>
+          <div style="margin-bottom: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-labels);">Mount Capability:</span>
+            <span id="lblMountGrade" style="font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 600;">${gradeText}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; padding-right: 4px;">
+            ${Array.from({ length: r }).map((_, idx) => {
+              const slotVal = prevValues[idx] || (opts[idx % opts.length] ? opts[idx % opts.length].value : opts[0].value);
+              return `
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 65px;">Mount #${idx + 1}:</span>
+                <select class="modal-mecha-slot-select" data-slot="${idx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;">
+                  ${opts.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === slotVal ? 'selected' : ''}>${o.value}</option>`).join('')}
+                </select>
+              </div>
+            `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+  } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[adv.name]) {
+    boxSpec.style.display = "block";
+    const opts = MECHA_SUBOPTIONS_MAP[adv.name];
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const prevSelects = boxSpec.querySelectorAll(".modal-mecha-slot-select");
+    const prevValues = Array.from(prevSelects).map(s => s.value);
+
+    if (r <= 1) {
+      const selectedVal = prevValues[0] || (opts[0] ? opts[0].value : "");
+      boxSpec.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+            ⚙️ ${adv.name} Sub-Options:
+          </label>
+          <span class="badge" style="background: var(--accent-primary); font-size: 11px;">Rank 1</span>
+        </div>
+        <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Sub-Option / Specification:</label>
+        <select id="selFeatSpecOption" class="modal-mecha-slot-select" data-slot="0" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
+          ${opts.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === selectedVal ? 'selected' : ''}>${o.value}</option>`).join('')}
+          <option value="__custom__">Custom Sub-Option...</option>
+        </select>
+        <input type="text" id="txtFeatCustomSpec" placeholder="Enter custom specification..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
+      `;
+    } else {
+      boxSpec.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
+            ⚙️ ${adv.name} Sub-Options (${r} Ranks = ${r} Choices):
+          </label>
+          <span class="badge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; padding-right: 4px;">
+          ${Array.from({ length: r }).map((_, idx) => {
+            const slotVal = prevValues[idx] || (opts[idx % opts.length] ? opts[idx % opts.length].value : opts[0].value);
+            return `
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 50px;">Slot #${idx + 1}:</span>
+              <select class="modal-mecha-slot-select" data-slot="${idx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;">
+                ${opts.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === slotVal ? 'selected' : ''}>${o.value}</option>`).join('')}
+              </select>
+            </div>
+          `;
+          }).join('')}
+        </div>
+      `;
+    }
+  } else if (adv.focused) {
+    boxSpec.style.display = "block";
+    boxSpec.innerHTML = `
+      <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Specify Choice / Detail:</label>
+      <input type="text" id="txtFeatCustomSpec" placeholder="Specify detail or application..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px;">
+    `;
+  } else {
+    boxSpec.style.display = "none";
+    boxSpec.innerHTML = "";
+  }
+};
+
+window.getEnvSealDuration = function(rank) {
+  const r = parseInt(rank) || 1;
+  switch(r) {
+    case 1: return "5 hours";
+    case 2: return "24 hours (1 day)";
+    case 3: return "5 days";
+    case 4: return "2 weeks";
+    case 5: return "1 month";
+    case 6: return "2 months";
+    case 7: return "6 months";
+    case 8: return "1 year";
+    case 9: return "5 years";
+    default: return r >= 10 ? "Perpetual Autonomous Life Support (Unlimited)" : "5 hours";
+  }
+};
+
+window.getMountGradeText = function(rank) {
+  const r = parseInt(rank) || 1;
+  if (r === 1) return "Rank 1: Dedicated Hardpoint (Specific Pod/Weapon)";
+  if (r === 2) return "Rank 2: Universal Hardpoint (Any matching item)";
+  return "Rank 3+: Smart-Linked Hardpoint (Full interface & bus)";
+};
+
+window.toggleEMSealType = function() {
+  const rad = document.querySelector('input[name="radEMSealType"]:checked');
+  const boxInsub = document.getElementById("boxEMSealInsub");
+  const boxPercept = document.getElementById("boxEMSealPerception");
+  const numRank = document.getElementById("numFeatInitialRank");
+  const badge = document.getElementById("lblEMSealBadge");
+  const note = document.getElementById("emSealRankNote");
+  if (!rad) return;
+
+  if (rad.value === "base") {
+    if (boxInsub) boxInsub.style.display = "none";
+    if (boxPercept) boxPercept.style.display = "none";
+    if (numRank && parseInt(numRank.value) > 1) {
+      numRank.value = 1;
+    }
+    if (badge) badge.textContent = `Rank ${numRank ? numRank.value : 1}`;
+    if (note) note.textContent = "🛡️ Base Radiation & Cosmic Ray Seal selected (Rank 1 - 1 MP).";
+  } else if (rad.value === "insubstantial") {
+    if (boxInsub) boxInsub.style.display = "block";
+    if (boxPercept) boxPercept.style.display = "none";
+    if (numRank && parseInt(numRank.value) < 2) {
+      numRank.value = 2;
+    }
+    if (badge) badge.textContent = `Rank ${numRank ? numRank.value : 2}`;
+    if (note) note.textContent = `⚡ Insubstantial Protection selected (Rank ${numRank ? numRank.value : 2}+ - ${numRank ? numRank.value : 2} MP).`;
+  } else if (rad.value === "perception") {
+    if (boxInsub) boxInsub.style.display = "none";
+    if (boxPercept) boxPercept.style.display = "block";
+    if (numRank && parseInt(numRank.value) < 2) {
+      numRank.value = 2;
+    }
+    if (badge) badge.textContent = `Rank ${numRank ? numRank.value : 2}`;
+    if (note) note.textContent = `⚡ Perception Attack Protection selected (Rank ${numRank ? numRank.value : 2}+ - ${numRank ? numRank.value : 2} MP).`;
+  }
+};
+window.onEMSealOptionPicked = function() { window.toggleEMSealType(); };
+
+window.toggleEjectorType = function() {
+  const rad = document.querySelector('input[name="radEjectorType"]:checked');
+  const boxUpgrade = document.getElementById("boxEjectorUpgrade");
+  const numRank = document.getElementById("numFeatInitialRank");
+  const badge = document.getElementById("lblEjectorBadge");
+  const note = document.getElementById("ejectorRankNote");
+  if (!rad) return;
+
+  if (rad.value === "base") {
+    if (boxUpgrade) boxUpgrade.style.display = "none";
+    if (numRank && parseInt(numRank.value) > 1) {
+      numRank.value = 1;
+    }
+    if (badge) badge.textContent = `Rank ${numRank ? numRank.value : 1}`;
+    if (note) note.textContent = "🚀 Base Launch System selected (Rank 1 - 1 MP).";
+  } else {
+    if (boxUpgrade) boxUpgrade.style.display = "block";
+    if (numRank && parseInt(numRank.value) < 2) {
+      numRank.value = 2;
+    }
+    if (badge) badge.textContent = `Rank ${numRank ? numRank.value : 2}`;
+    if (note) note.textContent = `⚡ Seat Upgrade Sub-Option selected (Rank ${numRank ? numRank.value : 2}+ - ${numRank ? numRank.value : 2} MP).`;
+  }
+};
+window.onEjectorOptionPicked = function() { window.toggleEjectorType(); };
+
+window.onEMSealPerceptionChange = function() {
+  const sel = document.getElementById("selEMSealPerception");
+  const txt = document.getElementById("txtEMSealPerceptionCustom");
+  if (!sel || !txt) return;
+  if (sel.value === "__custom__") {
+    txt.style.display = "block";
+    txt.focus();
+  } else {
+    txt.style.display = "none";
+  }
+};
+
+window.onFeatSpecOptionChange = function() {
+  const sel = document.getElementById("selFeatSpecOption");
+  const txt = document.getElementById("txtFeatCustomSpec");
+  if (!sel || !txt) return;
+  if (sel.value === "__custom__") {
+    txt.style.display = "block";
+    txt.focus();
+  } else {
+    txt.style.display = "none";
+  }
+};
+
+window.extractFeatSpecification = function(adv, ranksToAdd) {
+  let finalName = adv.name;
+  let specDetail = "";
+  let finalRanks = ranksToAdd;
+
+  if (adv.name === "Attack Focus") {
+    const rad = document.querySelector('input[name="radAttackFocusType"]:checked');
+    const type = rad ? rad.value : "Melee";
+    finalName = `Attack Focus (${type})`;
+    specDetail = type;
+  } else if (adv.name === "Electromagnetic Seal") {
+    const rad = document.querySelector('input[name="radEMSealType"]:checked');
+    const sealType = rad ? rad.value : (finalRanks >= 2 ? "insubstantial" : "base");
+    if (sealType === "insubstantial") {
+      const sel = document.getElementById("selEMSealInsub");
+      const val = sel ? sel.value : "Rank 1 (Gaseous / Vaporous)";
+      specDetail = [`Insubstantial: ${val}`];
+      if (finalRanks < 2) finalRanks = 2;
+    } else if (sealType === "perception") {
+      const sel = document.getElementById("selEMSealPerception");
+      const txt = document.getElementById("txtEMSealPerceptionCustom");
+      const val = (sel && sel.value === "__custom__") ? (txt ? txt.value.trim() : "Custom") : (sel ? sel.value : "Visual Dazzle / Blinding Flashes");
+      specDetail = [`Perception: ${val}`];
+      if (finalRanks < 2) finalRanks = 2;
+    } else {
+      specDetail = ["Base Seal (Radiation & Cosmic Rays)"];
+    }
+    finalName = adv.name;
+    return { finalName, specDetail, ranksToAdd: finalRanks };
+  } else if (adv.name === "Ejector Seat") {
+    const rad = document.querySelector('input[name="radEjectorType"]:checked');
+    const ejectType = rad ? rad.value : (finalRanks >= 2 ? "upgrade" : "base");
+    if (ejectType === "upgrade") {
+      const sel = document.getElementById("selFeatSpecOption");
+      const txt = document.getElementById("txtFeatCustomSpec");
+      const upVal = (sel && sel.value === "__custom__") ? (txt ? txt.value.trim() : "Custom") : (sel ? sel.value : "Parachute / Glider Thruster Flight Pack");
+      specDetail = [upVal];
+      if (finalRanks < 2) finalRanks = 2;
+    } else {
+      specDetail = ["Leaping 5 Launch Distance"];
+    }
+    finalName = adv.name;
+    return { finalName, specDetail, ranksToAdd: finalRanks };
+  } else if (adv.name === "Environmental Seal") {
+    const sel = document.getElementById("selFeatSpecOption");
+    const txt = document.getElementById("txtFeatCustomSpec");
+    const chosenEnv = (sel && sel.value === "__custom__") ? (txt ? txt.value.trim() : "Custom") : (sel ? sel.value : "Vacuum & Deep Space");
+    specDetail = [chosenEnv];
+    finalName = adv.name;
+    return { finalName, specDetail, ranksToAdd: finalRanks };
+  } else if (adv.name === "Equipment Mount") {
+    const slotSelects = document.querySelectorAll(".modal-mecha-slot-select");
+    if (slotSelects && slotSelects.length > 0) {
+      const chosenSlots = Array.from(slotSelects).map(s => s.value);
+      specDetail = chosenSlots;
+      finalName = `Equipment Mount`;
+      return { finalName, specDetail, ranksToAdd: finalRanks };
+    }
+    const sel = document.getElementById("selFeatSpecOption");
+    const txt = document.getElementById("txtFeatCustomSpec");
+    const loc = (sel && sel.value === "__custom__") ? (txt ? txt.value.trim() : "Custom") : (sel ? sel.value : "Right Shoulder Hardpoint");
+    specDetail = [loc];
+    finalName = `Equipment Mount`;
+    return { finalName, specDetail, ranksToAdd: finalRanks };
+  } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[adv.name]) {
+    const slotSelects = document.querySelectorAll(".modal-mecha-slot-select");
+    if (slotSelects && slotSelects.length > 0) {
+      const chosenSlots = Array.from(slotSelects).map(s => s.value);
+      specDetail = chosenSlots;
+      finalName = adv.name;
+      return { finalName, specDetail, ranksToAdd: finalRanks };
+    }
+    const sel = document.getElementById("selFeatSpecOption");
+    const txt = document.getElementById("txtFeatCustomSpec");
+    let chosen = "";
+    if (sel && sel.value === "__custom__") {
+      chosen = txt ? txt.value.trim() : "";
+    } else if (sel) {
+      chosen = sel.value;
+    }
+    if (!chosen && MECHA_SUBOPTIONS_MAP[adv.name][0]) {
+      chosen = MECHA_SUBOPTIONS_MAP[adv.name][0].value;
+    }
+    specDetail = [chosen || "Standard"];
+    finalName = adv.name;
+    return { finalName, specDetail, ranksToAdd: finalRanks };
+  } else if ([
+    "Attack Specialization", "Favored Environment", "Favored Opponent", "Ultimate Effort", "Benefit", "Environmental Adaptation"
+  ].includes(adv.name)) {
+    const sel = document.getElementById("selFeatSpecOption");
+    const txt = document.getElementById("txtFeatCustomSpec");
+    let chosen = "";
+    if (sel && sel.value === "__custom__") {
+      chosen = txt ? txt.value.trim() : "";
+    } else if (sel) {
+      chosen = sel.value;
+    }
+    if (!chosen) chosen = "General";
+    finalName = `${adv.name} (${chosen})`;
+    specDetail = chosen;
+  } else if (adv.focused) {
+    const txt = document.getElementById("txtFeatCustomSpec");
+    if (txt && txt.value.trim()) {
+      specDetail = txt.value.trim();
+      finalName = `${adv.name} (${specDetail})`;
+    }
+  }
+
+  return { finalName, specDetail, ranksToAdd: finalRanks };
+};
+
+window.getDefaultFeatSpecification = function(adv) {
+  const defaults = {
+    "Attack Focus": "Melee",
+    "Attack Specialization": "Unarmed",
+    "Favored Environment": "Airborne",
+    "Favored Opponent": "Criminals",
+    "Ultimate Effort": "Toughness Save",
+    "Benefit": "Wealth",
+    "Environmental Adaptation": "Underwater",
+    "Electromagnetic Seal": "Base Seal (Radiation & Cosmic Rays)",
+    "Environmental Seal": "Vacuum & Deep Space",
+    "Ejector Seat": "Leaping 5 Launch Distance",
+    "Equipment Mount": "Right Shoulder Hardpoint"
+  };
+  let spec = defaults[adv.name];
+  if (!spec && typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[adv.name] && MECHA_SUBOPTIONS_MAP[adv.name][0]) {
+    spec = MECHA_SUBOPTIONS_MAP[adv.name][0].value;
+  }
+  const isMecha = adv.category === "Mecha" || (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && !!MECHA_SUBOPTIONS_MAP[adv.name]);
+  if (isMecha) {
+    return {
+      finalName: adv.name,
+      specDetail: spec ? [spec] : [],
+      ranksToAdd: 1
+    };
+  }
+  if (!spec) spec = "";
+  return {
+    finalName: spec ? `${adv.name} (${spec})` : adv.name,
+    specDetail: spec,
+    ranksToAdd: 1
+  };
+};
+
+window.confirmAddFeat = function() {
+  const selChoice = document.getElementById("selFeatChoice");
+  const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+
+  // Multi-select batch adding if multiple checkboxes are checked
+  if (window.selectedFeatCheckboxes && window.selectedFeatCheckboxes.size > 1) {
+    let addedCount = 0;
+    const activeFeat = selChoice ? selChoice.value : "";
+    const numRank = document.getElementById("numFeatInitialRank");
+    const activeRanks = numRank ? (parseInt(numRank.value) || 1) : 1;
+
+    window.selectedFeatCheckboxes.forEach(featName => {
+      const adv = listRef.find(a => a.name === featName);
+      if (!adv) return;
+
+      let finalName = adv.name;
+      let specDetail = "";
+      let ranksToAdd = 1;
+
+      if (featName === activeFeat) {
+        ranksToAdd = activeRanks;
+        if (!adv.ranked) ranksToAdd = 1;
+        const res = window.extractFeatSpecification(adv, ranksToAdd);
+        finalName = res.finalName;
+        specDetail = res.specDetail;
+        if (res.ranksToAdd) ranksToAdd = res.ranksToAdd;
+      } else {
+        ranksToAdd = 1;
+        const res = window.getDefaultFeatSpecification(adv);
+        finalName = res.finalName;
+        specDetail = res.specDetail;
+        if (res.ranksToAdd) ranksToAdd = res.ranksToAdd;
+      }
+
+      const maxRank = char.getAdvantageMaxRank ? char.getAdvantageMaxRank(adv) : (adv.ranked ? 20 : 1);
+      if (char.feats[finalName] !== undefined && char.feats[finalName] > 0) {
+        char.feats[finalName] = Math.min(maxRank, (char.feats[finalName] || 0) + ranksToAdd);
+      } else {
+        char.feats[finalName] = Math.min(maxRank, ranksToAdd);
+      }
+
+      if (specDetail) {
+        char.featDetails[finalName] = specDetail;
+      }
+      const bKey = finalName.includes(" (") ? finalName.split(" (")[0].trim() : finalName.trim();
+      if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[bKey] || bKey === "Electromagnetic Seal" || bKey === "Ejector Seat")) {
+        char.featDetails[finalName] = window.getFeatSubOptionsList(finalName, char.feats[finalName]);
+      }
+      addedCount++;
+    });
+
+    window.selectedFeatCheckboxes.clear();
+    window.closeAddFeatModal();
+    buildAdvantagesUI();
+    buildSkillsUI();
+    buildEquipmentUI();
+    refreshUI();
+    const isMecha = typeof char !== 'undefined' && char.isMecha;
+    showToast(`Added ${addedCount} ${isMecha ? 'mecha options' : 'feats'} to sheet`, "success");
+    return;
+  }
+
+  // Single feat addition (1 checked or currently highlighted)
+  let featName = "";
+  if (window.selectedFeatCheckboxes && window.selectedFeatCheckboxes.size === 1) {
+    featName = Array.from(window.selectedFeatCheckboxes)[0];
+  } else if (selChoice) {
+    featName = selChoice.value;
+  }
+  if (!featName) return;
+
+  const adv = listRef.find(a => a.name === featName);
+  if (!adv) return;
+
+  const numRank = document.getElementById("numFeatInitialRank");
+  let ranksToAdd = numRank ? (parseInt(numRank.value) || 1) : 1;
+  const maxRank = char.getAdvantageMaxRank ? char.getAdvantageMaxRank(adv) : (adv.ranked ? 20 : 1);
+  if (!adv.ranked) ranksToAdd = 1;
+
+  const res = window.extractFeatSpecification(adv, ranksToAdd);
+  const finalName = res.finalName;
+  const specDetail = res.specDetail;
+  if (res.ranksToAdd) ranksToAdd = res.ranksToAdd;
+
+  if (char.feats[finalName] !== undefined && char.feats[finalName] > 0) {
+    char.feats[finalName] = Math.min(maxRank, (char.feats[finalName] || 0) + ranksToAdd);
+  } else {
+    char.feats[finalName] = Math.min(maxRank, ranksToAdd);
+  }
+
+  if (specDetail) {
+    char.featDetails[finalName] = specDetail;
+  }
+  const baseKey = finalName.includes(" (") ? finalName.split(" (")[0].trim() : finalName.trim();
+  if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
+    char.featDetails[finalName] = window.getFeatSubOptionsList(finalName, char.feats[finalName]);
+  }
+
+  if (window.selectedFeatCheckboxes) window.selectedFeatCheckboxes.clear();
+  window.closeAddFeatModal();
+  buildAdvantagesUI();
+  buildSkillsUI();
+  buildEquipmentUI();
+  refreshUI();
+  showToast(`Added "${finalName}" (Rank ${char.feats[finalName]})`, "success");
+};
+
+/* ==========================================================================
+   ADD SKILL MODAL LOGIC & SPECIALIZATIONS
+   ========================================================================== */
+
+const SKILL_CANONICAL_SPECIALIZATIONS = {
+  "Knowledge": [
+    "Arcane Lore",
+    "Art",
+    "Behavioral Sciences",
+    "Business",
+    "Civics",
+    "Current Events",
+    "Earth Sciences",
+    "History",
+    "Life Sciences",
+    "Physical Sciences",
+    "Popular Culture",
+    "Streetwise",
+    "Tactics",
+    "Technology",
+    "Theology and Philosophy"
+  ],
+  "Craft": [
+    "Artistic",
+    "Chemical",
+    "Electronic",
+    "Mechanical",
+    "Structural"
+  ],
+  "Perform": [
+    "Acting",
+    "Comedy",
+    "Dance",
+    "Keyboards",
+    "Oratory",
+    "Percussion Instruments",
+    "Singing",
+    "Stringed Instruments",
+    "Wind Instruments"
+  ],
+  "Drive": [
+    "Ground Vehicles",
+    "Water Vehicles"
+  ],
+  "Pilot": [
+    "Airplanes",
+    "Jet Planes",
+    "Helicopters",
+    "Starfighters",
+    "Space Transports",
+    "Space Cruisers"
+  ],
+  "Profession": [
+    "Accountant",
+    "Doctor",
+    "Engineer",
+    "Game Designer",
+    "Investigative Reporter",
+    "Lawyer",
+    "Military Officer",
+    "Police Detective",
+    "Sailor",
+    "Scientist",
+    "Teacher",
+    "Writer"
+  ],
+  "Language": [
+    "Arabic",
+    "Ancient Greek",
+    "Atlantean",
+    "English",
+    "French",
+    "German",
+    "Japanese",
+    "Latin",
+    "Mandarin Chinese",
+    "Russian",
+    "Spanish"
+  ]
+};
+
+window.toggleSkillCheckbox = function(skillName, isChecked, event) {
+  if (!window.selectedSkillCheckboxes) window.selectedSkillCheckboxes = new Set();
+  if (isChecked) {
+    window.selectedSkillCheckboxes.add(skillName);
+    window.selectSkillTouchItem(skillName);
+  } else {
+    window.selectedSkillCheckboxes.delete(skillName);
+  }
+  window.updateSkillModalAddButtonText();
+};
+
+window.updateSkillModalAddButtonText = function() {
+  const btn = document.getElementById("btnAddSkillConfirm");
+  const count = window.selectedSkillCheckboxes ? window.selectedSkillCheckboxes.size : 0;
+  if (btn) {
+    btn.textContent = count > 1 ? `+ Add Checked (${count}) to Sheet` : "+ Add to Sheet";
+  }
+  const lbl = document.getElementById("lblSkillCheckedCount");
+  if (lbl) {
+    lbl.innerHTML = count > 0 ? `(${count} selected <a href="#" onclick="event.preventDefault(); window.clearSkillCheckboxes()" style="color: var(--accent-primary); margin-left: 4px; text-decoration: underline;">Clear</a>)` : "";
+  }
+};
+
+window.clearSkillCheckboxes = function() {
+  if (window.selectedSkillCheckboxes) window.selectedSkillCheckboxes.clear();
+  const listEl = document.getElementById("listSkillChoice");
+  if (listEl) {
+    listEl.querySelectorAll(".touch-trait-checkbox").forEach(cb => cb.checked = false);
+  }
+  window.updateSkillModalAddButtonText();
+};
+
+window.handleSkillItemClick = function(skillName, event) {
+  const now = Date.now();
+  window.selectSkillTouchItem(skillName);
+  if (window._lastSkillTap && window._lastSkillTap.name === skillName && (now - window._lastSkillTap.time < 350)) {
+    window._lastSkillTap = null;
+    window.confirmAddSkill();
+  } else {
+    window._lastSkillTap = { name: skillName, time: now };
+  }
+};
+
+window.handleSkillDblClick = function(skillName, event) {
+  window.selectSkillTouchItem(skillName);
+  window.confirmAddSkill();
+};
+
+window.openAddSkillModal = function() {
+  const modal = document.getElementById("addSkillModal");
+  if (!modal) return;
+  window.updateTraitModalPosition();
+  if (window.selectedSkillCheckboxes) window.selectedSkillCheckboxes.clear();
+  window.updateSkillModalAddButtonText();
+
+  const listEl = document.getElementById("listSkillChoice");
+  const selChoice = document.getElementById("selSkillChoice");
+
+  if (typeof SKILLS_LIST !== 'undefined') {
+    const firstSkill = SKILLS_LIST[0] ? SKILLS_LIST[0].name : "";
+    if (selChoice) selChoice.value = firstSkill;
+
+    if (listEl) {
+      listEl.innerHTML = SKILLS_LIST.map((s, idx) => {
+        const isSelected = idx === 0;
+        const isChecked = window.selectedSkillCheckboxes && window.selectedSkillCheckboxes.has(s.name);
+        const hasSpec = !!SKILL_CANONICAL_SPECIALIZATIONS[s.name];
+        const specLabel = hasSpec ? " • Specialization" : "";
+        return `<div class="touch-trait-item ${isSelected ? 'selected' : ''}" data-skill="${s.name.replace(/"/g, '&quot;')}" onclick="window.handleSkillItemClick('${s.name.replace(/'/g, "\\'")}', event)" ondblclick="window.handleSkillDblClick('${s.name.replace(/'/g, "\\'")}', event)">
+          <input type="checkbox" class="touch-trait-checkbox" data-skill="${s.name.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleSkillCheckbox('${s.name.replace(/'/g, "\\'")}', this.checked, event)">
+          <span class="touch-trait-title">${s.name}</span>
+          <span class="touch-trait-badge">${s.ability}${specLabel}</span>
+        </div>`;
+      }).join("");
+    } else if (selChoice) {
+      selChoice.innerHTML = SKILLS_LIST.map((s, idx) => {
+        const hasSpec = !!SKILL_CANONICAL_SPECIALIZATIONS[s.name];
+        const specLabel = hasSpec ? " (Specialization)" : "";
+        return `<option value="${s.name}" ${idx === 0 ? "selected" : ""}>${s.name} [${s.ability}]${specLabel}</option>`;
+      }).join("");
+    }
+  }
+  window.onSkillModalSelect();
+  modal.classList.add("active");
+};
+
+window.selectSkillTouchItem = function(skillName) {
+  const selChoice = document.getElementById("selSkillChoice");
+  const listEl = document.getElementById("listSkillChoice");
+  if (selChoice) selChoice.value = skillName;
+  if (listEl) {
+    listEl.querySelectorAll(".touch-trait-item").forEach(item => {
+      if (item.dataset.skill === skillName) {
+        item.classList.add("selected");
+        item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } else {
+        item.classList.remove("selected");
+      }
+    });
+  }
+  window.onSkillModalSelect();
+};
+
+window.closeAddSkillModal = function() {
+  const modal = document.getElementById("addSkillModal");
+  if (modal) {
+    modal.classList.remove("active");
+    modal.classList.remove("has-spec");
+  }
+};
+
+window.onSkillModalSelect = function() {
+  const selChoice = document.getElementById("selSkillChoice");
+  const boxPreview = document.getElementById("boxSkillPreview");
+  const boxSpec = document.getElementById("boxSkillSpecContainer");
+  const listSpec = document.getElementById("listSkillSpecialization");
+  const selSpec = document.getElementById("selSkillSpecialization");
+  const txtCustomSpec = document.getElementById("txtSkillCustomSpec");
+  const numRank = document.getElementById("numSkillInitialRank");
+  if (!selChoice) return;
+
+  const baseName = selChoice.value;
+  const skill = typeof SKILLS_LIST !== 'undefined' ? SKILLS_LIST.find(s => s.name === baseName) : null;
+  if (!skill) return;
+
+  // Preview
+  if (boxPreview) {
+    boxPreview.innerHTML = `<strong>${skill.name} (${skill.ability})</strong>: ` + (skill.fullText || "<em>No description available.</em>");
+  }
+
+  // Initial rank default: 4 ranks (= 1 PP)
+  if (numRank) {
+    numRank.value = baseName === "Language" ? 1 : 4;
+  }
+
+  // Specializations
+  const specList = SKILL_CANONICAL_SPECIALIZATIONS[baseName];
+  const modal = document.getElementById("addSkillModal");
+  if (specList && boxSpec && (listSpec || selSpec)) {
+    if (modal) modal.classList.add("has-spec");
+    boxSpec.style.display = "block";
+    const defaultSpec = specList[0] || "__custom__";
+    if (selSpec) selSpec.value = defaultSpec;
+
+    if (listSpec) {
+      listSpec.innerHTML = specList.map((sp, idx) => {
+        const isSelected = idx === 0;
+        return `<div class="touch-trait-item ${isSelected ? 'selected' : ''}" data-spec="${sp.replace(/"/g, '&quot;')}" onclick="window.selectSkillSpecTouchItem('${sp.replace(/'/g, "\\'")}')">
+          <span class="touch-trait-title">${sp}</span>
+        </div>`;
+      }).join("") +
+      `<div class="touch-trait-item" data-spec="__custom__" onclick="window.selectSkillSpecTouchItem('__custom__')">
+        <span class="touch-trait-title"><em>Custom Specialization...</em></span>
+        <span class="touch-trait-badge">✏ Custom</span>
+      </div>`;
+    } else if (selSpec) {
+      selSpec.innerHTML = specList.map(sp => `<option value="${sp}">${sp}</option>`).join("") +
+        `<option value="__custom__">Custom Specialization...</option>`;
+    }
+
+    if (txtCustomSpec) {
+      txtCustomSpec.style.display = "none";
+      txtCustomSpec.value = "";
+    }
+  } else if (boxSpec) {
+    if (modal) modal.classList.remove("has-spec");
+    boxSpec.style.display = "none";
+  }
+};
+
+window.selectSkillSpecTouchItem = function(specVal) {
+  const selSpec = document.getElementById("selSkillSpecialization");
+  const listSpec = document.getElementById("listSkillSpecialization");
+  const txtCustomSpec = document.getElementById("txtSkillCustomSpec");
+
+  if (selSpec) selSpec.value = specVal;
+  if (listSpec) {
+    listSpec.querySelectorAll(".touch-trait-item").forEach(item => {
+      if (item.dataset.spec === specVal) {
+        item.classList.add("selected");
+        item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } else {
+        item.classList.remove("selected");
+      }
+    });
+  }
+
+  if (txtCustomSpec) {
+    if (specVal === "__custom__") {
+      txtCustomSpec.style.display = "block";
+      txtCustomSpec.focus();
+    } else {
+      txtCustomSpec.style.display = "none";
+    }
+  }
+};
+
+window.onSkillSpecializationChange = function() {
+  const selSpec = document.getElementById("selSkillSpecialization");
+  const txtCustomSpec = document.getElementById("txtSkillCustomSpec");
+  if (!selSpec || !txtCustomSpec) return;
+  if (selSpec.value === "__custom__") {
+    txtCustomSpec.style.display = "block";
+    txtCustomSpec.focus();
+  } else {
+    txtCustomSpec.style.display = "none";
+  }
+};
+
+window.confirmAddSkill = function() {
+  const selChoice = document.getElementById("selSkillChoice");
+
+  // Multi-select batch adding if multiple checkboxes are checked
+  if (window.selectedSkillCheckboxes && window.selectedSkillCheckboxes.size > 1) {
+    let addedCount = 0;
+    const activeSkill = selChoice ? selChoice.value : "";
+    const numRank = document.getElementById("numSkillInitialRank");
+    const activeRanks = numRank ? (parseInt(numRank.value) || 1) : 4;
+
+    window.selectedSkillCheckboxes.forEach(baseName => {
+      let fullSkillName = baseName;
+      let ranksToAdd = 4;
+
+      if (baseName === activeSkill) {
+        ranksToAdd = activeRanks;
+        const specList = SKILL_CANONICAL_SPECIALIZATIONS[baseName];
+        if (specList) {
+          const selSpec = document.getElementById("selSkillSpecialization");
+          const txtCustomSpec = document.getElementById("txtSkillCustomSpec");
+          let chosenSpec = "";
+          if (selSpec && selSpec.value === "__custom__") {
+            chosenSpec = txtCustomSpec ? txtCustomSpec.value.trim() : "";
+          } else if (selSpec) {
+            chosenSpec = selSpec.value;
+          }
+          if (!chosenSpec) chosenSpec = "General";
+          fullSkillName = `${baseName} (${chosenSpec})`;
+        }
+      } else {
+        ranksToAdd = baseName === "Language" ? 1 : 4;
+        const specList = SKILL_CANONICAL_SPECIALIZATIONS[baseName];
+        if (specList && specList.length > 0) {
+          fullSkillName = `${baseName} (${specList[0]})`;
+        }
+      }
+
+      if (char.skills[fullSkillName] !== undefined && char.skills[fullSkillName] > 0) {
+        char.skills[fullSkillName] = Math.min(20, (char.skills[fullSkillName] || 0) + ranksToAdd);
+      } else {
+        char.skills[fullSkillName] = Math.min(20, ranksToAdd);
+      }
+      addedCount++;
+    });
+
+    window.selectedSkillCheckboxes.clear();
+    window.closeAddSkillModal();
+    buildSkillsUI();
+    refreshUI();
+    showToast(`Added ${addedCount} skills to sheet`, "success");
+    return;
+  }
+
+  // Single skill addition
+  let baseName = "";
+  if (window.selectedSkillCheckboxes && window.selectedSkillCheckboxes.size === 1) {
+    baseName = Array.from(window.selectedSkillCheckboxes)[0];
+  } else if (selChoice) {
+    baseName = selChoice.value;
+  }
+  if (!baseName) return;
+
+  let fullSkillName = baseName;
+  const specList = SKILL_CANONICAL_SPECIALIZATIONS[baseName];
+  if (specList) {
+    const selSpec = document.getElementById("selSkillSpecialization");
+    const txtCustomSpec = document.getElementById("txtSkillCustomSpec");
+    let chosenSpec = "";
+    if (selSpec && selSpec.value === "__custom__") {
+      chosenSpec = txtCustomSpec ? txtCustomSpec.value.trim() : "";
+    } else if (selSpec) {
+      chosenSpec = selSpec.value;
+    }
+    if (!chosenSpec) chosenSpec = "General";
+    fullSkillName = `${baseName} (${chosenSpec})`;
+  }
+
+  const numRank = document.getElementById("numSkillInitialRank");
+  const ranksToAdd = numRank ? (parseInt(numRank.value) || 1) : (baseName === "Language" ? 1 : 4);
+
+  if (char.skills[fullSkillName] !== undefined && char.skills[fullSkillName] > 0) {
+    char.skills[fullSkillName] = Math.min(20, (char.skills[fullSkillName] || 0) + ranksToAdd);
+  } else {
+    char.skills[fullSkillName] = Math.min(20, ranksToAdd);
+  }
+
+  if (window.selectedSkillCheckboxes) window.selectedSkillCheckboxes.clear();
+  window.closeAddSkillModal();
+  buildSkillsUI();
+  refreshUI();
+  showToast(`Added "${fullSkillName}" (${char.skills[fullSkillName]} ranks)`, "success");
+};
 
 window.configureSkillMastery = function() {
   const allowed = (char.feats["Skill Mastery"] || 0) * 4;
@@ -1331,12 +3573,21 @@ window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = fals
   let config = null;
   let targetEffectName = "";
 
-  for (const eff of POWER_EFFECTS_LIST) {
-    if (eff.profiles) {
-      config = eff.profiles.find(c => c.name === targetProfile);
-      if (config) {
-        targetEffectName = eff.name;
-        break;
+  if (typeof POWER_PROFILES_LIST !== 'undefined') {
+    config = POWER_PROFILES_LIST.find(c => c.name === targetProfile);
+    if (config) {
+      targetEffectName = config.effectName;
+    }
+  }
+
+  if (!config && typeof POWER_EFFECTS_LIST !== 'undefined') {
+    for (const eff of POWER_EFFECTS_LIST) {
+      if (eff.profiles) {
+        config = eff.profiles.find(c => c.name === targetProfile);
+        if (config) {
+          targetEffectName = eff.name;
+          break;
+        }
       }
     }
   }
@@ -1346,7 +3597,13 @@ window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = fals
   effect.effectName = config.effectName || targetEffectName;
   effect.name = config.name;
   effect.isProfileExplicitlySelected = true;
-  effect.descriptors = "";
+  effect.descriptors = config.descriptors || "";
+
+  if (!char.activePowers[pIdx].name || char.activePowers[pIdx].name === "New Power Container") {
+    char.activePowers[pIdx].name = config.name;
+    const headerTitle = document.getElementById(`powerContainerName_${pIdx}`);
+    if (headerTitle) headerTitle.value = config.name;
+  }
   
   if (config.rank !== undefined) {
     effect.rank = config.rank;
@@ -1443,7 +3700,20 @@ window.updateEffectAssociation = function(pIdx, eIdx, val) {
 
 window.updateEffectLink = function(pIdx, eIdx, val) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx]) {
-      char.activePowers[pIdx].effects[eIdx].linkedTo = val || null;
+      if (val === "__unlink_children__") {
+          const currentId = char.activePowers[pIdx].effects[eIdx].id;
+          char.activePowers.forEach(cnt => {
+              if (Array.isArray(cnt.effects)) {
+                  cnt.effects.forEach(eff => {
+                      if (eff.linkedTo === currentId || (cnt === char.activePowers[pIdx] && eff.linkedTo === "previous")) {
+                          eff.linkedTo = null;
+                      }
+                  });
+              }
+          });
+      } else {
+          char.activePowers[pIdx].effects[eIdx].linkedTo = val || null;
+      }
       buildPowersUI();
       if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("update_link");
       refreshUI();
@@ -1455,6 +3725,12 @@ function calculateEffectiveRange(effect, baseRange) {
   if (effectiveRange === "Close") effectiveRange = "Touch"; // 3E to 2E compat
   
   if (!effect || !effect.modifiers || effect.modifiers.length === 0) {
+    return effectiveRange;
+  }
+
+  // Preserve Extended or Rank ranges unless explicitly modified by Range extras/flaws
+  const hasRangeMod = effect.modifiers.some(m => m.name === "Range (Extra)" || m.name === "Range (Flaw)");
+  if ((effectiveRange === "Extended" || effectiveRange === "Rank") && !hasRangeMod) {
     return effectiveRange;
   }
 
@@ -1675,23 +3951,32 @@ function buildPowersUI() {
         const hasAreaMod = effect.modifiers ? effect.modifiers.some(m => m.name === "Area" || m.name.startsWith("Area (") || m.name.includes("Area")) : false;
         const hasPortalMod = effect.modifiers ? effect.modifiers.some(m => m.name === "Portal") : false;
 
-        const progAreaMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Area)" || (m.name === "Progression" && (hasAreaMod || hasPortalMod || effect.effectName === "Environmental Control" || effect.effectName === "Obscure" || effect.effectName === "Illusion"))) : null;
+        const isDimPocket = effect.name === "Dimensional Pocket" || 
+                            effect.effectName === "Dimensional Pocket" || 
+                            (effect.subPowers && effect.subPowers.some(s => s.name && s.name.includes("Pocket Dimension"))) || 
+                            (effect.effectName === "Super-Movement" && ((effect.descriptors || "").includes("Dimensional") || (effect.notes || "").toLowerCase().includes("pocket") || (effect.name || "").toLowerCase().includes("pocket")));
+
+        const isAnimateObjects = effect.name === "Animate Objects" || 
+                                effect.effectName === "Animate Objects" || 
+                                (effect.effectName === "Summon" && (effect.name || "").toLowerCase().includes("animate"));
+
+        const progAreaMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Area)" || (m.name === "Progression" && (hasAreaMod || hasPortalMod || effect.effectName === "Environmental Control" || effect.effectName === "Obscure" || effect.effectName === "Illusion" || effect.effectName === "Create Object" || effect.name === "Create Object"))) : null;
         const progAreaRanks = progAreaMod ? (parseInt(progAreaMod.ranks) || 1) : 0;
 
-        const progRangeMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Range)" || (m.name === "Progression" && (effectiveRange === "Ranged" || effect.effectName === "Teleport" || (effectData && effectData.type === "Movement")))) : null;
+        const progRangeMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Range)" || (m.name === "Progression" && (effectiveRange === "Ranged" || effectiveRange === "Extended" || effectiveRange === "Rank" || effect.effectName === "Teleport" || effect.effectName === "Elongation" || effect.name === "Elasticity" || (effectData && effectData.type === "Movement")))) : null;
         const progRangeRanks = progRangeMod ? (parseInt(progRangeMod.ranks) || 1) : 0;
 
-        const progMassMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Mass)" || (m.name === "Progression" && ["Teleport", "Dimensional Pocket", "Super-Movement", "Move Object", "Super-Strength"].includes(effect.effectName))) : null;
+        const progMassMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Mass)" || m.name.startsWith("Progression (Mass)") || (m.name === "Progression" && (["Teleport", "Super-Movement", "Move Object", "Super-Strength", "Transform"].includes(effect.effectName) || ["Dimensional Pocket", "Telekinesis", "Transform", "Shape Matter", "Transmutation", "Animate Objects"].includes(effect.name) || isDimPocket || isAnimateObjects))) : null;
         const progMassRanks = progMassMod ? (parseInt(progMassMod.ranks) || 1) : 0;
 
-        const progTargetsMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Targets)" || (m.name === "Progression" && ((effect.modifiers && effect.modifiers.some(x => x.name === "Affects Others" || x.name === "Split Attack")) || ["Summon", "Duplication", "Animate Objects"].includes(effect.effectName)))) : null;
+        const progTargetsMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Targets)" || m.name === "Progression (Minions)" || m.name === "Progression (Duplicates)" || (m.name === "Progression" && ((effect.modifiers && effect.modifiers.some(x => x.name === "Affects Others" || x.name === "Split Attack")) || ["Summon", "Duplication", "Animate Objects"].includes(effect.effectName)))) : null;
         const progTargetsRanks = progTargetsMod ? (parseInt(progTargetsMod.ranks) || 1) : 0;
 
         const progDurMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Progression (Duration)") : null;
         const progDurRanks = progDurMod ? (parseInt(progDurMod.ranks) || 1) : 0;
 
         let reachRanks = 0;
-        const reachMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Reach") : null;
+        const reachMod = effect.modifiers ? effect.modifiers.find(m => m.name === "Reach" || m.name === "Extended Reach") : null;
         if (reachMod) reachRanks = parseInt(reachMod.ranks) || 1;
 
         let rangeShift = 0;
@@ -1733,10 +4018,10 @@ function buildPowersUI() {
           rangeDisplay = "Perception (Line of sight / Accurate Sense)";
         } else if (effectiveRange === "Personal") {
           rangeDisplay = "Personal";
-        } else if (effectiveRange === "Rank") {
-          let effRank = Math.max(-5, rankNum + rangeShift);
+        } else if (effectiveRange === "Rank" || effectiveRange === "Extended") {
+          let effRank = Math.max(1, rankNum + rangeShift);
           let dist = (typeof MEASUREMENT_TABLE !== 'undefined' && MEASUREMENT_TABLE[effRank.toString()]) ? MEASUREMENT_TABLE[effRank.toString()].dist_imp : "Special";
-          rangeDisplay = `Rank ${effRank} (${dist})`;
+          rangeDisplay = `${effectiveRange} (Rank ${effRank} / ${dist})`;
         }
 
         // Distance & Speed
@@ -1784,6 +4069,10 @@ function buildPowersUI() {
         } else if (effect.effectName === "Leaping") {
           const leapMult = getProgMult(rankNum - 1 + progRangeRanks);
           distanceDisplay = `×${leapMult.toLocaleString()} normal jumping distance`;
+        } else if (effect.effectName === "Elongation" || effect.name === "Elongation" || effect.name === "Elasticity") {
+          const elDistFt = 5 * getProgMult(rankNum - 1 + progRangeRanks);
+          const elDistStr = elDistFt >= 5280 ? `${(elDistFt / 5280).toFixed(1)} miles` : `${elDistFt.toLocaleString()} ft.`;
+          distanceDisplay = `Reach / Move: ${elDistStr}`;
         }
 
         // Area
@@ -1815,6 +4104,9 @@ function buildPowersUI() {
         } else if (effect.effectName === "Illusion") {
           const rad = 5 * areaProgMult;
           areaDisplay = `${rad.toLocaleString()} ft. radius`;
+        } else if (effect.effectName === "Create Object" || effect.name === "Create Object") {
+          const cubes = rankNum * areaProgMult;
+          areaDisplay = `${cubes.toLocaleString()} 5-ft. cube${cubes > 1 ? 's' : ''} (Toughness ${rankNum})`;
         }
 
         // Cargo / Mass
@@ -1827,7 +4119,30 @@ function buildPowersUI() {
           "25,000,000 lbs. (12,500 tons)", "50,000,000 lbs. (25,000 tons)", "100,000,000 lbs. (50,000 tons)",
           "250,000,000 lbs. (125,000 tons)", "500,000,000 lbs. (250,000 tons)"
         ];
-        if (effect.effectName === "Teleport" || effect.effectName === "Dimensional Pocket" || (effect.modifiers && effect.modifiers.some(m => m.name.startsWith("Progression (Mass)"))) || (effect.effectName === "Super-Movement" && (effect.descriptors || "").includes("Dimensional"))) {
+
+        if (isDimPocket || isAnimateObjects) {
+          const stepIdx = Math.max(0, (rankNum - 1) + progMassRanks);
+          massDisplay = MASS_STEPS[Math.min(stepIdx, MASS_STEPS.length - 1)] || `${MASS_STEPS[MASS_STEPS.length - 1]}+`;
+        } else if (effect.effectName === "Teleport" || effect.name === "Teleport") {
+          const stepIdx = Math.max(0, progMassRanks);
+          massDisplay = MASS_STEPS[Math.min(stepIdx, MASS_STEPS.length - 1)] || `${MASS_STEPS[MASS_STEPS.length - 1]}+`;
+        } else if (effect.effectName === "Transform" || effect.name === "Transform" || ["Transmutation", "Shape Matter", "Petrification", "Color Control", "Mutation"].includes(effect.name)) {
+          const TRANSFORM_MASS_STEPS = [
+            "1 lb.", "2 lbs.", "5 lbs.", "10 lbs.", "25 lbs.", "50 lbs.",
+            ...MASS_STEPS
+          ];
+          const stepIdx = Math.max(0, (rankNum - 1) + progMassRanks);
+          massDisplay = TRANSFORM_MASS_STEPS[Math.min(stepIdx, TRANSFORM_MASS_STEPS.length - 1)] || `${TRANSFORM_MASS_STEPS[TRANSFORM_MASS_STEPS.length - 1]}+`;
+        } else if (effect.effectName === "Move Object" || effect.name === "Move Object" || ["Telekinesis", "Air Control", "Earth Control", "Magnetic Control", "Water Control"].includes(effect.name)) {
+          const effStr = (rankNum * 5) + (progMassRanks * 5);
+          const cap = (typeof CharacterModel !== 'undefined' && CharacterModel.getCarryingCapacity) 
+            ? CharacterModel.getCarryingCapacity(effStr) 
+            : `${Math.round(100 * Math.pow(2, (effStr - 10) / 5)).toLocaleString()} lbs.`;
+          massDisplay = `Max Load: ${cap} (Str ${effStr})`;
+        } else if (effect.effectName === "Super-Strength" || effect.name === "Super-Strength") {
+          const effBonus = (rankNum + progMassRanks) * 5;
+          massDisplay = `+${effBonus} Str to Carrying Capacity`;
+        } else if (progMassRanks > 0 || (effect.modifiers && effect.modifiers.some(m => m.name.startsWith("Progression (Mass)")))) {
           massDisplay = MASS_STEPS[Math.min(progMassRanks, MASS_STEPS.length - 1)] || `${MASS_STEPS[MASS_STEPS.length - 1]}+`;
         }
 
@@ -1835,7 +4150,8 @@ function buildPowersUI() {
         let targetsDisplay = "";
         if (progTargetsRanks > 0 || (effect.modifiers && effect.modifiers.some(m => m.name === "Affects Others" || m.name === "Split Attack")) || ["Summon", "Duplication", "Animate Objects"].includes(effect.effectName)) {
           const tCount = getProgMult(progTargetsRanks);
-          targetsDisplay = `${tCount.toLocaleString()} subject${tCount > 1 ? 's' : ''}`;
+          const noun = (effect.effectName === "Summon" || effect.name === "Summon") ? "minion" : ((effect.effectName === "Duplication" || effect.name === "Duplication") ? "duplicate" : "subject");
+          targetsDisplay = `${tCount.toLocaleString()} ${noun}${tCount > 1 ? 's' : ''}`;
         }
 
         // Save DC / Check
@@ -1863,8 +4179,8 @@ function buildPowersUI() {
           const massData = MEASUREMENT_TABLE[Math.min(30, Math.max(1, effMassRank)).toString()] || MEASUREMENT_TABLE["20"];
 
           let effDistRank = rankNum + progRangeRanks;
-          if (effectiveRange === "Rank") {
-              effDistRank = Math.max(-5, effDistRank + rangeShift);
+          if (effectiveRange === "Rank" || effectiveRange === "Extended") {
+              effDistRank = Math.max(1, effDistRank + rangeShift);
           }
           if (hasAreaMod || hasPortalMod) {
              effDistRank = rankNum + progAreaRanks;
@@ -1873,16 +4189,16 @@ function buildPowersUI() {
           const distData = MEASUREMENT_TABLE[Math.min(30, Math.max(1, effDistRank)).toString()] || MEASUREMENT_TABLE["20"];
 
           if (mData && effect.effectName) {
-            const showDist = (effectiveRange === "Rank" || hasAreaMod || hasPortalMod || (effectData && effectData.type === "Movement") || effect.effectName === "Teleport");
-            const showMass = (massDisplay !== "" || ["Move Object", "Super-Strength"].includes(effect.effectName));
-            const showTable = showDist || showMass || ["Move Object", "Create", "Insubstantial"].includes(effect.effectName);
+            const showDist = (effectiveRange === "Rank" || effectiveRange === "Extended" || hasAreaMod || hasPortalMod || (effectData && effectData.type === "Movement") || effect.effectName === "Teleport" || effect.effectName === "Elongation" || effect.name === "Elasticity");
+            const showMass = (massDisplay !== "" || ["Move Object", "Super-Strength", "Transform"].includes(effect.effectName) || isDimPocket || isAnimateObjects);
+            const showTable = showDist || showMass || ["Move Object", "Create Object", "Insubstantial"].includes(effect.effectName);
             
             if (showTable && effect.effectName !== "Enhanced Movement") {
                 measurementHtml = `
                   <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); display: flex; gap: 16px; flex-wrap: wrap; font-size: calc(var(--font-size-secondary) * 0.95); font-family: monospace;">
                     <strong style="color: var(--accent-primary);">Table Equivalents:</strong>
                     ${showDist ? `<span><strong>Dist:</strong> ${distData ? distData.dist_imp : 'Special'}</span>` : ''}
-                    ${showMass ? `<span><strong>Mass:</strong> ${massData ? massData.dist_imp : 'Special'}</span>` : ''}
+                    ${showMass ? `<span><strong>Mass:</strong> ${massData && massData.mass_imp ? massData.mass_imp : (massDisplay || 'Special')}</span>` : ''}
                     <span><strong>Time:</strong> ${mData ? mData.time : 'Special'}</span>
                   </div>
                 `;
@@ -1891,7 +4207,9 @@ function buildPowersUI() {
         }
 
         let allTemplates = [];
-        if (typeof POWER_EFFECTS_LIST !== 'undefined') {
+        if (typeof POWER_PROFILES_LIST !== 'undefined') {
+            allTemplates = [...POWER_PROFILES_LIST];
+        } else if (typeof POWER_EFFECTS_LIST !== 'undefined') {
             POWER_EFFECTS_LIST.forEach(eff => {
               if (eff.profiles) {
                 eff.profiles.forEach(cfg => {
@@ -1899,16 +4217,15 @@ function buildPowersUI() {
                 });
               }
             });
-            allTemplates.sort((a, b) => a.name.localeCompare(b.name));
         }
+        allTemplates.sort((a, b) => a.name.localeCompare(b.name));
 
         const showAll = effect.showAllProfiles;
-        const availableTemplates = showAll ? allTemplates : (effectData.profiles || []);
+        const availableTemplates = (showAll || !effect.effectName) ? allTemplates : (effectData.profiles || []);
         const isCustomProfile = effect.isProfileExplicitlySelected || (effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName);
 
         let templateDropdownHtml = `
           <div style="display: flex; align-items: center; gap: 6px;">
-            <label style="font-size: var(--font-size-secondary); font-weight: 600; white-space: nowrap;">Profile:</label>
             <select class="minor-control" style="width: 160px; ${isCustomProfile ? 'color: var(--accent-primary); font-weight: bold;' : ''}" onchange="applyEffectProfile(${pIdx}, ${eIdx}, this.value)">
               <option value="" ${!isCustomProfile ? 'selected' : ''} style="color: var(--text-main); font-weight: normal;">- Select Profile -</option>
               ${availableTemplates.map(cfg => {
@@ -2514,12 +4831,15 @@ function buildPowersUI() {
         if (effect.modifiers && effect.modifiers.length > 0) {
           rootModifiersHtml = effect.modifiers.map((mod, mIdx) => {
             let modData = null;
+            const cleanMod = (s) => (s || "").replace(/\s*\[.*?\]/g, '').replace(/\s*\([+–-]?\d+[^)]*\)/g, '').trim();
+            const matchMod = (m) => m && (m.name === mod.name || cleanMod(m.name) === cleanMod(mod.name));
             if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
-              modData = POWER_MODIFIERS_LIST.find(m => m.name === mod.name);
+              modData = POWER_MODIFIERS_LIST.find(matchMod);
             }
-            if (!modData && effectData && effectData.uniqueModifiers) modData = effectData.uniqueModifiers.find(m => m.name === mod.name);
-            if (!modData && effectData && effectData.specificExtras) modData = effectData.specificExtras.find(m => m.name === mod.name);
-            if (!modData && effectData && effectData.specificFlaws) modData = effectData.specificFlaws.find(m => m.name === mod.name);
+            if (!modData && effectData && effectData.uniqueModifiers) modData = effectData.uniqueModifiers.find(matchMod);
+            if (!modData && effectData && effectData.specificExtras) modData = effectData.specificExtras.find(matchMod);
+            if (!modData && effectData && effectData.specificFlaws) modData = effectData.specificFlaws.find(matchMod);
+            if (!modData && effectData && effectData.specificFeats) modData = effectData.specificFeats.find(matchMod);
             if (!modData) modData = { name: mod.name, cost: mod.cost !== undefined ? mod.cost : 1, costType: mod.costType || "flat", category: mod.category || "extra", hasRanks: false };
 
             modData = JSON.parse(JSON.stringify(modData));
@@ -2539,7 +4859,7 @@ function buildPowersUI() {
                     <button type="button" class="modifier-stepper-btn" onclick="stepModifierRank(${pIdx}, ${eIdx}, ${mIdx}, 1, 1, ${maxR})">+</button>
                   </div>
                 ` : ''}
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85);" onclick="showModifierInfo('${mod.name}')" title="View Modifier Rule">?</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85);" onclick="showModifierInfo('${mod.name}', '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}')" title="View Modifier Rule">?</button>
                 <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 2px;" onclick="removeModifier(${pIdx}, ${eIdx}, ${mIdx})" title="Remove Modifier">✕</button>
               </div>
             `;
@@ -2572,27 +4892,6 @@ function buildPowersUI() {
         if (effect.association === undefined) effect.association = "";
 
         const isLinked = effect.linkedTo === "previous" || (typeof effect.linkedTo === "string" && effect.linkedTo !== "") || effect.association === "linked";
-
-        // Build list of potential link targets (previous effect + other effects across containers)
-        let linkOptions = `<option value="">🔗 Not Linked</option>`;
-        if (eIdx > 0) {
-          const prevEff = powerContainer.effects[eIdx - 1];
-          const prevName = prevEff.name || prevEff.effectName || ("Effect " + eIdx);
-          linkOptions += `<option value="previous" ${effect.linkedTo === 'previous' ? 'selected' : ''}>🔗 Link to Previous (${prevName})</option>`;
-        }
-
-        char.activePowers.forEach((otherContainer, otherPIdx) => {
-          if (Array.isArray(otherContainer.effects)) {
-            otherContainer.effects.forEach((otherEff, otherEIdx) => {
-              if (otherEff.id && otherEff.id !== effect.id) {
-                // If it's already previous, skip duplicate option
-                if (otherPIdx === pIdx && otherEIdx === eIdx - 1) return;
-                const optLabel = (otherContainer.name || 'Power') + ' > ' + (otherEff.name || otherEff.effectName || `Effect ${otherEIdx + 1}`);
-                linkOptions += `<option value="${otherEff.id}" ${effect.linkedTo === otherEff.id ? 'selected' : ''}>🔗 Link to: ${optLabel}</option>`;
-              }
-            });
-          }
-        });
 
         // Determine linked target effect (outgoing) and incoming links
         let targetEffect = null;
@@ -2627,6 +4926,33 @@ function buildPowersUI() {
         });
 
         const isLinkedCard = isLinked || (linkedChildren.length > 0);
+
+        // Build list of potential link targets (previous effect + other effects across containers)
+        let linkOptions = `<option value="">🔗 Not Linked</option>`;
+        if (linkedChildren.length > 0 && !isLinked) {
+          const childNames = linkedChildren.map(c => (c.effect.name || c.effect.effectName || c.name.split(' > ').pop())).join(', ');
+          linkOptions = `<option value="" selected>🔗 Linked with: ${childNames}</option><option value="__unlink_children__">🔗 Unlink Attached Effects</option>`;
+        }
+        if (eIdx > 0) {
+          const prevEff = powerContainer.effects[eIdx - 1];
+          const prevName = prevEff.name || prevEff.effectName || ("Effect " + eIdx);
+          const isPrevSelected = (effect.linkedTo === 'previous') || (prevEff.id && effect.linkedTo === prevEff.id);
+          const prevOptValue = prevEff.id || 'previous';
+          linkOptions += `<option value="${prevOptValue}" ${isPrevSelected ? 'selected' : ''}>🔗 Link to Previous (${prevName})</option>`;
+        }
+
+        char.activePowers.forEach((otherContainer, otherPIdx) => {
+          if (Array.isArray(otherContainer.effects)) {
+            otherContainer.effects.forEach((otherEff, otherEIdx) => {
+              if (otherEff.id && otherEff.id !== effect.id) {
+                // If it's already previous, skip duplicate option
+                if (otherPIdx === pIdx && otherEIdx === eIdx - 1) return;
+                const optLabel = (otherContainer.name || 'Power') + ' > ' + (otherEff.name || otherEff.effectName || `Effect ${otherEIdx + 1}`);
+                linkOptions += `<option value="${otherEff.id}" ${effect.linkedTo === otherEff.id ? 'selected' : ''}>🔗 Link to: ${optLabel}</option>`;
+              }
+            });
+          }
+        });
 
         // Build Two-Way Link Banners & Rule Checks
         let linkBannerHtml = "";
@@ -2670,6 +4996,122 @@ function buildPowersUI() {
           `;
         }
 
+        // Container Powers (Battle Form, Alternate Form, Container)
+        let containerPowersHtml = "";
+        const isContainer = (typeof CharacterModel !== 'undefined' && CharacterModel.isContainerEffect) ? CharacterModel.isContainerEffect(effect) : (effect.effectName === "Battle Form" || effect.effectName === "Container");
+        if (isContainer) {
+          if (!effect.containedPowers) effect.containedPowers = [];
+          const pool = (typeof CharacterModel !== 'undefined' && CharacterModel.getContainerPool) ? CharacterModel.getContainerPool(effect) : (rankNum * 5);
+          const spent = (char.calculateContainedCost) ? char.calculateContainedCost(effect) : 0;
+          const isOver = spent > pool;
+          const isFormActive = effect.formActive !== false;
+
+          const containedItemsHtml = effect.containedPowers.map((cp, cpIdx) => {
+            const cpName = cp.name || cp.effectName || "Trait";
+            const cpRank = parseInt(cp.rank) || 1;
+            const cpCost = cp.cost !== undefined ? cp.cost : (cpRank * (cp.effectName ? 1 : 1));
+            return `
+              <div style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 3px 8px; font-size: var(--font-size-secondary);">
+                <strong>${cpName}</strong> <span class="badge" style="background: var(--bg-panel); color: var(--text-main); font-size: 11px;">Rank ${cpRank} (${cpCost} PP)</span>
+                <button type="button" class="stepper-btn" style="width: 20px !important; height: 20px; font-size: 11px; border-radius: 2px;" onclick="stepContainedPowerRank(${pIdx}, ${eIdx}, ${cpIdx}, -1)">−</button>
+                <button type="button" class="stepper-btn" style="width: 20px !important; height: 20px; font-size: 11px; border-radius: 2px;" onclick="stepContainedPowerRank(${pIdx}, ${eIdx}, ${cpIdx}, 1)">+</button>
+                <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 4px;" onclick="removeContainedPower(${pIdx}, ${eIdx}, ${cpIdx})" title="Remove from form">✕</button>
+              </div>
+            `;
+          }).join('');
+
+          containerPowersHtml = `
+            <div style="margin-top: 8px; padding: 10px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-weight: 600; font-size: var(--font-size-labels); color: var(--text-main);">Contained Traits &amp; Powers:</span>
+                  <span class="badge" style="background: ${isOver ? '#ef4444' : 'rgba(16, 185, 129, 0.2)'}; color: ${isOver ? '#ffffff' : '#10b981'}; font-weight: bold; font-size: 12px; border: 1px solid ${isOver ? '#ef4444' : '#10b981'};">
+                    Pool: ${spent} / ${pool} PP ${isOver ? '⚠️ (Over Budget)' : '✓'}
+                  </span>
+                </div>
+                <button type="button" class="btn minor-control-btn" style="font-weight: bold; background: ${isFormActive ? '#10b981' : 'var(--bg-card)'}; color: ${isFormActive ? '#ffffff' : 'var(--text-main)'}; border: 1px solid ${isFormActive ? '#10b981' : 'var(--border-color)'};" onclick="toggleContainerFormActive(${pIdx}, ${eIdx})" title="Toggle whether these traits are applied to the active character sheet">
+                  ${isFormActive ? '⚡ Form Active (Traits Applied)' : '⚪ Form Inactive (Base Stats)'}
+                </button>
+              </div>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center;">
+                ${containedItemsHtml || '<span class="secondary-text" style="font-style: italic;">No traits added to form yet. Select traits or powers below to spend pool points.</span>'}
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 2px;">
+                <label style="font-size: var(--font-size-secondary); font-weight: 600;">+ Add to Form:</label>
+                <select id="selContainedPower_${pIdx}_${eIdx}" class="minor-control" style="width: 220px;">
+                  <option value="">- Select Trait or Power -</option>
+                  <optgroup label="Enhanced Abilities (1 PP/r)">
+                    <option value="trait_Strength">Strength (STR)</option>
+                    <option value="trait_Dexterity">Dexterity (DEX)</option>
+                    <option value="trait_Constitution">Constitution (CON)</option>
+                    <option value="trait_Intelligence">Intelligence (INT)</option>
+                    <option value="trait_Wisdom">Wisdom (WIS)</option>
+                    <option value="trait_Charisma">Charisma (CHA)</option>
+                  </optgroup>
+                  <optgroup label="Combat &amp; Saves">
+                    <option value="trait_Attack">Attack (2 PP/r)</option>
+                    <option value="trait_Defense">Defense (2 PP/r)</option>
+                    <option value="trait_Toughness">Toughness Save (1 PP/r)</option>
+                    <option value="trait_Fortitude">Fortitude Save (1 PP/r)</option>
+                    <option value="trait_Reflex">Reflex Save (1 PP/r)</option>
+                    <option value="trait_Will">Will Save (1 PP/r)</option>
+                  </optgroup>
+                  <optgroup label="Powers">
+                    <option value="Protection">Protection (1 PP/r)</option>
+                    <option value="Strike">Strike (1 PP/r)</option>
+                    <option value="Damage">Damage / Blast (1 PP/r)</option>
+                    <option value="Flight">Flight (2 PP/r)</option>
+                    <option value="Speed">Speed (1 PP/r)</option>
+                    <option value="Super-Strength">Super-Strength (2 PP/r)</option>
+                    <option value="Insubstantial">Insubstantial (5 PP/r)</option>
+                    <option value="Density">Density (3 PP/r)</option>
+                    <option value="Immovable">Immovable (1 PP/r)</option>
+                    <option value="Elongation">Elongation (1 PP/r)</option>
+                    <option value="Swimming">Swimming (1 PP/r)</option>
+                    <option value="Burrowing">Burrowing (1 PP/r)</option>
+                    <option value="Leaping">Leaping (1 PP/r)</option>
+                    <option value="Super-Senses">Super-Senses (1 PP/r)</option>
+                    <option value="Enhanced Trait">Enhanced Trait (1 PP/r)</option>
+                  </optgroup>
+                </select>
+                <button type="button" class="btn minor-control-btn" onclick="addContainedPowerToEffect(${pIdx}, ${eIdx}, 'selContainedPower_${pIdx}_${eIdx}')">+ Add</button>
+              </div>
+            </div>
+          `;
+        }
+
+        // Companion In-Context Actions
+        let companionButtonHtml = "";
+        const isSummonEff = effect.effectName === "Summon";
+        const isDupEff = effect.effectName === "Duplication" || (effect.name && effect.name.includes("Duplication"));
+        const hasMetamorphEff = effect.effectName === "Morph" && effect.modifiers && effect.modifiers.some(m => m.name && m.name.includes("Metamorph"));
+
+        if (isSummonEff) {
+          const budget = rankNum * 15;
+          companionButtonHtml = `
+            <div style="margin-top: 8px; padding: 8px 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: var(--font-size-secondary);">Summoned Creature (Rank ${rankNum}): <strong>${budget} PP Budget</strong> (Max PL ${rankNum})</span>
+              <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('summon', ${pIdx}, ${eIdx})">👥 Build / Edit Summoned Creature</button>
+            </div>
+          `;
+        } else if (isDupEff) {
+          companionButtonHtml = `
+            <div style="margin-top: 8px; padding: 8px 10px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: var(--font-size-secondary);">Duplicate Minion: <strong>Full Hero Traits</strong></span>
+              <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('duplicate', ${pIdx}, ${eIdx})">👥 Generate / Edit Duplicate Sheet</button>
+            </div>
+          `;
+        } else if (hasMetamorphEff) {
+          companionButtonHtml = `
+            <div style="margin-top: 8px; padding: 8px 10px; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: var(--font-size-secondary);">Alternate Form (Metamorph): <strong>${char.totalPointsAllowed} PP Budget</strong></span>
+              <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('metamorph', ${pIdx}, ${eIdx})">🔄 Build / Edit Alternate Form</button>
+            </div>
+          `;
+        }
+
         return `
           <div class="effect-card ${isLinkedCard ? 'is-linked' : ''}" style="margin-top: 12px; padding-top: 12px; border-top: 2px dashed var(--text-muted);">
             
@@ -2689,9 +5131,9 @@ function buildPowersUI() {
                     
                     <select onchange="updateEffectDirect(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="min-width: 160px; color: var(--accent-primary); font-weight: bold;">
                       <option value="" ${effect.effectName === "" ? "selected" : ""} style="color: var(--text-main); font-weight: normal;">- Select Effect -</option>
-                      ${POWER_EFFECTS_LIST.filter(e => e.name !== "Pre-built Powers").map(eff => `<option value="${eff.name}" ${eff.name === effect.effectName ? 'selected' : ''} style="color: var(--text-main); font-weight: normal;">${eff.name} (${eff.baseCost} PP/r)</option>`).join('')}
+                      ${POWER_EFFECTS_LIST.filter(e => !e.effectName && e.name !== "Pre-built Powers").map(eff => `<option value="${eff.name}" ${eff.name === effect.effectName ? 'selected' : ''} style="color: var(--text-main); font-weight: normal;">${eff.name} (${eff.baseCost} PP/r)</option>`).join('')}
                     </select>
-                    ${effectData && effect.effectName !== "" ? `<button type="button" class="btn-info-circle" onclick="showPowerEffectInfo('${effect.effectName}')" title="View Effect Rules">?</button>` : ''}
+                    ${effectData && effect.effectName !== "" ? `<button type="button" class="btn-info-circle" onclick="showPowerEffectInfo('${effect.effectName}', '${(effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName) ? effect.name : ''}')" title="View Effect Rules">?</button>` : ''}
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -2717,6 +5159,10 @@ function buildPowersUI() {
 
             ${optionPickersHtml}
 
+            ${containerPowersHtml}
+
+            ${companionButtonHtml}
+
             ${subPowersHtml ? `<div style="margin-top: 8px;"><strong style="font-size: var(--font-size-secondary); color: var(--text-main);">Profile Options:</strong><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">${subPowersHtml}</div></div>` : ''}
 
             ${effect.effectName !== "" ? `
@@ -2729,7 +5175,7 @@ function buildPowersUI() {
                     ${availableRootExtras.map(e => `<option value="${e.name}">${e.name} (+${e.cost}${e.costType === 'flat' ? ' flat' : '/r'})${e.hasRanks && e.maxRanks && e.maxRanks < 20 ? ` (Max rank: ${e.maxRanks})` : ''}</option>`).join('')}
                   </optgroup>
                 </select>
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootExtra_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val);" title="View Info for Selected Extra">?</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootExtra_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Extra">?</button>
                 <button type="button" class="btn minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootExtra_${pIdx}_${eIdx}')">+ Extra</button>
               </div>
 
@@ -2741,7 +5187,7 @@ function buildPowersUI() {
                     ${availableRootFeats.map(f => `<option value="${f.name}">${f.name} (+${f.cost} flat)${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}
                   </optgroup>
                 </select>
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFeat_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val);" title="View Info for Selected Power Feat">?</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFeat_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Power Feat">?</button>
                 <button type="button" class="btn minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFeat_${pIdx}_${eIdx}')">+ Feat</button>
               </div>
 
@@ -2753,7 +5199,7 @@ function buildPowersUI() {
                     ${availableRootFlaws.map(f => `<option value="${f.name}">${f.name} (-${Math.abs(f.cost)}${f.costType === 'flat' ? ' flat' : '/r'})${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}
                   </optgroup>
                 </select>
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFlaw_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val);" title="View Info for Selected Flaw">?</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFlaw_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Flaw">?</button>
                 <button type="button" class="btn btn-secondary minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFlaw_${pIdx}_${eIdx}')">+ Flaw</button>
               </div>
 
@@ -3526,6 +5972,7 @@ window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
       if (effData.uniqueModifiers) modData = effData.uniqueModifiers.find(m => m.name === modName);
       if (!modData && effData.specificExtras) modData = effData.specificExtras.find(m => m.name === modName);
       if (!modData && effData.specificFlaws) modData = effData.specificFlaws.find(m => m.name === modName);
+      if (!modData && effData.specificFeats) modData = effData.specificFeats.find(m => m.name === modName);
   }
   if (!modData) {
       let smartMods = window.generateSmartModifiers(effect);
@@ -3566,6 +6013,91 @@ window.removeModifier = function(pIdx, eIdx, modIdx) {
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_modifier");
     buildPowersUI();
     refreshUI();
+  }
+};
+
+/* ==========================================================================
+   CONTAINER POWERS (BATTLE FORM / ALTERNATE FORM / CONTAINER)
+   ========================================================================== */
+
+window.toggleContainerFormActive = function(pIdx, eIdx) {
+  if (char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].effects && char.activePowers[pIdx].effects[eIdx]) {
+    const effect = char.activePowers[pIdx].effects[eIdx];
+    effect.formActive = effect.formActive === false ? true : false;
+    if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("toggle_form_active");
+    buildPowersUI();
+    refreshUI();
+    if (typeof showToast === 'function') {
+      showToast(effect.formActive ? "Form activated: contained traits applied." : "Form deactivated: base traits restored.", "info");
+    }
+  }
+};
+
+window.addContainedPowerToEffect = function(pIdx, eIdx, selectElemId) {
+  const sel = document.getElementById(selectElemId);
+  if (!sel || !sel.value) return;
+  const val = sel.value;
+  if (!char.activePowers || !char.activePowers[pIdx] || !char.activePowers[pIdx].effects || !char.activePowers[pIdx].effects[eIdx]) return;
+  const effect = char.activePowers[pIdx].effects[eIdx];
+  if (!effect.containedPowers) effect.containedPowers = [];
+
+  if (val.startsWith("trait_")) {
+    const traitName = val.replace("trait_", "");
+    let costPerRank = 1;
+    if (traitName === "Attack" || traitName === "Defense") {
+      costPerRank = 2;
+    }
+    effect.containedPowers.push({
+      name: traitName,
+      traitName: traitName,
+      isTrait: true,
+      rank: 1,
+      costPerRank: costPerRank,
+      cost: costPerRank
+    });
+  } else {
+    let effData = (typeof POWER_EFFECTS_LIST !== 'undefined') ? POWER_EFFECTS_LIST.find(e => e.name === val) : null;
+    let costPerRank = effData ? effData.baseCost : 1;
+    effect.containedPowers.push({
+      name: val,
+      effectName: val,
+      rank: 1,
+      costPerRank: costPerRank,
+      cost: costPerRank
+    });
+  }
+
+  sel.value = "";
+  if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("add_contained_power");
+  buildPowersUI();
+  refreshUI();
+};
+
+window.stepContainedPowerRank = function(pIdx, eIdx, cpIdx, delta) {
+  if (char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].effects && char.activePowers[pIdx].effects[eIdx]) {
+    const effect = char.activePowers[pIdx].effects[eIdx];
+    if (effect.containedPowers && effect.containedPowers[cpIdx]) {
+      const cp = effect.containedPowers[cpIdx];
+      let newRank = (parseInt(cp.rank) || 1) + delta;
+      if (newRank < 1) newRank = 1;
+      cp.rank = newRank;
+      cp.cost = newRank * (cp.costPerRank || 1);
+      if (window.PowerHistoryManager) window.PowerHistoryManager.recordStepperChange(`contained_${pIdx}_${eIdx}_${cpIdx}`);
+      buildPowersUI();
+      refreshUI();
+    }
+  }
+};
+
+window.removeContainedPower = function(pIdx, eIdx, cpIdx) {
+  if (char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].effects && char.activePowers[pIdx].effects[eIdx]) {
+    const effect = char.activePowers[pIdx].effects[eIdx];
+    if (effect.containedPowers && effect.containedPowers[cpIdx]) {
+      effect.containedPowers.splice(cpIdx, 1);
+      if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_contained_power");
+      buildPowersUI();
+      refreshUI();
+    }
   }
 };
 
@@ -3690,21 +6222,30 @@ if (typeof POWER_EFFECTS_LIST !== 'undefined') {
             EXTRACTED_MODIFIERS["Remote Sensing"].extras.push({name: "Protected", cost: 1, costType: "per_rank"});
             EXTRACTED_MODIFIERS["Remote Sensing"].extras.push({name: "Targeting", cost: 1, costType: "per_rank"});
         }
-        if (EXTRACTED_MODIFIERS["Shrinking"] && !EXTRACTED_MODIFIERS["Shrinking"].extras.some(e => e.name === "Atomic")) {
-            EXTRACTED_MODIFIERS["Shrinking"].extras.push({name: "Atomic", cost: 1, costType: "flat"});
-            EXTRACTED_MODIFIERS["Shrinking"].extras.push({name: "Microscopic", cost: 1, costType: "flat"});
-            EXTRACTED_MODIFIERS["Shrinking"].extras.push({name: "Normal Speed", cost: 1, costType: "per_rank"});
+        if (EXTRACTED_MODIFIERS["Shrinking"]) {
+            if (!EXTRACTED_MODIFIERS["Shrinking"].feats) EXTRACTED_MODIFIERS["Shrinking"].feats = [];
+            if (!EXTRACTED_MODIFIERS["Shrinking"].feats.some(e => e.name === "Atomic")) {
+                EXTRACTED_MODIFIERS["Shrinking"].feats.push({name: "Atomic", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Shrinking"].feats.push({name: "Microscopic", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Shrinking"].extras.push({name: "Normal Speed", cost: 1, costType: "per_rank"});
+            }
         }
-        if (EXTRACTED_MODIFIERS["Summon"] && !EXTRACTED_MODIFIERS["Summon"].extras.some(e => e.name === "Memory Merge")) {
-            EXTRACTED_MODIFIERS["Summon"].extras.push({name: "Memory Merge", cost: 1, costType: "flat"});
-            EXTRACTED_MODIFIERS["Summon"].extras.push({name: "Sacrifice", cost: 1, costType: "flat"});
+        if (EXTRACTED_MODIFIERS["Summon"]) {
+            if (!EXTRACTED_MODIFIERS["Summon"].feats) EXTRACTED_MODIFIERS["Summon"].feats = [];
+            if (!EXTRACTED_MODIFIERS["Summon"].feats.some(e => e.name === "Memory Merge")) {
+                EXTRACTED_MODIFIERS["Summon"].feats.push({name: "Memory Merge", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Summon"].feats.push({name: "Sacrifice", cost: 1, costType: "flat"});
+            }
         }
-        if (EXTRACTED_MODIFIERS["Teleport"] && !EXTRACTED_MODIFIERS["Teleport"].extras.some(e => e.name === "Change Direction")) {
-            EXTRACTED_MODIFIERS["Teleport"].extras.push({name: "Change Direction", cost: 1, costType: "flat"});
-            EXTRACTED_MODIFIERS["Teleport"].extras.push({name: "Change Velocity", cost: 1, costType: "flat"});
-            EXTRACTED_MODIFIERS["Teleport"].extras.push({name: "Easy", cost: 1, costType: "per_rank"});
-            EXTRACTED_MODIFIERS["Teleport"].extras.push({name: "Known Location", cost: 1, costType: "flat"});
-            EXTRACTED_MODIFIERS["Teleport"].extras.push({name: "Turnabout", cost: 1, costType: "flat"});
+        if (EXTRACTED_MODIFIERS["Teleport"]) {
+            if (!EXTRACTED_MODIFIERS["Teleport"].feats) EXTRACTED_MODIFIERS["Teleport"].feats = [];
+            if (!EXTRACTED_MODIFIERS["Teleport"].feats.some(e => e.name === "Change Direction")) {
+                EXTRACTED_MODIFIERS["Teleport"].feats.push({name: "Change Direction", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Teleport"].feats.push({name: "Change Velocity", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Teleport"].feats.push({name: "Easy", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Teleport"].feats.push({name: "Known Location", cost: 1, costType: "flat"});
+                EXTRACTED_MODIFIERS["Teleport"].feats.push({name: "Turnabout", cost: 1, costType: "flat"});
+            }
         }
         if (EXTRACTED_MODIFIERS["Affliction"]) {
             EXTRACTED_MODIFIERS["Affliction"].extras = EXTRACTED_MODIFIERS["Affliction"].extras.filter(e => !e.name.includes("Variable Conditions"));
@@ -4010,6 +6551,9 @@ function populateUIFromCharacter() {
     }
   }
 
+  const chkMechaAI = document.getElementById("chkMechaHasAI");
+  if (chkMechaAI) chkMechaAI.checked = !!char.hasAI;
+
   if (document.getElementById("bgIdentity")) document.getElementById("bgIdentity").value = char.identity || "";
   if (document.getElementById("bgMotivation")) document.getElementById("bgMotivation").value = char.motivation || "";
   if (document.getElementById("bgComplications")) document.getElementById("bgComplications").value = char.complications || "";
@@ -4029,6 +6573,8 @@ function applyLoadedCharacter(loaded) {
 }
 
 function refreshUI() {
+  if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
+
   document.getElementById("lblHeroName").textContent = char.name;
   document.getElementById("lblPL").textContent = char.powerLevel;
 
@@ -4036,14 +6582,116 @@ function refreshUI() {
   const massLbs = typeof CharacterModel !== 'undefined' ? CharacterModel.getProgressionValue(massRank) * 5 : 200;
   document.getElementById("lblHeroMassVal").textContent = typeof CharacterModel !== 'undefined' ? `(${CharacterModel.formatWeight(massLbs)})` : "";
 
+  const unit = char.pointUnit || (char.isMecha ? "MP" : "PP");
+
+  // Mecha Mode button and status
+  const btnMecha = document.getElementById("btnToggleMechaMode");
+  const lblMechaStatus = document.getElementById("lblMechaModeStatus");
+  if (btnMecha && lblMechaStatus) {
+    const isMechaActive = !!char.isMecha;
+
+    if (isMechaActive) {
+      btnMecha.classList.add("mecha-active");
+      lblMechaStatus.textContent = "Mecha: ON";
+      btnMecha.title = "Mecha Mode is ON (Construct & Mecha Points rules active). Click to return to Pilot.";
+    } else {
+      btnMecha.classList.remove("mecha-active");
+      lblMechaStatus.textContent = "Mecha: Off";
+      btnMecha.title = "Toggle Mecha Mode (Construct / Vehicle Rules).";
+    }
+  }
+
+  // Mecha AI options panel
+  const boxAI = document.getElementById("boxMechaAIOptions");
+  if (boxAI) {
+    boxAI.style.display = char.isMecha ? "flex" : "none";
+  }
+  const chkAI = document.getElementById("chkMechaHasAI");
+  if (chkAI) {
+    chkAI.checked = !!char.hasAI;
+  }
+
+  // Point labels update
+  const lblPrefix = document.getElementById("lblPointTypePrefix");
+  if (lblPrefix) lblPrefix.textContent = `${unit}:`;
+
+  const ppModalTitle = document.getElementById("ppModalTitle");
+  if (ppModalTitle) ppModalTitle.textContent = `Character Point Breakdown (${unit})`;
+
+  const abilPanelTitle = document.getElementById("lblAbilitiesPanelTitle");
+  if (abilPanelTitle) {
+    abilPanelTitle.textContent = char.isMecha ? `Core Abilities (Construct Chassis - Base 0 ${unit})` : `Abilities (2 PP per Rank)`;
+  }
+
+  const navFeats = document.getElementById("lblNavFeats");
+  if (navFeats) {
+    navFeats.textContent = char.isMecha ? "Mecha Options" : "Feats";
+  }
+
+  const featsPanelTitle = document.getElementById("lblFeatsPanelTitle");
+  if (featsPanelTitle) {
+    featsPanelTitle.textContent = char.isMecha ? `Mecha Options (1 ${unit} per Rank)` : `Feats (1 PP per Rank)`;
+  }
+
+  const btnOpenFeat = document.getElementById("btnOpenAddFeatModal");
+  if (btnOpenFeat) {
+    btnOpenFeat.textContent = char.isMecha ? "+ Add Mecha Option" : "+ Add Feat";
+  }
+
+  const selFeatCat = document.getElementById("selFeatCategoryFilter");
+  if (selFeatCat) {
+    const optMecha = selFeatCat.querySelector('option[value="Mecha"]');
+    if (char.isMecha) {
+      if (!optMecha) {
+        const opt = document.createElement("option");
+        opt.value = "Mecha";
+        opt.textContent = "🤖 Mecha Options";
+        const optAll = selFeatCat.querySelector('option[value="All"]');
+        if (optAll && optAll.nextSibling) {
+          selFeatCat.insertBefore(opt, optAll.nextSibling);
+        } else {
+          selFeatCat.appendChild(opt);
+        }
+      }
+    } else {
+      if (optMecha) {
+        optMecha.remove();
+      }
+      if (selFeatCat.value === "Mecha") {
+        selFeatCat.value = "All";
+      }
+    }
+  }
+
   const pp = char.powerPointsSummary;
-  document.getElementById("lblAbilPP").textContent = `${pp.abilities} PP`;
-  document.getElementById("lblCombatPP").textContent = `${pp.combat} PP`;
-  document.getElementById("lblResistPP").textContent = `${pp.resistances} PP`;
-  document.getElementById("lblSkillPP").textContent = `${pp.skills} PP`;
-  document.getElementById("lblAdvPP").textContent = `${pp.feats} PP`;
-  document.getElementById("lblPowerPP").textContent = `${pp.powers} PP`;
-  document.getElementById("lblTotalPP").textContent = `${pp.totalSpent} / ${char.totalPointsAllowed} PP`;
+  const isOverBudget = pp.totalSpent > char.totalPointsAllowed;
+
+  const elAbil = document.getElementById("lblAbilPP"); if (elAbil) elAbil.textContent = `${pp.abilities} ${unit}`;
+  const elCombat = document.getElementById("lblCombatPP"); if (elCombat) elCombat.textContent = `${pp.combat} ${unit}`;
+  const elResist = document.getElementById("lblResistPP"); if (elResist) elResist.textContent = `${pp.resistances} ${unit}`;
+  const elSkill = document.getElementById("lblSkillPP"); if (elSkill) elSkill.textContent = `${pp.skills} ${unit}`;
+  const elAdv = document.getElementById("lblAdvPP"); if (elAdv) elAdv.textContent = `${pp.feats} ${unit}`;
+  const elPower = document.getElementById("lblPowerPP"); if (elPower) elPower.textContent = `${pp.powers} ${unit}`;
+
+  const elTotal = document.getElementById("lblTotalPP");
+  if (elTotal) {
+    elTotal.textContent = `${pp.totalSpent} / ${char.totalPointsAllowed} ${unit}`;
+    elTotal.style.background = isOverBudget ? "#ef4444" : "var(--accent-primary)";
+  }
+
+  const elModalTotal = document.getElementById("lblModalTotalPP");
+  if (elModalTotal) {
+    elModalTotal.textContent = `${pp.totalSpent} / ${char.totalPointsAllowed} ${unit}`;
+    elModalTotal.style.background = isOverBudget ? "#ef4444" : "var(--accent-primary)";
+  }
+
+  const elModalPL = document.getElementById("lblModalPL");
+  if (elModalPL) elModalPL.textContent = char.powerLevel;
+
+  const boxBudgetStatus = document.getElementById("boxModalPPBudgetStatus");
+  if (boxBudgetStatus) {
+    boxBudgetStatus.style.display = isOverBudget ? "block" : "none";
+  }
 
   const limits = char.advantageLimitsCheck;
   const heroicElem = document.getElementById("lblHeroicLimit");
@@ -4144,9 +6792,15 @@ function refreshUI() {
   const elToughness = document.getElementById("resToughness");
   if (elToughness) elToughness.textContent = derived.toughness;
   const elFortitude = document.getElementById("resFortitude");
-  if (elFortitude) elFortitude.textContent = derived.fortitude === null ? "—" : derived.fortitude;
+  if (elFortitude) elFortitude.textContent = char.isMecha ? "Immune" : (derived.fortitude === null ? "—" : derived.fortitude);
   const elWill = document.getElementById("resWill");
-  if (elWill) elWill.textContent = derived.will === null ? "—" : derived.will;
+  if (elWill) {
+    if (char.isMecha && !char.hasAI) {
+      elWill.textContent = "Immune";
+    } else {
+      elWill.textContent = derived.will === null ? "—" : derived.will;
+    }
+  }
 
   const elTotalDef = document.getElementById("resTotalDef");
   if (elTotalDef) elTotalDef.textContent = derived.totalDefense;
@@ -4188,27 +6842,43 @@ function refreshUI() {
     const enhToughStr = enhTough > 0 ? ` + Enhanced (${enhTough})` : "";
     const enhToughTag = enhTough > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Toughness +${enhTough}]</span>` : "";
     const enhConTag = enhCon > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced CON +${enhCon}]</span>` : "";
-    elAdjToughness.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Def Roll (${defRoll}) + Protection (${protOnly})${enhToughStr}${toughNote}`) + enhToughTag + enhConTag + generateCombatTags(["Defensive Roll", "Uncanny Dodge"]);
+
+    if (char.isMecha || sta === null) {
+      const boughtArmor = char.purchasedResistances.Toughness || 0;
+      const sizeToughBonus = (typeof SIZE_TABLE !== 'undefined' && SIZE_TABLE[char.sizeCategory]) ? SIZE_TABLE[char.sizeCategory].toughness || 0 : 0;
+      const sizeStr = sizeToughBonus ? ` + Size (${sizeToughBonus >= 0 ? '+' : ''}${sizeToughBonus})` : "";
+      elAdjToughness.innerHTML = `Structural Armor (${boughtArmor}) + Protection (${protOnly})${enhToughStr}${sizeStr}` + enhToughTag + generateCombatTags(["Tough"]);
+    } else {
+      elAdjToughness.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Def Roll (${defRoll}) + Protection (${protOnly})${enhToughStr}${toughNote}`) + enhToughTag + enhConTag + generateCombatTags(["Defensive Roll", "Uncanny Dodge"]);
+    }
   }
 
   const elAdjFort = document.getElementById("adjFort");
   if (elAdjFort) {
-    const gfRanks = (char.effectiveFeats || char.feats)["Great Fortitude"] || 0;
-    const gfStr = gfRanks > 0 ? ` + Great Fortitude (+${gfRanks * 2})` : "";
-    const enhFortStr = enhFort > 0 ? ` + Enhanced (${enhFort})` : "";
-    const enhFortTag = enhFort > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Fortitude +${enhFort}]</span>` : "";
-    const enhConTag = enhCon > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced CON +${enhCon}]</span>` : "";
-    elAdjFort.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Bought (${char.purchasedResistances.Fortitude || 0})${enhFortStr}${gfStr}`) + enhFortTag + enhConTag + generateCombatTags(["Endurance", "Diehard", "Great Fortitude"]);
+    if (char.isMecha) {
+      elAdjFort.innerHTML = "<span style='color: #10b981; font-weight: 600;'>Immune to Fortitude Effects (Construct / Machine)</span>";
+    } else {
+      const gfRanks = (char.effectiveFeats || char.feats)["Great Fortitude"] || 0;
+      const gfStr = gfRanks > 0 ? ` + Great Fortitude (+${gfRanks * 2})` : "";
+      const enhFortStr = enhFort > 0 ? ` + Enhanced (${enhFort})` : "";
+      const enhFortTag = enhFort > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Fortitude +${enhFort}]</span>` : "";
+      const enhConTag = enhCon > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced CON +${enhCon}]</span>` : "";
+      elAdjFort.innerHTML = (sta === null ? "Absent CON" : `CON (${sta}) + Bought (${char.purchasedResistances.Fortitude || 0})${enhFortStr}${gfStr}`) + enhFortTag + enhConTag + generateCombatTags(["Endurance", "Diehard", "Great Fortitude"]);
+    }
   }
 
   const elAdjWill = document.getElementById("adjWill");
   if (elAdjWill) {
-    const iwRanks = (char.effectiveFeats || char.feats)["Iron Will"] || 0;
-    const iwStr = iwRanks > 0 ? ` + Iron Will (+${iwRanks * 2})` : "";
-    const enhWillStr = enhWill > 0 ? ` + Enhanced (${enhWill})` : "";
-    const enhWillTag = enhWill > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Will +${enhWill}]</span>` : "";
-    const enhWisTag = enhWis > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced WIS +${enhWis}]</span>` : "";
-    elAdjWill.innerHTML = (awe === null ? "Absent WIS" : `WIS (${awe}) + Bought (${char.purchasedResistances.Will || 0})${enhWillStr}${iwStr}`) + enhWillTag + enhWisTag + generateCombatTags(["Fearless", "Iron Will", "Trance"]);
+    if (char.isMecha && !char.hasAI) {
+      elAdjWill.innerHTML = "<span style='color: #10b981; font-weight: 600;'>Immune to Mental & Interaction Effects (Mindless / Pilot Will)</span>";
+    } else {
+      const iwRanks = (char.effectiveFeats || char.feats)["Iron Will"] || 0;
+      const iwStr = iwRanks > 0 ? ` + Iron Will (+${iwRanks * 2})` : "";
+      const enhWillStr = enhWill > 0 ? ` + Enhanced (${enhWill})` : "";
+      const enhWillTag = enhWill > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced Will +${enhWill}]</span>` : "";
+      const enhWisTag = enhWis > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced WIS +${enhWis}]</span>` : "";
+      elAdjWill.innerHTML = (awe === null ? "Absent WIS" : `WIS (${awe}) + Bought (${char.purchasedResistances.Will || 0})${enhWillStr}${iwStr}`) + enhWillTag + enhWisTag + generateCombatTags(["Fearless", "Iron Will", "Trance"]);
+    }
   }
 
   const elAdjTotalDef = document.getElementById("adjTotalDef");
@@ -4297,19 +6967,23 @@ function refreshUI() {
   });
 
   if (typeof ADVANTAGES_LIST !== 'undefined') {
-    ADVANTAGES_LIST.forEach(adv => {
-      if ((adv.category === "Combat" || (adv.types && adv.types.includes("Combat"))) && adv.conditionalSummary) {
-        const ranks = (char.effectiveFeats || char.feats)[adv.name] || 0;
-        if (ranks > 0) {
-          const detail = char.featDetails[adv.name] ? ` (${char.featDetails[adv.name]})` : "";
+    const effFeats = char.effectiveFeats || char.feats || {};
+    Object.keys(effFeats).forEach(featKey => {
+      const ranks = effFeats[featKey] || 0;
+      if (ranks > 0) {
+        const baseName = featKey.includes(" (") ? featKey.split(" (")[0].trim() : featKey.trim();
+        const adv = ADVANTAGES_LIST.find(a => a.name.toLowerCase() === baseName.toLowerCase() || a.name.toLowerCase() === featKey.toLowerCase());
+        if (adv && (adv.category === "Combat" || (adv.types && adv.types.includes("Combat"))) && (adv.conditionalSummary || adv.description)) {
+          const detail = char.featDetails && char.featDetails[featKey] ? ` (${char.featDetails[featKey]})` : "";
           const rankLabel = adv.ranked ? ` [Rank ${ranks}]` : "";
+          const desc = adv.conditionalSummary || adv.description;
           activeCombatAdvHTML += `
             <div class="combat-conditional-row">
               <span class="combat-conditional-name">
-                ${adv.name}${rankLabel}${detail}
-                <button type="button" class="btn-info-circle" onclick="showAdvantageInfo('${adv.name}')" title="View Feat Rules">?</button>
+                ${featKey}${rankLabel}${detail}
+                <button type="button" class="btn-info-circle" onclick="window.showAdvantageInfo('${adv.name}')" title="View Feat Rules">?</button>
               </span>
-              <span class="combat-conditional-desc">${adv.conditionalSummary}</span>
+              <span class="combat-conditional-desc">${desc}</span>
             </div>
           `;
         }
@@ -4336,7 +7010,15 @@ function refreshUI() {
 
     if (val === null) {
       if (totalElem) totalElem.textContent = "—";
-      if (adjElem) adjElem.innerHTML = "<span style='color:#ef4444;'>Absent / Disabled</span>";
+      if (adjElem) {
+        if (char.isMecha && k === "CON") {
+          adjElem.innerHTML = "<span style='color:#0284c7; font-weight:600;'>Absent (Construct chassis)</span>";
+        } else if (char.isMecha && (k === "INT" || k === "WIS" || k === "CHA") && !char.hasAI) {
+          adjElem.innerHTML = "<span style='color:#0284c7; font-weight:600;'>Absent (Unconscious machine)</span>";
+        } else {
+          adjElem.innerHTML = "<span style='color:#ef4444;'>Absent / Disabled</span>";
+        }
+      }
     } else {
       if (totalElem) totalElem.textContent = val;
       if (adjElem) {
@@ -4368,37 +7050,42 @@ function refreshUI() {
     }
   });
 
-  if (typeof SKILLS_LIST !== 'undefined') {
-    const maxSkillCap = char.powerLevel + 10;
-    SKILLS_LIST.forEach(skill => {
-      const idSafe = skill.name.replace(/[^a-zA-Z0-9]/g, "_");
-      let base = 0;
-      if (skill.ability === "ATK") {
-        base = char.getCombatRank("ATK");
+  const allActiveSkills = new Set([
+    ...Object.keys(char.skills || {}),
+    ...Object.keys((char.enhancedTraits && char.enhancedTraits.skills) || {})
+  ]);
+  const maxSkillCap = char.powerLevel + 10;
+  allActiveSkills.forEach(skillName => {
+    const idSafe = skillName.replace(/[^a-zA-Z0-9]/g, "_");
+    const meta = getSkillMetadata(skillName);
+    let base = 0;
+    if (meta.ability === "None") {
+      base = 0;
+    } else if (meta.ability === "ATK") {
+      base = char.getCombatRank("ATK");
+    } else {
+      const val = char.getAbilityRank(meta.ability);
+      base = val === null ? -5 : val;
+    }
+
+    const bought = char.skills[skillName] || 0;
+    const enhancedSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skillName]) ? char.enhancedTraits.skills[skillName] : 0;
+    const total = base + bought + enhancedSkill;
+
+    const baseElem = document.getElementById(`skill_base_${idSafe}`);
+    const totalElem = document.getElementById(`skill_total_${idSafe}`);
+    if (baseElem) baseElem.textContent = (base >= 0 ? "+" : "") + base;
+    if (totalElem) {
+      totalElem.textContent = (total >= 0 ? "+" : "") + total;
+      if (total > maxSkillCap) {
+        totalElem.style.color = "#ef4444";
+        totalElem.title = `Exceeds PL Cap (${maxSkillCap})`;
       } else {
-        const val = char.getAbilityRank(skill.ability);
-        base = val === null ? -5 : val;
+        totalElem.style.color = "inherit";
+        totalElem.title = "";
       }
-
-      const bought = char.skills[skill.name] || 0;
-      const enhancedSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skill.name]) ? char.enhancedTraits.skills[skill.name] : 0;
-      const total = base + bought + enhancedSkill;
-
-      const baseElem = document.getElementById(`skill_base_${idSafe}`);
-      const totalElem = document.getElementById(`skill_total_${idSafe}`);
-      if (baseElem) baseElem.textContent = (base >= 0 ? "+" : "") + base;
-      if (totalElem) {
-        totalElem.textContent = (total >= 0 ? "+" : "") + total;
-        if (total > maxSkillCap) {
-          totalElem.style.color = "#ef4444";
-          totalElem.title = `Exceeds PL Cap (${maxSkillCap})`;
-        } else {
-          totalElem.style.color = "inherit";
-          totalElem.title = "";
-        }
-      }
-    });
-  }
+    }
+  });
 }
 
 /* ==========================================================================
@@ -4590,9 +7277,11 @@ const FileManager = {
 
   // Save As: Opens native OS save dialog to choose any directory/filename, or downloads
   saveHeroAs: async function() {
-    const safeHeroName = char.name ? char.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : "hero";
+    if (typeof syncActiveCompanionIfActive === 'function') syncActiveCompanionIfActive();
+    const heroToSave = window.primaryHero || char;
+    const safeHeroName = heroToSave.name ? heroToSave.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : "hero";
     const defaultFileName = `${safeHeroName}.mm2e`;
-    const payload = JSON.stringify(char.serialize(), null, 2);
+    const payload = JSON.stringify(heroToSave.serialize(), null, 2);
 
     if (window.showSaveFilePicker) {
       try {
@@ -4639,7 +7328,9 @@ const FileManager = {
       return this.saveHeroAs();
     }
 
-    const payload = JSON.stringify(char.serialize(), null, 2);
+    if (typeof syncActiveCompanionIfActive === 'function') syncActiveCompanionIfActive();
+    const heroToSave = window.primaryHero || char;
+    const payload = JSON.stringify(heroToSave.serialize(), null, 2);
     try {
       const writable = await this.currentFileHandle.createWritable();
       await writable.write(payload);
@@ -4664,6 +7355,12 @@ const FileManager = {
         const text = await file.text();
         const parsed = JSON.parse(text);
 
+        if (window.primaryHero) {
+          char = window.primaryHero;
+          window.char = char;
+          window.primaryHero = null;
+          window.activeCompanionId = null;
+        }
         applyLoadedCharacter(parsed);
         this.currentFileHandle = handle;
         this.currentFileName = handle.name;
@@ -4717,29 +7414,21 @@ const FileManager = {
       if (modal && titleEl && bodyEl) {
         titleEl.textContent = "Folder Settings in Firefox";
         bodyEl.innerHTML = `
-          <div style="line-height: 1.6; font-size: var(--font-size-controls);">
-            <p style="margin-bottom: 8px;"><strong>Why this happens:</strong> For security, browsers prevent websites from directly opening internal configuration pages (like <code>about:preferences</code>) or modifying folder paths via scripts.</p>
-            <p style="margin-bottom: 8px;">To set your save folder in Firefox:</p>
-            
-            <div style="margin: 10px 0 14px 0; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <div style="white-space: normal; line-height: 1.3; font-size: var(--font-size-controls);">
+            <p style="margin: 0 0 6px 0;">Firefox security restricts web pages from directly browsing or changing system folders.</p>
+            <div style="margin: 4px 0 6px 0; padding: 4px 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <div>
                 <span style="color: var(--text-muted); font-size: var(--font-size-secondary);">Firefox Address:</span>
                 <code style="font-weight: bold; color: var(--accent-primary); margin-left: 6px;">about:preferences</code>
               </div>
-              <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-minor-controls); padding: 4px 10px;" onclick="navigator.clipboard.writeText('about:preferences').then(() => { this.textContent = '✓ Copied!'; setTimeout(() => this.textContent = '📋 Copy Address', 2000); })">📋 Copy Address</button>
+              <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-minor-controls); padding: 2px 8px;" onclick="navigator.clipboard.writeText('about:preferences').then(() => { this.textContent = '✓ Copied!'; setTimeout(() => this.textContent = '📋 Copy Address', 2000); })">📋 Copy Address</button>
             </div>
-
-            <ol style="margin-left: 20px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <li>Open a new tab in Firefox and paste or enter <code>about:preferences</code> in the address bar.</li>
-              <li>Under <strong>General &gt; Files and Applications &gt; Downloads</strong>:
-                <ul style="margin-left: 16px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px;">
-                  <li><strong>Recommended:</strong> Check <em>"Always ask you where to save files"</em>.</li>
-                  <li>Or click <strong>"Browse..."</strong> next to <em>Save files to</em> to choose a default folder.</li>
-                </ul>
-              </li>
-              <li><strong>How Saving Works in Firefox:</strong> When you click <em>Save Character</em> or <em>Save As</em>, Firefox will show its confirmation prompt (<em>"Open with / Save File"</em>). Click <strong>OK</strong> and the standard Windows "Save As" file explorer dialog will immediately open so you can choose any directory or file name!</li>
+            <ol style="margin: 0 0 6px 16px; padding: 0; display: flex; flex-direction: column; gap: 3px;">
+              <li>Open a new tab and go to <code>about:preferences</code>.</li>
+              <li>Under <strong>Downloads</strong>, check <em>"Always ask you where to save files"</em> (or click <strong>Browse...</strong> to set a default folder).</li>
+              <li>When saving in this app, click <strong>OK / Save File</strong> on Firefox's download prompt to choose any directory or filename.</li>
             </ol>
-            <p style="color: var(--text-muted); font-size: var(--font-size-secondary);">Tip: In Chromium browsers (Chrome, Edge, Opera, Brave), direct folder selection works via the File System Access API without the browser prompt step.</p>
+            <p style="margin: 0; color: var(--text-muted); font-size: var(--font-size-secondary);">Tip: Chromium browsers (Chrome, Edge) support direct folder selection without download prompts.</p>
           </div>
         `;
         modal.classList.add("active");
@@ -4767,11 +7456,20 @@ const FileManager = {
       : `Create a new hero? Current file "${this.currentFileName}" will be closed.`;
 
     if (confirm(msg)) {
+      if (window.primaryHero) {
+        char = window.primaryHero;
+        window.char = char;
+        window.primaryHero = null;
+        window.activeCompanionId = null;
+      }
       char.reset();
+      const btnAudit = document.getElementById("btnOpenImportAudit");
+      if (btnAudit) btnAudit.style.display = "none";
       this.currentFileHandle = null;
       this.currentFileName = null;
       this.updateFileStatusUI();
       populateUIFromCharacter();
+      if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
       showToast("New hero sheet created.", "info");
     }
   },
@@ -4831,7 +7529,15 @@ function setupFileHandlers() {
       reader.onload = (uploadEvent) => {
         try {
           const loadedData = JSON.parse(uploadEvent.target.result);
+          if (window.primaryHero) {
+            char = window.primaryHero;
+            window.char = char;
+            window.primaryHero = null;
+            window.activeCompanionId = null;
+          }
           applyLoadedCharacter(loadedData);
+          const btnAudit = document.getElementById("btnOpenImportAudit");
+          if (btnAudit) btnAudit.style.display = "none";
           FileManager.currentFileHandle = null;
           FileManager.currentFileName = file.name;
           FileManager.updateFileStatusUI();
@@ -4846,4 +7552,591 @@ function setupFileHandlers() {
     });
   }
 }
+
+/* ==========================================================================
+   COMPANIONS, MINIONS & ALTERNATE FORMS ENGINE
+   ========================================================================== */
+
+function syncActiveCompanionIfActive() {
+  if (window.primaryHero && window.activeCompanionId) {
+    const companion = (window.primaryHero.companions || []).find(c => c.id === window.activeCompanionId);
+    if (companion) {
+      companion.name = char.name;
+      companion.powerLevel = char.powerLevel;
+      companion.totalPointsAllowed = char.totalPointsAllowed;
+      companion.characterData = char.serialize().character;
+    }
+  }
+}
+window.syncActiveCompanionIfActive = syncActiveCompanionIfActive;
+
+function updateCharacterSelectorUI() {
+  const sel = document.getElementById("selActiveCharacterContext");
+  const heroRoot = window.primaryHero || char;
+  const companions = heroRoot.companions || [];
+
+  if (sel) {
+    let optionsHtml = `<option value="main">🦸 Main Hero: ${heroRoot.name || "Hero"} (PL ${heroRoot.powerLevel})</option>`;
+    
+    if (companions.length > 0) {
+      const typeLabels = {
+        sidekick: "🤝 Sidekicks",
+        minion: "👥 Minions",
+        summon: "👥 Summoned Creatures",
+        duplicate: "👥 Duplicates",
+        metamorph: "🔄 Alternate Forms / Metamorph",
+        mecha: "🤖 Mecha"
+      };
+      
+      const groups = {};
+      companions.forEach(c => {
+        const t = c.type || "sidekick";
+        if (!groups[t]) groups[t] = [];
+        groups[t].push(c);
+      });
+
+      for (const [t, list] of Object.entries(groups)) {
+        const groupLabel = typeLabels[t] || "Companions";
+        optionsHtml += `<optgroup label="${groupLabel}">`;
+        list.forEach(c => {
+          let spent = 0;
+          let isMechaComp = (c.type === "mecha");
+          if (window.activeCompanionId === c.id) {
+            spent = char.powerPointsSummary.totalSpent;
+            isMechaComp = char.isMecha;
+          } else if (c.characterData) {
+            const tempModel = new CharacterModel();
+            tempModel.deserialize(c.characterData);
+            spent = tempModel.powerPointsSummary.totalSpent;
+            isMechaComp = tempModel.isMecha || (c.type === "mecha");
+          }
+          const unit = isMechaComp ? "MP" : "PP";
+          optionsHtml += `<option value="${c.id}">${c.name || "Unnamed"} (PL ${c.powerLevel} - ${spent}/${c.totalPointsAllowed} ${unit})</option>`;
+        });
+        optionsHtml += `</optgroup>`;
+      }
+    }
+    optionsHtml += `<option value="__add_new__">➕ Add New Companion / Form...</option>`;
+    sel.innerHTML = optionsHtml;
+    sel.value = window.activeCompanionId || "main";
+  }
+
+  // Update Sticky Companion Active Banner
+  const banner = document.getElementById("companionActiveBanner");
+  const bannerTitle = document.getElementById("lblCompanionBannerTitle");
+  const bannerBudget = document.getElementById("lblCompanionBannerBudget");
+  const btnReturnToHero = document.getElementById("btnReturnToPrimaryHero");
+
+  if (banner) {
+    if (window.activeCompanionId && window.primaryHero) {
+      banner.style.display = "flex";
+      const comp = (window.primaryHero.companions || []).find(c => c.id === window.activeCompanionId);
+      const isMecha = (comp && comp.type === "mecha") || char.isMecha;
+      const cType = comp ? (comp.type === "mecha" ? "Mecha" : (comp.type.charAt(0).toUpperCase() + comp.type.slice(1))) : "Companion";
+      const unit = isMecha ? "MP" : "PP";
+
+      if (isMecha) {
+        banner.style.background = "linear-gradient(90deg, #0284c7 0%, #1e40af 100%)";
+      } else {
+        banner.style.background = "#0284c7";
+      }
+
+      if (bannerTitle) {
+        bannerTitle.textContent = `${isMecha ? '🤖' : '👥'} Editing ${cType}: ${char.name} (PL ${char.powerLevel})`;
+      }
+      if (bannerBudget) {
+        const spent = char.powerPointsSummary.totalSpent;
+        const total = char.totalPointsAllowed;
+        const isOver = spent > total;
+        bannerBudget.textContent = `${spent} / ${total} ${unit} ${isOver ? '⚠️ (Over Budget)' : '✓'}`;
+        bannerBudget.style.background = isOver ? "#ef4444" : "rgba(255,255,255,0.25)";
+      }
+      if (btnReturnToHero) {
+        btnReturnToHero.textContent = isMecha ? "⬅ Return to Pilot" : "⬅ Return to Main Hero";
+      }
+    } else {
+      banner.style.display = "none";
+    }
+  }
+
+  // If currently on tab-companions, re-render it
+  const companionsTab = document.getElementById("tab-companions");
+  if (companionsTab && companionsTab.classList.contains("active")) {
+    buildCompanionsUI();
+  }
+}
+window.updateCharacterSelectorUI = updateCharacterSelectorUI;
+
+function buildCompanionsUI() {
+  syncActiveCompanionIfActive();
+  const container = document.getElementById("companionsContainer");
+  if (!container) return;
+
+  const rootHero = window.primaryHero || char;
+  const companions = rootHero.companions || [];
+
+  if (companions.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 32px 16px; text-align: center; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 8px; color: var(--text-muted); margin-top: 10px;">
+        <div style="font-size: 36px; margin-bottom: 8px;">👥</div>
+        <h3 style="font-size: var(--font-size-labels); margin-bottom: 6px; color: var(--text-main);">No Companions, Minions, or Alternate Forms Added Yet</h3>
+        <p style="font-size: var(--font-size-controls); max-width: 600px; margin: 0 auto 16px auto; line-height: 1.5;">
+          You can create loyal sidekicks (5 PP/rank), expendable minions (15 PP/rank), summoned creatures, duplicate clones, or alternate metamorph forms with full character sheets.
+        </p>
+        <button type="button" class="btn" onclick="openCreateCompanionModal()" style="font-size: var(--font-size-controls); padding: 8px 16px;">
+          + Add Companion or Form
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  let html = `<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 12px;">`;
+
+  companions.forEach((comp) => {
+    const isCurrentlyActive = (window.activeCompanionId === comp.id);
+    let compModel;
+    if (isCurrentlyActive) {
+      compModel = char;
+    } else if (comp.characterData) {
+      compModel = new CharacterModel();
+      compModel.deserialize(comp.characterData);
+    } else {
+      compModel = new CharacterModel();
+      compModel.name = comp.name;
+      compModel.powerLevel = comp.powerLevel;
+      compModel.totalPointsAllowed = comp.totalPointsAllowed;
+    }
+
+    const spent = compModel.powerPointsSummary.totalSpent;
+    const totalAllowed = comp.totalPointsAllowed || (comp.powerLevel * 15);
+    const isOver = spent > totalAllowed;
+    const typeLabel = {
+      sidekick: "🤝 Sidekick",
+      minion: "👥 Minion",
+      summon: "👥 Summoned Creature",
+      duplicate: "👥 Duplicate Minion",
+      metamorph: "🔄 Alternate Form / Metamorph",
+      mecha: "🤖 Mecha"
+    }[comp.type] || "Companion";
+
+    const typeBadgeBg = {
+      sidekick: "#0284c7",
+      minion: "#f59e0b",
+      summon: "#ea580c",
+      duplicate: "#6366f1",
+      metamorph: "#8b5cf6",
+      mecha: "#0284c7"
+    }[comp.type] || "#475569";
+
+    const isMechaComp = (comp.type === "mecha") || compModel.isMecha;
+    const unit = isMechaComp ? "MP" : "PP";
+
+    const ppSummary = compModel.powerPointsSummary;
+    const topPowers = (compModel.powers || []).slice(0, 4).map(p => p.name).join(", ");
+    const topFeats = Object.keys(compModel.feats || {}).slice(0, 4).join(", ");
+
+    html += `
+      <div class="panel" style="padding: 14px; border: 2px solid ${isCurrentlyActive ? '#0284c7' : 'var(--border-color)'}; background: var(--bg-panel); border-radius: 8px; box-shadow: ${isCurrentlyActive ? '0 0 10px rgba(2,132,199,0.3)' : 'none'};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="badge" style="background: ${typeBadgeBg}; color: #ffffff; font-weight: bold; font-size: 11px; text-transform: uppercase;">${typeLabel}</span>
+              <h3 style="font-size: 16px; margin: 0; color: var(--text-main); font-weight: bold;">${comp.name || compModel.name}</h3>
+              <span class="badge" style="background: var(--bg-card); color: var(--text-main); font-size: 12px; border: 1px solid var(--border-color);">PL ${comp.powerLevel}</span>
+              ${isCurrentlyActive ? `<span class="badge" style="background: #10b981; color: #fff; font-weight: bold; font-size: 11px;">⚡ Currently Active Sheet</span>` : ''}
+            </div>
+            <div style="margin-top: 6px; font-size: var(--font-size-secondary); color: var(--text-muted);">
+              Abilities: STR ${compModel.getAbilityRank("STR") ?? '—'}, DEX ${compModel.getAbilityRank("DEX") ?? '—'}, CON ${compModel.getAbilityRank("CON") ?? '—'}, INT ${compModel.getAbilityRank("INT") ?? '—'}, WIS ${compModel.getAbilityRank("WIS") ?? '—'}, CHA ${compModel.getAbilityRank("CHA") ?? '—'}
+              | Combat: ATK +${compModel.getCombatRank("ATK")}, DEF +${compModel.getCombatRank("DEF")}
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="text-align: right; margin-right: 6px;">
+              <span style="font-size: var(--font-size-secondary); display: block; color: var(--text-muted);">Budget:</span>
+              <span class="badge" style="background: ${isOver ? '#ef4444' : 'rgba(16, 185, 129, 0.15)'}; color: ${isOver ? '#fff' : '#10b981'}; font-weight: bold; font-size: 13px; border: 1px solid ${isOver ? '#ef4444' : '#10b981'};">
+                ${spent} / ${totalAllowed} ${unit} ${isOver ? '⚠️ (Over Budget)' : '✓'}
+              </span>
+            </div>
+
+            ${isCurrentlyActive ? `
+              <button type="button" class="btn" style="background: #0284c7; font-weight: bold;" onclick="returnToPrimaryHero()">${isMechaComp ? '⬅ Return to Pilot' : '⬅ Back to Hero'}</button>
+            ` : `
+              <button type="button" class="btn" style="background: var(--accent-primary); font-weight: bold;" onclick="switchToCompanion('${comp.id}')">✏️ Edit Sheet</button>
+            `}
+
+            <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-minor-controls);" onclick="exportCompanionStandalone('${comp.id}')" title="Export as standalone .mm2e file">💾 Export</button>
+            <button type="button" class="btn-delete-power" style="margin-left: 4px;" onclick="deleteCompanion('${comp.id}')" title="Delete this companion">✕</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-color); display: flex; flex-wrap: wrap; gap: 12px; font-size: var(--font-size-secondary);">
+          <div><strong style="color: var(--text-main);">Points:</strong> Abil: ${ppSummary.abilities} ${unit}, Combat: ${ppSummary.combat} ${unit}, Saves: ${ppSummary.resistances} ${unit}, Skills: ${ppSummary.skills} ${unit}, Feats: ${ppSummary.feats} ${unit}, Powers: ${ppSummary.powers} ${unit}</div>
+          ${topPowers ? `<div><strong style="color: var(--text-main);">Powers:</strong> ${topPowers}</div>` : ''}
+          ${topFeats ? `<div><strong style="color: var(--text-main);">Feats:</strong> ${topFeats}</div>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+window.buildCompanionsUI = buildCompanionsUI;
+
+function updateCompanionModalDefaults(prefillSource) {
+  const rootHero = window.primaryHero || char;
+  const selType = document.getElementById("selCompanionType");
+  const txtName = document.getElementById("txtCompanionName");
+  const numPL = document.getElementById("numCompanionPL");
+  const numBudget = document.getElementById("numCompanionBudget");
+  const boxHint = document.getElementById("boxCompanionHint");
+  if (!selType) return;
+
+  const type = selType.value;
+  let defaultName = "New Sidekick";
+  let pl = rootHero.powerLevel;
+  let budget = 50;
+  let hint = "";
+
+  if (type === "sidekick") {
+    const sidekickRanks = (rootHero.feats && rootHero.feats["Sidekick"]) ? rootHero.feats["Sidekick"] : 10;
+    budget = sidekickRanks * 5;
+    pl = Math.min(rootHero.powerLevel, Math.floor(budget / 15) || rootHero.powerLevel);
+    defaultName = `${rootHero.name}'s Sidekick`;
+    hint = `<strong>Sidekick Rules:</strong> Sidekicks receive <strong>5 PP per rank</strong> of the Sidekick feat (Current: Rank ${sidekickRanks} = ${budget} PP). A sidekick's Power Level cannot exceed the hero's PL (${rootHero.powerLevel}).`;
+  } else if (type === "minion") {
+    const minionRanks = (rootHero.feats && rootHero.feats["Minions"]) ? rootHero.feats["Minions"] : 5;
+    budget = minionRanks * 15;
+    pl = Math.min(rootHero.powerLevel, minionRanks);
+    defaultName = "Minion";
+    hint = `<strong>Minion Rules:</strong> Minions receive <strong>15 PP per rank</strong> of the Minions feat (Current: Rank ${minionRanks} = ${budget} PP). Minions are subject to the standard minion rules (failing a save renders them incapacitated).`;
+  } else if (type === "summon") {
+    let summonRank = 8;
+    if (prefillSource && prefillSource.pIdx !== undefined && prefillSource.eIdx !== undefined) {
+      const eff = rootHero.activePowers[prefillSource.pIdx]?.effects[prefillSource.eIdx];
+      if (eff && eff.rank) summonRank = parseInt(eff.rank) || 8;
+    }
+    pl = summonRank;
+    budget = summonRank * 15;
+    defaultName = "Summoned Minion";
+    hint = `<strong>Summon Rules:</strong> Summoned creatures receive <strong>15 PP per rank</strong> of the Summon power (Current: Rank ${summonRank} = ${budget} PP). Max Power Level cannot exceed the Summon rank (${summonRank}).`;
+  } else if (type === "duplicate") {
+    pl = rootHero.powerLevel;
+    budget = rootHero.totalPointsAllowed;
+    defaultName = `${rootHero.name} (Duplicate)`;
+    hint = `<strong>Duplication Rules:</strong> A duplicate is an identical copy of the hero (with Duplication removed), treated as a minion. Starts with full hero traits and budget (${budget} PP).`;
+  } else if (type === "metamorph") {
+    pl = rootHero.powerLevel;
+    budget = rootHero.totalPointsAllowed;
+    defaultName = `${rootHero.name} (Alternate Form)`;
+    hint = `<strong>Metamorph Rules:</strong> Metamorph grants an entirely distinct character sheet with the same total Power Points budget (${budget} PP) and campaign Power Level (${pl}).`;
+  } else if (type === "mecha") {
+    const eqRanks = (rootHero.feats && rootHero.feats["Equipment"]) ? rootHero.feats["Equipment"] : 0;
+    const eqBudget = eqRanks * 5;
+    budget = eqBudget > 0 ? eqBudget : (rootHero.powerLevel * 15);
+    pl = rootHero.powerLevel;
+    defaultName = `${rootHero.name}'s Mecha`;
+    hint = `<strong>Mecha Rules (Mecha & Manga / Core):</strong> Mecha are piloted machine constructs. Standard mecha have Strength and Dexterity, but no Constitution, and no mental abilities unless equipped with an Onboard AI. In Mecha campaigns or when built independently, budget uses Mecha Points (MP) based on PL (${rootHero.powerLevel * 15} MP for PL ${rootHero.powerLevel}), or 5 MP per rank of the Equipment feat.`;
+  }
+
+  const lblBudgetTitle = document.getElementById("lblCompanionBudgetTitle");
+  if (lblBudgetTitle) {
+    lblBudgetTitle.textContent = type === "mecha" ? "Mecha Points Budget (MP):" : "PP Budget Allowed:";
+  }
+
+  if (txtName) {
+    txtName.value = defaultName;
+  }
+  if (numPL) numPL.value = pl;
+  if (numBudget) numBudget.value = budget;
+  if (boxHint) boxHint.innerHTML = hint;
+}
+
+function openCreateCompanionModal(prefillType, prefillSource) {
+  const modal = document.getElementById("companionCreateModal");
+  if (!modal) return;
+  const selType = document.getElementById("selCompanionType");
+  if (selType && prefillType) {
+    selType.value = prefillType;
+  }
+  updateCompanionModalDefaults(prefillSource);
+  modal.classList.add("active");
+  const txtName = document.getElementById("txtCompanionName");
+  if (txtName) {
+    txtName.focus();
+    txtName.select();
+  }
+}
+window.openCreateCompanionModal = openCreateCompanionModal;
+
+function handleConfirmCreateCompanion() {
+  const rootHero = window.primaryHero || char;
+  const selType = document.getElementById("selCompanionType");
+  const txtName = document.getElementById("txtCompanionName");
+  const numPL = document.getElementById("numCompanionPL");
+  const numBudget = document.getElementById("numCompanionBudget");
+  const modal = document.getElementById("companionCreateModal");
+
+  const type = selType ? selType.value : "sidekick";
+  const name = (txtName && txtName.value.trim()) ? txtName.value.trim() : (type === "mecha" ? "New Mecha" : "New Companion");
+  const pl = numPL ? (parseInt(numPL.value) || 10) : 10;
+  const budget = numBudget ? (parseInt(numBudget.value) || (pl * 15)) : (pl * 15);
+
+  const newComp = {
+    id: "comp_" + Math.random().toString(36).substr(2, 9),
+    type: type,
+    name: name,
+    powerLevel: pl,
+    totalPointsAllowed: budget,
+    characterData: null
+  };
+
+  const temp = new CharacterModel();
+  if (type === "duplicate") {
+    const heroCopy = JSON.parse(JSON.stringify(rootHero.serialize().character));
+    heroCopy.name = name;
+    if (heroCopy.powers && Array.isArray(heroCopy.powers)) {
+      heroCopy.powers = heroCopy.powers.filter(c => {
+        if (!c.effects) return true;
+        return !c.effects.some(e => e.effectName === "Duplication");
+      });
+    }
+    temp.deserialize(heroCopy);
+    temp.powerLevel = pl;
+    temp.totalPointsAllowed = budget;
+  } else if (type === "mecha") {
+    temp.name = name;
+    temp.powerLevel = pl;
+    temp.totalPointsAllowed = budget;
+    temp.sizeCategory = "Huge"; // 30 ft tall canonical starting mecha size
+    temp.setMechaMode(true, false);
+  } else {
+    temp.name = name;
+    temp.powerLevel = pl;
+    temp.totalPointsAllowed = budget;
+  }
+  newComp.characterData = temp.serialize().character;
+
+  if (!rootHero.companions) rootHero.companions = [];
+  rootHero.companions.push(newComp);
+
+  if (modal) modal.classList.remove("active");
+  switchToCompanion(newComp.id);
+  showToast(`Created ${newComp.name}! Now editing mecha sheet.`, "success");
+}
+
+function setupCompanionModalHandlers() {
+  const modal = document.getElementById("companionCreateModal");
+  const btnOpen = document.getElementById("btnOpenAddCompanionModal");
+  const btnClose = document.getElementById("modalCompanionClose");
+  const btnCancel = document.getElementById("btnCancelCompanionModal");
+  const btnConfirm = document.getElementById("btnConfirmCreateCompanion");
+  const selType = document.getElementById("selCompanionType");
+  const btnImport = document.getElementById("btnImportCompanion");
+  const fileImport = document.getElementById("fileImportCompanion");
+
+  if (btnOpen) {
+    btnOpen.addEventListener("click", () => openCreateCompanionModal());
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener("click", () => {
+      if (modal) modal.classList.remove("active");
+    });
+  }
+
+  if (btnCancel) {
+    btnCancel.addEventListener("click", () => {
+      if (modal) modal.classList.remove("active");
+    });
+  }
+
+  if (selType) {
+    selType.addEventListener("change", () => updateCompanionModalDefaults());
+  }
+
+  if (btnConfirm) {
+    btnConfirm.addEventListener("click", () => handleConfirmCreateCompanion());
+  }
+
+  if (btnImport && fileImport) {
+    btnImport.addEventListener("click", () => fileImport.click());
+    fileImport.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          const temp = new CharacterModel();
+          temp.deserialize(parsed);
+          const rootHero = window.primaryHero || char;
+          if (!rootHero.companions) rootHero.companions = [];
+          const newComp = {
+            id: "comp_" + Math.random().toString(36).substr(2, 9),
+            type: "sidekick",
+            name: temp.name || "Imported Companion",
+            powerLevel: temp.powerLevel || 10,
+            totalPointsAllowed: temp.totalPointsAllowed || (temp.powerLevel * 15),
+            characterData: temp.serialize().character
+          };
+          rootHero.companions.push(newComp);
+          updateCharacterSelectorUI();
+          buildCompanionsUI();
+          showToast(`Imported "${newComp.name}" into Companions!`, "success");
+        } catch (err) {
+          console.error("Companion import error:", err);
+          showToast("Failed to import companion file.", "error");
+        }
+      };
+      reader.readAsText(file);
+      fileImport.value = "";
+    });
+  }
+}
+window.setupCompanionModalHandlers = setupCompanionModalHandlers;
+
+window.buildOrEditCompanionForSource = function(type, pIdx, eIdx) {
+  syncActiveCompanionIfActive();
+  const rootHero = window.primaryHero || char;
+  const companions = rootHero.companions || [];
+  const matches = companions.filter(c => c.type === type);
+
+  if (matches.length === 0) {
+    openCreateCompanionModal(type, { pIdx, eIdx });
+  } else if (matches.length === 1) {
+    switchToCompanion(matches[0].id);
+  } else {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+    const compTabBtn = document.querySelector('.tab-btn[data-tab="tab-companions"]');
+    if (compTabBtn) compTabBtn.classList.add("active");
+    const compTabContent = document.getElementById("tab-companions");
+    if (compTabContent) compTabContent.classList.add("active");
+    buildCompanionsUI();
+  }
+};
+
+window.switchToCompanion = function(companionId) {
+  syncActiveCompanionIfActive();
+  if (!window.primaryHero) {
+    window.primaryHero = char;
+  }
+  const rootHero = window.primaryHero;
+  const companion = (rootHero.companions || []).find(c => c.id === companionId);
+  if (!companion) return;
+
+  window.activeCompanionId = companionId;
+  char = new CharacterModel();
+  window.char = char;
+
+  if (companion.characterData) {
+    char.deserialize(companion.characterData);
+  } else {
+    char.name = companion.name;
+    char.powerLevel = companion.powerLevel;
+    char.totalPointsAllowed = companion.totalPointsAllowed;
+    if (companion.type === "mecha") {
+      char.sizeCategory = "Huge";
+      char.setMechaMode(true, false);
+    }
+  }
+  char.powerLevel = companion.powerLevel;
+  char.totalPointsAllowed = companion.totalPointsAllowed;
+  if (companion.type === "mecha") {
+    char.isMecha = true;
+  }
+
+  populateUIFromCharacter();
+  updateCharacterSelectorUI();
+  const typeMsg = companion.type === "mecha" ? "🤖 Editing Mecha:" : "Editing";
+  showToast(`${typeMsg} ${companion.name}.`, "info");
+};
+
+window.returnToPrimaryHero = function() {
+  if (!window.primaryHero) return;
+  syncActiveCompanionIfActive();
+  char = window.primaryHero;
+  window.char = char;
+  window.primaryHero = null;
+  window.activeCompanionId = null;
+
+  populateUIFromCharacter();
+  updateCharacterSelectorUI();
+  showToast(`Returned to ${char.name}.`, "info");
+};
+
+window.deleteCompanion = function(companionId) {
+  if (!confirm("Delete this companion/form? This cannot be undone.")) return;
+  if (window.activeCompanionId === companionId) {
+    returnToPrimaryHero();
+  }
+  const rootHero = window.primaryHero || char;
+  rootHero.companions = (rootHero.companions || []).filter(c => c.id !== companionId);
+  updateCharacterSelectorUI();
+  buildCompanionsUI();
+  showToast("Companion removed.", "info");
+};
+
+window.exportCompanionStandalone = function(companionId) {
+  syncActiveCompanionIfActive();
+  const rootHero = window.primaryHero || char;
+  const companion = (rootHero.companions || []).find(c => c.id === companionId);
+  if (!companion) return;
+
+  let compModel;
+  if (window.activeCompanionId === companionId) {
+    compModel = char;
+  } else if (companion.characterData) {
+    compModel = new CharacterModel();
+    compModel.deserialize(companion.characterData);
+  } else {
+    compModel = new CharacterModel();
+    compModel.name = companion.name;
+    compModel.powerLevel = companion.powerLevel;
+    compModel.totalPointsAllowed = companion.totalPointsAllowed;
+  }
+
+  const payload = JSON.stringify(compModel.serialize(), null, 2);
+  const safeName = (compModel.name || "companion").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  FileManager.fallbackDownload(payload, `${safeName}.mm2e`);
+  showToast(`Exported "${compModel.name}" as standalone .mm2e file!`, "success");
+};
+
+window.toggleMechaMode = function(explicitVal) {
+  // Case 1: If currently editing/piloting a mecha companion/form, switch back to pilot
+  if (window.activeCompanionId && window.primaryHero) {
+    const comp = (window.primaryHero.companions || []).find(c => c.id === window.activeCompanionId);
+    if (comp && comp.type === "mecha") {
+      returnToPrimaryHero();
+      return;
+    }
+  }
+
+  const rootHero = window.primaryHero || char;
+  const mechaForms = (rootHero.companions || []).filter(c => c.type === "mecha");
+
+  // Case 2: If root hero is already a standalone mecha sheet (loaded from standalone file)
+  if (char.isMecha && !window.primaryHero && mechaForms.length === 0) {
+    const newMode = (explicitVal !== undefined) ? !!explicitVal : !char.isMecha;
+    char.setMechaMode(newMode, char.hasAI);
+    populateUIFromCharacter();
+    updateCharacterSelectorUI();
+    showToast(newMode ? "🤖 Mecha Mode Enabled" : "Mecha Mode Disabled", "info");
+    return;
+  }
+
+  // Case 3: If on Pilot and mecha forms exist, board the mecha!
+  if (mechaForms.length > 0) {
+    switchToCompanion(mechaForms[0].id);
+    return;
+  }
+
+  // Case 4: No mecha form added yet -> Prevent switching pilot to mecha mode!
+  showToast("No Mecha form found. Please add a Mecha form for this character first!", "warning");
+  openCreateCompanionModal("mecha");
+};
+
 

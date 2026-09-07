@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -83,6 +83,7 @@
         <button class="btn btn-secondary" id="btnSaveAsHero">Save As...</button>
         <button class="btn btn-secondary" id="btnLoadHero">Load</button>
         <input type="file" id="fileLoadHero" accept=".mm2e,.json,.por" style="display: none;">
+        <button class="btn btn-secondary" id="btnOpenImportAudit" style="display: none; align-items: center; gap: 4px;" title="View Hero Lab Import Audit Report">📋 Audit</button>
         <button class="btn btn-secondary" onclick="window.print()">Print</button>
         
         <!-- Theme/Options Toggle with dots handled dynamically in JS -->
@@ -92,92 +93,125 @@
       </div>
 
       <!-- Options Drop-Down Window / Modal -->
-      <div class="options-dropdown" id="optionsModal">
-        <h3>Display & Interface Settings</h3>
-        
-        <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;">
-          <!-- Filled dynamically by JS -->
-        </button>
-
-        <div style="margin-top: 6px; padding: 6px 0; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-          <label for="togglePersistentHeader" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
-            Persistent Top Bar:
-          </label>
-          <input type="checkbox" id="togglePersistentHeader" style="cursor: pointer; width: 16px; height: 16px;" checked>
+      <div class="options-dropdown" id="optionsModal" style="display: none; flex-direction: row; gap: 20px;">
+        <div style="flex: 1; min-width: 200px;">
+          <h3>House Rules</h3>
+          <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleEnhancedTraitBoost" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Allows Enhanced Trait to increase power effect ranks (not rules-legal normally)">
+              Enhanced Trait can boost effects:
+            </label>
+            <input type="checkbox" id="toggleEnhancedTraitBoost" style="cursor: pointer;">
+          </div>
         </div>
+        <div style="flex: 1; min-width: 240px;">
+          <h3>Display & Interface Settings</h3>
+          
+          <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;">
+            <!-- Filled dynamically by JS -->
+          </button>
 
-        <div class="font-control-group" style="margin-top: 6px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <button class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-              <label>Labels & Headers:</label>
+          <div style="margin-top: 6px; padding: 6px 0; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <label for="togglePersistentHeader" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+              Persistent Top Bar:
+            </label>
+            <input type="checkbox" id="togglePersistentHeader" style="cursor: pointer;" checked>
+          </div>
+
+          <div class="font-control-group" style="margin-top: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
+                <label>Labels & Headers:</label>
+              </div>
+              <span class="secondary-text" id="valLabelFont">16px</span>
             </div>
-            <span class="secondary-text" id="valLabelFont">16px</span>
+            <input type="range" id="sliderLabelFont" min="14" max="22" value="16">
           </div>
-          <input type="range" id="sliderLabelFont" min="12" max="22" value="16">
-        </div>
 
-        <div class="font-control-group">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <button class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-              <label>Interactive Controls:</label>
+          <div class="font-control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
+                <label>Interactive Controls:</label>
+              </div>
+              <span class="secondary-text" id="valControlFont">14px</span>
             </div>
-            <span class="secondary-text" id="valControlFont">14px</span>
+            <input type="range" id="sliderControlFont" min="12" max="22" value="14">
           </div>
-          <input type="range" id="sliderControlFont" min="10" max="20" value="14">
-        </div>
 
-        <div class="font-control-group">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <button class="btn btn-secondary" onclick="resetFont('Link', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-              <label>Links & Tags (Touch Target):</label>
+          <div class="font-control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('Link', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
+                <label>Links & Tags (Touch Target):</label>
+              </div>
+              <span class="secondary-text" id="valLinkFont">14px</span>
             </div>
-            <span class="secondary-text" id="valLinkFont">14px</span>
+            <input type="range" id="sliderLinkFont" min="11" max="18" value="14">
           </div>
-          <input type="range" id="sliderLinkFont" min="9" max="18" value="14">
-        </div>
 
-        <div class="font-control-group">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <button class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-              <label>Secondary Details:</label>
+          <div class="font-control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
+                <label>Secondary Details:</label>
+              </div>
+              <span class="secondary-text" id="valSecondaryFont">14px</span>
             </div>
-            <span class="secondary-text" id="valSecondaryFont">14px</span>
+            <input type="range" id="sliderSecondaryFont" min="12" max="18" value="14">
           </div>
-          <input type="range" id="sliderSecondaryFont" min="10" max="18" value="14">
-        </div>
 
-        <div class="font-control-group" style="margin-top: 4px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <button class="btn btn-secondary" onclick="resetFont('MinorControl', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-              <label>Sub-Controls & Dropdowns:</label>
+          <div class="font-control-group" style="margin-top: 4px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('MinorControl', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
+                <label>Sub-Controls & Dropdowns:</label>
+              </div>
+              <span class="secondary-text" id="valMinorControlFont">14px</span>
             </div>
-            <span class="secondary-text" id="valMinorControlFont">14px</span>
+            <input type="range" id="sliderMinorControlFont" min="12" max="18" value="14">
           </div>
-          <input type="range" id="sliderMinorControlFont" min="9" max="18" value="14">
         </div>
 
-        <!-- Save / Load Folder Preferences -->
-        <div style="margin-top: 4px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
-          <h3 style="font-size: var(--font-size-labels); margin-bottom: 6px; border: none; padding: 0;">Save / Load Folder</h3>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: var(--font-size-secondary);">
-            <span style="color: var(--text-muted);">Default:</span>
-            <span id="lblActiveFolder" style="font-weight: 600; color: var(--text-main); font-family: ui-monospace, monospace; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Current default save/load folder">[Project Default]</span>
+        <!-- Save / Load Folder & Alerts Column -->
+        <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 12px;">
+          <!-- Save / Load Folder Preferences -->
+          <div>
+            <h3 style="font-size: var(--font-size-labels); margin-bottom: 6px;">Save / Load Folder</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: var(--font-size-secondary);">
+              <span style="color: var(--text-muted);">Default:</span>
+              <span id="lblActiveFolder" style="font-weight: 600; color: var(--text-main); font-family: ui-monospace, monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Current default save/load folder">[Project Default]</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" class="btn btn-secondary" id="btnSetCustomFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
+                📁 Set Folder...
+              </button>
+              <button type="button" class="btn btn-secondary" id="btnResetFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
+                ↺ Reset to Default
+              </button>
+            </div>
+            <div id="boxFirefoxNotice" style="display: none; margin-top: 8px; padding: 6px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.35;">
+              🦊 <strong>Firefox Saving:</strong> In <em>Firefox Settings &gt; General &gt; Downloads</em>, check <strong>"Always ask you where to save files"</strong>. When saving, click <strong>OK / Save File</strong> on Firefox's prompt to open the system Save As dialog.
+            </div>
           </div>
-          <div style="display: flex; gap: 6px;">
-            <button type="button" class="btn btn-secondary" id="btnSetCustomFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
-              📁 Set Folder...
-            </button>
-            <button type="button" class="btn btn-secondary" id="btnResetFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
-              ↺ Reset to Default
-            </button>
-          </div>
-          <div id="boxFirefoxNotice" style="display: none; margin-top: 8px; padding: 8px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.4;">
-            🦊 <strong>Firefox Saving:</strong> In <em>Firefox Settings &gt; General &gt; Downloads</em>, check <strong>"Always ask you where to save files"</strong>. When saving, click <strong>OK / Save File</strong> on Firefox's prompt to open the system Save As dialog.
+
+          <!-- Disable Warnings & Alerts Options (reorganized below save/load settings) -->
+          <div style="border-top: 1px dashed var(--border-color); padding-top: 8px;">
+            <h3 style="font-size: var(--font-size-labels); margin-bottom: 6px;">Alerts &amp; Prompts</h3>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+                <input type="checkbox" id="chkDisableWarnings" style="cursor: pointer;">
+                Disable non-critical power option alerts
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+                <input type="checkbox" id="chkDisableDeleteWarning" style="cursor: pointer;">
+                Disable power container deletion warnings
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+                <input type="checkbox" id="chkDisableResWarning" style="cursor: pointer;">
+                Disable screen resolution warning
+              </label>
+            </div>
           </div>
         </div>
 
@@ -186,31 +220,43 @@
 
     <!-- Power Point Totals Header -->
     <div class="summary-bar">
-      <div>
-        Hero: <strong id="lblHeroName">New Hero</strong> | 
-        PL: <span class="badge" id="lblPL">10</span>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-weight: 600;" id="lblContextRole">Hero:</span>
+        <select id="selActiveCharacterContext" class="fit-content" style="font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; cursor: pointer;" title="Switch Active Character / Form">
+          <option value="main">👑 Main Hero: New Hero</option>
+        </select>
+        <span id="lblHeroName" style="display: none;">New Hero</span>
+        | PL: <span class="badge" id="lblPL">10</span>
+        <button type="button" class="btn btn-secondary" id="btnTogglePPBreakdown" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Power Points Breakdown">
+          <span id="lblPointTypePrefix">⚡ PP:</span> <span class="badge" id="lblTotalPP">0 / 150 PP</span>
+        </button>
+        <button type="button" class="btn btn-secondary" id="btnToggleMechaMode" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Toggle Mecha Mode (Construct / Vehicle Rules)">
+          🤖 <span id="lblMechaModeStatus">Mecha: Off</span>
+        </button>
+        <button type="button" class="btn btn-secondary" id="btnOpenTables" style="padding: 2px 10px; font-size: var(--font-size-minor-controls); font-weight: 600;" title="View Reference Tables">📊 Tables</button>
+        <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="display: none; padding: 2px 10px; font-size: var(--font-size-minor-controls); font-weight: 600; align-items: center; gap: 4px;" title="Return to previous view">⬅ Back</button>
       </div>
-      <div>
-        Abilities: <span class="badge" id="lblAbilPP">0 PP</span>
-        Combat: <span class="badge" id="lblCombatPP">0 PP</span>
-        Resistances: <span class="badge" id="lblResistPP">0 PP</span>
-        Skills: <span class="badge" id="lblSkillPP">0 PP</span>
-        Feats: <span class="badge" id="lblAdvPP">0 PP</span>
-        Powers: <span class="badge" id="lblPowerPP">0 PP</span>
-        | Total: <span class="badge" id="lblTotalPP">0 / 150 PP</span>
+    </div>
+
+    <!-- Active Companion / Form Banner (Shown when editing a companion/form) -->
+    <div id="companionActiveBanner" style="display: none; background: #0284c7; color: #ffffff; padding: 6px 16px; font-size: var(--font-size-controls); font-weight: 600; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span id="lblCompanionBannerTitle">👥 Editing Sidekick: Sparrow</span>
+        <span id="lblCompanionBannerBudget" class="badge" style="background: rgba(255,255,255,0.25); color: #fff; font-size: 13px;">0 / 50 PP</span>
       </div>
+      <button type="button" class="btn" id="btnReturnToPrimaryHero" style="background: #ffffff; color: #0284c7; font-weight: bold; border: none; padding: 3px 12px; cursor: pointer; border-radius: 4px;">⬅ Return to Main Hero</button>
     </div>
 
     <!-- Primary Tabs -->
     <nav class="tabs-container">
-      <button class="tab-btn active" data-tab="tab-basics" style="font-weight: bold;">Basics & Stats</button>
+      <button class="tab-btn active" data-tab="tab-basics" style="font-weight: bold;">Main Stats</button>
       <button class="tab-btn" data-tab="tab-skills" style="font-weight: bold;">Skills</button>
-      <button class="tab-btn" data-tab="tab-feats" style="font-weight: bold;">Feats</button>
+      <button class="tab-btn" data-tab="tab-feats" style="font-weight: bold;"><span id="lblNavFeats">Feats</span></button>
       <button class="tab-btn" data-tab="tab-powers" style="font-weight: bold;">Powers</button>
       <button class="tab-btn" data-tab="tab-equipment" style="font-weight: bold;">Equipment & HQ</button>
       <button class="tab-btn" data-tab="tab-background" style="font-weight: bold;">Background</button>
-      <button class="tab-btn" data-tab="tab-blueprints" style="font-weight: bold;">Gadgets & Rituals</button>
-      <button class="tab-btn" data-tab="tab-tables" style="font-weight: bold;">Reference Tables</button>
+      <button class="tab-btn" data-tab="tab-blueprints" style="font-weight: bold;">Plans</button>
+      <button class="tab-btn" data-tab="tab-companions" style="font-weight: bold;">Companions &amp; Forms</button>
     </nav>
   </div>
 
@@ -272,10 +318,17 @@
     <!-- Core Abilities Panel -->
     <div class="collapsible-panel">
       <div class="panel-header">
-        <span>Abilities (2 PP per Rank)</span>
+        <span id="lblAbilitiesPanelTitle">Abilities (2 PP per Rank)</span>
         <span>▼</span>
       </div>
       <div class="panel-body">
+        <div id="boxMechaAIOptions" style="display: none; margin-bottom: 8px; padding: 6px 10px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 4px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; user-select: none; font-size: var(--font-size-controls);">
+            <input type="checkbox" id="chkMechaHasAI" style="cursor: pointer;">
+            Equip Onboard AI / Conscious Computer (Enables INT, WIS, CHA)
+          </label>
+          <button type="button" class="btn btn-sm" onclick="window.openMechaOptions()" style="background: #0284c7; color: #ffffff; font-weight: bold; padding: 3px 10px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">⚙️ Browse &amp; Buy Mecha Options</button>
+        </div>
         <div class="full-width-list" id="abilitiesContainer"></div>
       </div>
     </div>
@@ -325,6 +378,25 @@
         <div class="combat-conditionals-box" id="combatConditionalsContainer" style="margin-top: 4px; padding-top: 4px;">
           <div id="combatFeatList"></div>
           <div id="combatAdvList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attacks Block -->
+    <div class="collapsible-panel">
+      <div class="panel-header">
+        <span>Attacks</span>
+        <span>▼</span>
+      </div>
+      <div class="panel-body">
+        <div class="full-width-list">
+          <div class="list-row" style="font-weight: bold; border-bottom: 1px solid var(--border-color);">
+            <span class="row-title" style="flex: 1.5;">Attack Mode</span>
+            <div style="flex: 0.8; text-align: center; color: var(--text-main);">Bonus</div>
+            <div class="row-adjustments" style="flex: 3;">Bonus Breakdown</div>
+            <div class="defense-total-col" style="flex: 1.2;">Damage / DC</div>
+          </div>
+          <div id="attacksListContainer"></div>
         </div>
       </div>
     </div>
@@ -453,9 +525,12 @@
   <!-- TAB 2: SKILLS -->
   <section id="tab-skills" class="tab-content">
     <div class="collapsible-panel">
-      <div class="panel-header">
+      <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
         <span>Skills (1 PP per 4 Ranks)</span>
-        <span>▼</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-sm" id="btnOpenAddSkillModal" onclick="event.stopPropagation(); window.openAddSkillModal();" style="font-size: var(--font-size-minor-controls); padding: 3px 10px;">+ Add Skill</button>
+          <span>▼</span>
+        </div>
       </div>
       <div class="panel-body">
         <table id="skillsTable">
@@ -467,9 +542,8 @@
               <th>Ability Rank</th>
               <th>Bought Ranks</th>
               <th>Total Bonus</th>
-              <th>Focus / Specialization</th>
               <th>Modifying Feats</th>
-              <th style="width: 40px; text-align: center;">Info</th>
+              <th style="width: 70px; text-align: center;">Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -481,9 +555,12 @@
   <!-- TAB 3: FEATS -->
   <section id="tab-feats" class="tab-content">
     <div class="collapsible-panel">
-      <div class="panel-header">
-        <span>Feats (1 PP per Rank)</span>
-        <span>▼</span>
+      <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="lblFeatsPanelTitle">Feats (1 PP per Rank)</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-sm" id="btnOpenAddFeatModal" onclick="event.stopPropagation(); window.openAddFeatModal();" style="font-size: var(--font-size-minor-controls); padding: 3px 10px;">+ Add Feat</button>
+          <span>▼</span>
+        </div>
       </div>
       <div class="panel-body">
         <table id="advantagesTable">
@@ -492,9 +569,10 @@
               <th class="sortable" data-table="feats" data-col="name">Feat</th>
               <th class="sortable" data-table="feats" data-col="types">Type</th>
               <th>Rank</th>
-              <th>Profile / Focus Details</th>
+              <th>Total</th>
+              <th>Specification / Details</th>
               <th>Description</th>
-              <th style="width: 40px; text-align: center;">Info</th>
+              <th style="width: 70px; text-align: center;">Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -613,6 +691,28 @@
           <textarea id="bgHistory" placeholder="Character origin story, appearance notes, personality..."></textarea>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- TAB: COMPANIONS & FORMS -->
+  <section id="tab-companions" class="tab-content">
+    <div class="static-panel" style="margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <h2 style="font-size: var(--font-size-labels); margin: 0;">Companions, Minions &amp; Alternate Forms</h2>
+          <span class="secondary-text">Build and manage Sidekicks, Summoned Minions, Duplicates, and Alternate Forms (Metamorph).</span>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" id="btnImportCompanion" style="font-size: var(--font-size-minor-controls);">📂 Import (.mm2e)...</button>
+          <input type="file" id="fileImportCompanion" accept=".mm2e,.json" style="display: none;">
+          <button type="button" class="btn" id="btnOpenAddCompanionModal">+ Add Companion / Form</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Companions List Container -->
+    <div id="companionsContainer">
+      <!-- Rendered dynamically by buildCompanionsUI() -->
     </div>
   </section>
 
@@ -829,21 +929,84 @@
   </section>
 
   <!-- TAB 8: GADGETS & RITUALS -->
-  <section id="tab-blueprints" class="tab-content" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+  <section id="tab-blueprints" class="tab-content">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 8px;">
       <div>
-        <h2 style="margin: 0; font-size: 1.2rem; color: var(--accent-primary);">Gadgets & Rituals</h2>
+        <h2 style="margin: 0; font-size: 1.2rem; color: var(--accent-primary);">Plans</h2>
         <div style="font-size: var(--font-size-secondary); color: var(--text-muted); margin-top: 4px;">
-          Create temporary Power Stunts, Inventions, and Rituals without altering your main PP totals.
+          Create temporary Power Stunts, Inventions, Gadgets, and Rituals without altering your main PP totals.
         </div>
       </div>
-      <button type="button" class="btn" id="btnAddBlueprint">+ Add Blueprint</button>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-weight: 600; font-size: var(--font-size-minor-controls);">History:</span>
+        <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryBack" onclick="window.PowerHistoryManager && window.PowerHistoryManager.undo()" title="Undo Change" disabled>&lt;</button>
+        <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryForward" onclick="window.PowerHistoryManager && window.PowerHistoryManager.redo()" title="Redo Change" disabled>&gt;</button>
+        <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryClear" onclick="window.PowerHistoryManager && window.PowerHistoryManager.clear()" title="Clear History" style="font-size: 11px;">Clear</button>
+        <button type="button" class="btn minor-control-btn" onclick="document.getElementById('fileLoadBlueprint').click()" title="Load a saved Plan">Load Plan</button>
+        <button type="button" class="btn" id="btnAddBlueprint">+ Add Plan</button>
+      </div>
     </div>
+    
+    <input type="file" id="fileLoadBlueprint" style="display:none;" accept=".mm2bp" onchange="window.loadBlueprintFile(event)">
     
     <div id="blueprintsContainer">
       <!-- Improvised effects rendered here -->
     </div>
   </section>
+
+  <!-- Power Points Breakdown Modal Overlay -->
+  <div class="modal-overlay" id="ppBreakdownModal">
+    <div class="info-popup-box" style="max-width: 460px;">
+      <div class="info-popup-header">
+        <h3 id="ppModalTitle">⚡ Power Points Breakdown</h3>
+        <button class="info-popup-close" id="modalPPBreakdownClose" title="Close">✕</button>
+      </div>
+      <div class="info-popup-body" id="modalPPBreakdownBody" style="display: flex; flex-direction: column; gap: 12px; padding: 16px; white-space: normal;">
+        <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 6px;">
+          <div>
+            <span style="font-weight: 600; font-size: var(--font-size-labels); display: block;">Total Budget Allocation</span>
+            <span style="font-size: var(--font-size-secondary); color: var(--text-muted);">Power Level <span id="lblModalPL">10</span></span>
+          </div>
+          <span class="badge" id="lblModalTotalPP" style="font-size: 15px; padding: 4px 10px; font-weight: bold;">0 / 150 PP</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-controls);">Abilities:</span>
+            <span class="badge" id="lblAbilPP">0 PP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-controls);">Combat:</span>
+            <span class="badge" id="lblCombatPP">0 PP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-controls);">Resistances:</span>
+            <span class="badge" id="lblResistPP">0 PP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-controls);">Skills:</span>
+            <span class="badge" id="lblSkillPP">0 PP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-controls);">Feats:</span>
+            <span class="badge" id="lblAdvPP">0 PP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px;">
+            <span style="font-weight: 600; font-size: var(--font-size-controls);">Powers:</span>
+            <span class="badge" id="lblPowerPP">0 PP</span>
+          </div>
+        </div>
+
+        <div id="boxModalPPBudgetStatus" style="display: none; padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 4px; color: #ef4444; font-size: var(--font-size-secondary); font-weight: 600;">
+          ⚠️ Character exceeds available Power Point budget!
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+          <button type="button" class="btn btn-secondary" id="btnClosePPModal" style="font-size: var(--font-size-minor-controls); padding: 4px 14px;">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Universal Rule Description Modal Overlay -->
   <div class="modal-overlay" id="ruleInfoModal">
@@ -856,23 +1019,231 @@
     </div>
   </div>
 
-  <!-- Toast Notification Container -->
+  <!-- Companion / Alternate Form Creation Modal Overlay -->
+  <div class="modal-overlay" id="companionCreateModal">
+    <div class="info-popup-box" style="max-width: 500px;">
+      <div class="info-popup-header">
+        <h3 id="companionModalTitle">Add Companion / Alternate Form</h3>
+        <button class="info-popup-close" id="modalCompanionClose">✕</button>
+      </div>
+      <div class="info-popup-body" style="display: flex; flex-direction: column; gap: 14px; white-space: normal;">
+        <div>
+          <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Classification / Type:</label>
+          <select id="selCompanionType" class="fit-content" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px;">
+            <option value="sidekick">🤝 Sidekick (from Sidekick feat: 5 PP / rank)</option>
+            <option value="minion">👥 Minion (from Minions feat: 15 PP / rank)</option>
+            <option value="summon">👥 Summoned Creature (from Summon power: 15 PP / rank)</option>
+            <option value="duplicate">👥 Duplicate (from Duplication power)</option>
+            <option value="metamorph">🔄 Alternate Form / Metamorph (from Morph feat: equal to Hero PP)</option>
+            <option value="mecha">🤖 Mecha (from Mecha &amp; Manga / Equipment: 5 MP / rank or PL × 15)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Companion / Form Name:</label>
+          <input type="text" id="txtCompanionName" placeholder="e.g. Sparrow, Fire Elemental, Werewolf Form, Titan-01" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
+        </div>
+
+        <div style="display: flex; gap: 14px;">
+          <div style="flex: 1;">
+            <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Power Level (PL):</label>
+            <input type="number" id="numCompanionPL" min="1" max="20" value="8" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
+          </div>
+          <div style="flex: 1;">
+            <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;" id="lblCompanionBudgetTitle">Points Budget (PP / MP):</label>
+            <input type="number" id="numCompanionBudget" min="1" max="500" value="50" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
+          </div>
+        </div>
+
+        <div id="boxCompanionHint" style="padding: 8px 10px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.4;">
+          <strong>Sidekick:</strong> Built as an independent character with (rank × 5) power points, capped at the series Power Level.
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+          <button type="button" class="btn btn-secondary" id="btnCancelCompanionModal">Cancel</button>
+          <button type="button" class="btn" id="btnConfirmCreateCompanion">Create &amp; Edit Sheet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Feat Modal Overlay -->
+  <div class="modal-overlay" id="addFeatModal">
+    <div class="info-popup-box" style="width: 90%; max-width: 1080px; height: calc(100vh - var(--trait-modal-top, 130px) - 20px); max-height: calc(100vh - var(--trait-modal-top, 130px) - 20px);">
+      <div class="info-popup-header" style="padding: 6px 12px;">
+        <h3 id="addFeatModalTitle">Add Feat</h3>
+        <button class="info-popup-close" id="modalAddFeatClose" onclick="window.closeAddFeatModal()">✕</button>
+      </div>
+      <div class="info-popup-body" style="display: flex; flex-direction: column; gap: 6px; overflow: hidden; padding: 8px 12px 6px 12px; white-space: normal; flex: 1; min-height: 0; box-sizing: border-box;">
+        
+        <!-- Top Half: Pick List & Initial Ranks Row (50% of pop-up length) -->
+        <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
+          <!-- Category Filter & Search -->
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="txtFeatSearch" placeholder="Search feats by name or keyword..." style="flex: 1; min-width: 180px; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;" oninput="window.filterFeatModalOptions()">
+            <select id="selFeatCategoryFilter" style="font-size: var(--font-size-controls); padding: 4px 6px;" onchange="window.filterFeatModalOptions()">
+              <option value="All">All Categories</option>
+              <option value="Combat">Combat</option>
+              <option value="Fortune">Fortune</option>
+              <option value="General">General</option>
+              <option value="Skill">Skill</option>
+            </select>
+            <span id="lblFeatCheckedCount" style="font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 600;"></span>
+          </div>
+
+          <div>
+            <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 2px;">Choose Feat:</label>
+            <input type="hidden" id="selFeatChoice" value="">
+          </div>
+
+          <div id="listFeatChoice" class="touch-trait-list" style="flex: 1; min-height: 80px; overflow-y: auto;" role="listbox" aria-label="Choose Feat">
+            <!-- Populated dynamically with touch-friendly rows and checkboxes -->
+          </div>
+
+          <!-- Dynamic Specification / Multi-Form Container -->
+          <div id="boxFeatSpecContainer" style="display: none; padding: 8px 10px; background: rgba(2, 132, 199, 0.08); border: 1.5px solid rgba(2, 132, 199, 0.4); border-radius: 6px; max-height: 200px; overflow-y: auto; margin-bottom: 2px;">
+            <!-- Injected dynamically based on selected feat (Attack Focus, Attack Specialization, Favored Environment, etc.) -->
+          </div>
+
+          <!-- Unified Initial Rank & Action Buttons Row -->
+          <div id="boxFeatRankContainer" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span style="font-weight: 600; font-size: var(--font-size-labels);" id="lblFeatRankTitle">Initial Rank:</span>
+              <div class="stepper-group">
+                <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('numFeatInitialRank', -1, 1, 20)">−</button>
+                <input type="number" id="numFeatInitialRank" class="stepper-input" min="1" max="20" value="1">
+                <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('numFeatInitialRank', 1, 1, 20)">+</button>
+              </div>
+              <span class="secondary-text" id="lblFeatMaxRankNote" style="font-size: var(--font-size-secondary);">(1 PP per rank)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+              <button type="button" class="btn btn-secondary" onclick="window.closeAddFeatModal()">Cancel</button>
+              <button type="button" class="btn" id="btnAddFeatConfirm" onclick="window.confirmAddFeat()">+ Add to Sheet</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 50% Divider -->
+        <div style="border-top: 1px dashed var(--border-color); margin: 2px 0;"></div>
+
+        <!-- Bottom Half: Trait Description Pane (extending to almost touch the bottom of the popup) -->
+        <div id="boxFeatPreview" style="flex: 1; min-height: 0; padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--font-size-secondary); overflow-y: auto; line-height: 1.35; box-sizing: border-box; margin-bottom: 2px;">
+          <em>Select a feat above to view rules and details.</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Skill Modal Overlay -->
+  <div class="modal-overlay" id="addSkillModal">
+    <div class="info-popup-box" style="width: 90%; max-width: 1080px; height: calc(100vh - var(--trait-modal-top, 130px) - 20px); max-height: calc(100vh - var(--trait-modal-top, 130px) - 20px);">
+      <div class="info-popup-header" style="padding: 6px 12px;">
+        <h3 id="addSkillModalTitle">Add Skill</h3>
+        <button class="info-popup-close" id="modalAddSkillClose" onclick="window.closeAddSkillModal()">✕</button>
+      </div>
+      <div class="info-popup-body" style="display: flex; flex-direction: column; gap: 6px; overflow: hidden; padding: 8px 12px 6px 12px; white-space: normal; flex: 1; min-height: 0; box-sizing: border-box;">
+        
+        <!-- Skill Choice Section (consumes 50% by default, or clamp(160px, 30vh, 230px) when specialization is active) -->
+        <div id="boxSkillChoiceContainer" style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 140px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <label style="font-weight: 600; font-size: var(--font-size-labels); margin: 0;">Choose Skill:</label>
+            <span id="lblSkillCheckedCount" style="font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 600;"></span>
+          </div>
+          <input type="hidden" id="selSkillChoice" value="">
+
+          <div id="listSkillChoice" class="touch-trait-list" style="flex: 1; min-height: 120px; overflow-y: auto;" role="listbox" aria-label="Choose Skill">
+            <!-- Populated dynamically with touch-friendly rows and checkboxes -->
+          </div>
+        </div>
+
+        <!-- Dynamic Specialization Container (shown for Craft, Knowledge, Perform, Drive, Pilot, Profession, Language) -->
+        <div id="boxSkillSpecContainer" style="display: none; padding: 6px 8px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 4px; flex-shrink: 0; box-sizing: border-box;">
+          <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 2px;" id="lblSkillSpecTitle">Specialization (Treated as a Separate Skill):</label>
+          <input type="hidden" id="selSkillSpecialization" value="">
+          <div id="listSkillSpecialization" class="touch-trait-list" style="height: 185px; max-height: 185px; overflow-y: auto; margin-bottom: 4px;" role="listbox" aria-label="Choose Specialization">
+            <!-- Populated with canonical specializations -->
+          </div>
+          <input type="text" id="txtSkillCustomSpec" placeholder="Or enter custom specialization..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 6px; box-sizing: border-box; display: none;">
+        </div>
+
+        <!-- Unified Initial Bought Ranks & Action Buttons Row -->
+        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); gap: 8px; flex-wrap: wrap; flex-shrink: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-weight: 600; font-size: var(--font-size-labels);">Initial Bought Ranks:</span>
+            <div class="stepper-group">
+              <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('numSkillInitialRank', -1, 1, 20)">−</button>
+              <input type="number" id="numSkillInitialRank" class="stepper-input" min="1" max="20" value="4">
+              <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('numSkillInitialRank', 1, 1, 20)">+</button>
+            </div>
+            <span class="secondary-text" style="font-size: var(--font-size-secondary);">(4 ranks = 1 PP)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+            <button type="button" class="btn btn-secondary" onclick="window.closeAddSkillModal()">Cancel</button>
+            <button type="button" class="btn" id="btnAddSkillConfirm" onclick="window.confirmAddSkill()">+ Add to Sheet</button>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div id="divSkillModalDivider" style="border-top: 1px dashed var(--border-color); margin: 2px 0; flex-shrink: 0;"></div>
+
+        <!-- Bottom Half: Skill Description Pane (extending to almost touch the bottom of the popup) -->
+        <div id="boxSkillPreview" style="flex: 1; min-height: 70px; padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--font-size-secondary); overflow-y: auto; line-height: 1.35; box-sizing: border-box; margin-bottom: 2px;">
+          <em>Select a skill to view rules.</em>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Portfolio Character Picker Modal Overlay -->
+  <div class="modal-overlay" id="porCharacterPickerModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 90%; max-width: 620px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3>📂 Select Hero from Portfolio</h3>
+        <button class="info-popup-close" id="modalPorPickerClose" onclick="document.getElementById('porCharacterPickerModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;">
+        <p style="margin: 0; font-size: var(--font-size-secondary); color: var(--text-secondary);">
+          This Hero Lab portfolio contains multiple characters. Select which hero you would like to load:
+        </p>
+        <div id="porCharacterList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" id="btnCancelPorPicker" onclick="document.getElementById('porCharacterPickerModal').classList.remove('active')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hero Lab Import Audit Modal Overlay -->
+  <div class="modal-overlay" id="importAuditModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 92%; max-width: 900px; max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3 id="importAuditTitle">📋 Hero Lab Import Audit Report</h3>
+        <button class="info-popup-close" id="modalImportAuditClose" onclick="document.getElementById('importAuditModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" id="importAuditBody" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px;"></div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" id="btnCopyImportAudit">📋 Copy Audit Log</button>
+        <button type="button" class="btn" id="btnCloseImportAudit" onclick="document.getElementById('importAuditModal').classList.remove('active')">Close &amp; Review Sheet</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <div id="print-layout" class="print-only"></div>
 
   <!-- Data and Model Files -->
-  <script src="data_feats.js?v=8"></script>
-  <script src="data_skills.js?v=8"></script>
-  <script src="data_powers_effects.js?v=13"></script>
-  <script src="data_powers_modifiers.js?v=6"></script>
-  <script src="data_measurements.js?v=7"></script>
+  <script src="data_feats.js?v=10"></script>
+  <script src="data_skills.js?v=10"></script>
+  <script src="data_powers_effects.js?v=21"></script>
+  <script src="data_powers_profiles.js?v=7"></script>
+  <script src="data_powers_modifiers.js?v=11"></script>
+  <script src="data_measurements.js?v=8"></script>
   <script src="data_equipment.js?v=6"></script>
-  <script src="character_model.js?v=8"></script>
-  <script src="por_importer.js?v=5"></script>
-  <script src="print.js?v=6"></script>
+  <script src="character_model.js?v=13"></script>
+  <script src="por_importer.js?v=12"></script>
+  <script src="print.js?v=9"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=31"></script>
+  <script src="app.js?v=64"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>

@@ -125,7 +125,8 @@ body {
   position: absolute;
   top: 100%;
   right: 16px;
-  width: 320px;
+  width: max-content;
+  max-width: 90vw;
   max-height: calc(100vh - 70px);
   overflow-y: auto;
   background: var(--bg-panel);
@@ -139,8 +140,7 @@ body {
 }
 
 .options-dropdown.show {
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
   gap: 10px;
 }
 
@@ -563,7 +563,8 @@ textarea {
 .modifier-stepper-group {
   display: inline-flex;
   align-items: stretch;
-  height: 24px;
+  height: calc(var(--font-size-minor-controls) * 1.7);
+  min-height: 22px;
   border: 1px solid var(--border-color);
   border-radius: 3px;
   background: var(--bg-panel);
@@ -575,7 +576,8 @@ textarea {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  width: 22px;
+  width: calc(var(--font-size-minor-controls) * 1.55);
+  min-width: calc(var(--font-size-minor-controls) * 1.55);
   height: 100%;
   background: var(--bg-card);
   color: var(--text-main);
@@ -596,7 +598,7 @@ textarea {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  min-width: 24px;
+  min-width: calc(var(--font-size-minor-controls) * 1.7);
   font-weight: bold;
   font-size: var(--font-size-minor-controls);
   color: var(--text-main);
@@ -637,7 +639,7 @@ textarea {
 .info-popup-box {
   width: 90%;
   max-width: 540px;
-  max-height: 55vh;
+  max-height: 88vh;
   background: var(--bg-panel);
   color: var(--text-main);
   border: 2px solid var(--border-color);
@@ -650,7 +652,7 @@ textarea {
 
 .info-popup-header {
   background: var(--bg-card);
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
@@ -678,11 +680,24 @@ textarea {
 }
 
 .info-popup-body {
-  padding: 12px 16px;
+  padding: 8px 12px;
   overflow-y: auto;
   font-size: var(--font-size-controls);
-  line-height: 1.45;
-  white-space: pre-wrap;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.info-popup-body p {
+  margin: 0 0 6px 0;
+}
+
+.info-popup-body p:last-child {
+  margin-bottom: 0;
+}
+
+.info-popup-body ol, .info-popup-body ul {
+  margin: 0 0 6px 16px;
+  padding: 0;
 }
 
 .combat-conditionals-box {
@@ -732,11 +747,24 @@ textarea {
   gap: 8px;
 }
 
+input[type="checkbox"] {
+  width: calc(var(--font-size-controls) * 1.25) !important;
+  height: calc(var(--font-size-controls) * 1.25) !important;
+  min-width: calc(var(--font-size-controls) * 1.25) !important;
+  min-height: calc(var(--font-size-controls) * 1.25) !important;
+  cursor: pointer;
+  accent-color: var(--accent-primary);
+  vertical-align: middle;
+}
+
 .row-enable-toggle {
-  width: 16px;
-  height: 16px;
+  width: calc(var(--font-size-controls) * 1.25) !important;
+  height: calc(var(--font-size-controls) * 1.25) !important;
+  min-width: calc(var(--font-size-controls) * 1.25) !important;
+  min-height: calc(var(--font-size-controls) * 1.25) !important;
   cursor: pointer;
   margin: 0;
+  accent-color: var(--accent-primary);
 }
 
 .row-title {
@@ -795,10 +823,11 @@ textarea {
 .stepper-group {
   display: inline-flex;
   align-items: stretch;
-  height: 30px;
-  width: 110px;
-  min-width: 110px;
-  max-width: 110px;
+  height: calc(var(--font-size-controls) * 2.14);
+  min-height: 26px;
+  width: calc(var(--font-size-controls) * 7.85);
+  min-width: calc(var(--font-size-controls) * 7.85);
+  max-width: calc(var(--font-size-controls) * 7.85);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: var(--bg-card);
@@ -809,9 +838,9 @@ textarea {
 }
 
 .stepper-input {
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
+  width: calc(var(--font-size-controls) * 2.85) !important;
+  min-width: calc(var(--font-size-controls) * 2.85) !important;
+  max-width: calc(var(--font-size-controls) * 2.85) !important;
   text-align: center;
   border: none !important;
   border-radius: 0 !important;
@@ -834,9 +863,9 @@ textarea {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  width: 35px !important;
-  min-width: 35px !important;
-  max-width: 35px !important;
+  width: calc(var(--font-size-controls) * 2.5) !important;
+  min-width: calc(var(--font-size-controls) * 2.5) !important;
+  max-width: calc(var(--font-size-controls) * 2.5) !important;
   height: 100%;
   background: var(--bg-card);
   color: var(--text-main);
@@ -901,6 +930,13 @@ th, td {
   text-align: left;
   font-size: var(--font-size-controls);
   vertical-align: middle;
+}
+
+.reference-table td,
+.reference-table th,
+#tab-tables td,
+#tab-tables th {
+  font-size: var(--font-size-labels);
 }
 
 th {
@@ -1079,6 +1115,126 @@ th.sortable.sort-desc::after {
   background: rgba(245, 158, 11, 0.15);
 }
 
+/* Touch-friendly trait list selection (Feats & Skills modals) */
+.touch-trait-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-panel);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  box-sizing: border-box;
+}
+
+.touch-trait-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: background 0.1s ease, color 0.1s ease;
+  font-size: var(--font-size-controls);
+  color: var(--text-main);
+}
+
+.touch-trait-item:last-child {
+  border-bottom: none;
+}
+
+.touch-trait-item:hover {
+  background: rgba(29, 78, 216, 0.08);
+}
+
+.touch-trait-item.selected {
+  background: var(--accent-primary) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.touch-trait-item.selected .touch-trait-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.touch-trait-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.touch-trait-badge {
+  font-size: calc(var(--font-size-secondary) * 0.85);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.touch-trait-checkbox {
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  cursor: pointer;
+  accent-color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+/* Trait Picker Modals (Feats & Skills): Top edge almost touches persistent tab bar */
+#addFeatModal.modal-overlay,
+#addSkillModal.modal-overlay {
+  align-items: flex-start;
+  padding-top: var(--trait-modal-top, 130px);
+  padding-bottom: 12px;
+  box-sizing: border-box;
+}
+
+#addFeatModal .info-popup-box,
+#addSkillModal .info-popup-box {
+  width: 90%;
+  max-width: 1080px;
+  height: calc(100vh - var(--trait-modal-top, 130px) - 20px);
+  max-height: calc(100vh - var(--trait-modal-top, 130px) - 20px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#addFeatModal .info-popup-body,
+#addSkillModal .info-popup-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 12px 6px 12px;
+}
+
+#listSkillSpecialization .touch-trait-item {
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+#addSkillModal.has-spec #boxSkillChoiceContainer {
+  flex: 0 0 auto !important;
+  height: clamp(160px, 30vh, 230px) !important;
+}
+
 /* ================= PRINT LAYOUT ================= */
 .print-only { display: none; }
 @media print {
@@ -1102,3 +1258,51 @@ th.sortable.sort-desc::after {
   .print-value { font-weight: bold; }
   .print-muted { color: #4b5563 !important; font-size: 0.9em; }
 }
+
+/* ================= MECHA MODE STYLING ================= */
+#btnToggleMechaMode.mecha-active {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0369a1 !important;
+  box-shadow: 0 0 6px rgba(2, 132, 199, 0.4);
+}
+
+.mecha-mode-badge {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: bold;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* ================= HERO LAB IMPORT AUDIT STYLING ================= */
+.audit-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.audit-badge.audit-info {
+  background: rgba(2, 132, 199, 0.15);
+  color: var(--accent-primary);
+  border: 1px solid rgba(2, 132, 199, 0.35);
+}
+
+.audit-badge.audit-refund {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.audit-badge.audit-warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+

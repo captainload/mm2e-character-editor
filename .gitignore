@@ -19,3 +19,19 @@ Nightengale_extracted/
 # Copyrighted Rulebook PDFs & Reference Dumps
 *.pdf
 Mutants & Masterminds - CORE Rules 2nd ed - *.txt
+ultimate_power_text.txt
+up_transcript_dump.txt
+pdf_texts.txt
+found_pdf_*.txt
+parsed_effects_raw.json
+
+# Node & Extraction Tools
+node_modules/
+package.json
+package-lock.json
+extract_*.js
+update_descriptions.js
+
+# Extracted character portfolio folders
+Doctor_Midnight_extracted/
+*.stock

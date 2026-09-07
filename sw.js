@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mm2e-hero-builder-v6';
+const CACHE_NAME = 'mm2e-hero-builder-v34';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
   './data_skills.js',
   './data_feats.js',
   './data_powers_effects.js',
+  './data_powers_profiles.js',
   './data_powers_modifiers.js',
   './data_equipment.js',
   './por_importer.js',

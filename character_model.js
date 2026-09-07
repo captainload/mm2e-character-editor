@@ -8,6 +8,8 @@ class CharacterModel {
     this.totalPointsAllowed = 150;
     this.sizeCategory = "Medium";
     this.massRank = 3;
+    this.isMecha = false;
+    this.hasAI = false;
 
     // 6 Core Abilities
     this.abilities = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
@@ -36,11 +38,19 @@ class CharacterModel {
     this.vehicles = [];
     this.installations = [];
 
+    // Minions, Sidekicks & Alternate Forms
+    this.companions = [];
+
     // Background & Identity
     this.identity = "";
     this.motivation = "";
     this.complications = "";
     this.history = "";
+
+    // House Rules
+    this.houseRules = {
+      enhancedTraitBoostsEffects: false
+    };
   }
 
   reset() {
@@ -50,6 +60,8 @@ class CharacterModel {
     this.totalPointsAllowed = 150;
     this.sizeCategory = "Medium";
     this.massRank = 3;
+    this.isMecha = false;
+    this.hasAI = false;
 
     this.abilities = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
     this.absentAbilities = { STR: false, CON: false, DEX: false, INT: false, WIS: false, CHA: false };
@@ -67,11 +79,16 @@ class CharacterModel {
     this.gear = [];
     this.vehicles = [];
     this.installations = [];
+    this.companions = [];
 
     this.identity = "";
     this.motivation = "";
     this.complications = "";
     this.history = "";
+
+    this.houseRules = {
+      enhancedTraitBoostsEffects: false
+    };
   }
 
   serialize() {
@@ -86,6 +103,8 @@ class CharacterModel {
         totalPointsAllowed: this.totalPointsAllowed,
         sizeCategory: this.sizeCategory,
         massRank: this.massRank,
+        isMecha: this.isMecha || false,
+        hasAI: this.hasAI || false,
         abilities: { ...this.abilities },
         absentAbilities: { ...this.absentAbilities },
         combat: { ...this.combat },
@@ -99,10 +118,12 @@ class CharacterModel {
         gear: JSON.parse(JSON.stringify(this.gear || [])),
         vehicles: JSON.parse(JSON.stringify(this.vehicles || [])),
         installations: JSON.parse(JSON.stringify(this.installations || [])),
+        companions: JSON.parse(JSON.stringify(this.companions || [])),
         identity: this.identity || "",
         motivation: this.motivation || "",
         complications: this.complications || "",
-        history: this.history || ""
+        history: this.history || "",
+        houseRules: { ...this.houseRules }
       }
     };
   }
@@ -117,6 +138,8 @@ class CharacterModel {
     this.totalPointsAllowed = typeof data.totalPointsAllowed === "number" ? data.totalPointsAllowed : (this.powerLevel * 15);
     this.sizeCategory = data.sizeCategory || data.size || "Medium";
     this.massRank = typeof data.massRank === "number" ? data.massRank : 3;
+    this.isMecha = !!(data.isMecha || data.nature === "mecha" || data.type === "Mecha");
+    this.hasAI = !!data.hasAI;
 
     // Abilities
     this.abilities = { STR: 0, CON: 0, DEX: 0, INT: 0, WIS: 0, CHA: 0, ...(data.abilities || {}) };
@@ -203,18 +226,48 @@ class CharacterModel {
     this.gear = Array.isArray(data.gear) ? JSON.parse(JSON.stringify(data.gear)) : [];
     this.vehicles = Array.isArray(data.vehicles) ? JSON.parse(JSON.stringify(data.vehicles)) : [];
     this.installations = Array.isArray(data.installations) ? JSON.parse(JSON.stringify(data.installations)) : [];
+    this.companions = Array.isArray(data.companions) ? JSON.parse(JSON.stringify(data.companions)) : [];
 
     // Background & Identity
     this.identity = data.identity || (data.background?.identity || "");
     this.motivation = data.motivation || (data.background?.motivation || "");
     this.complications = data.complications || (data.background?.complications || "");
     this.history = data.history || (data.background?.history || "");
+
+    // House Rules
+    this.houseRules = {
+      enhancedTraitBoostsEffects: false,
+      ...(data.houseRules || {})
+    };
+  }
+
+  setMechaMode(enabled, hasAI = false) {
+    this.isMecha = !!enabled;
+    this.hasAI = !!hasAI;
+    if (this.isMecha) {
+      this.absentAbilities.CON = true;
+      if (!this.hasAI) {
+        this.absentAbilities.INT = true;
+        this.absentAbilities.WIS = true;
+        this.absentAbilities.CHA = true;
+      } else {
+        this.absentAbilities.INT = false;
+        this.absentAbilities.WIS = false;
+        this.absentAbilities.CHA = false;
+      }
+    } else {
+      this.absentAbilities.CON = false;
+      this.absentAbilities.INT = false;
+      this.absentAbilities.WIS = false;
+      this.absentAbilities.CHA = false;
+    }
   }
 
   findEffectById(effectId) {
-    if (!effectId || !Array.isArray(this.powers)) return null;
-    for (let pIdx = 0; pIdx < this.powers.length; pIdx++) {
-      const container = this.powers[pIdx];
+    const list = this.activePowers || this.powers;
+    if (!effectId || !Array.isArray(list)) return null;
+    for (let pIdx = 0; pIdx < list.length; pIdx++) {
+      const container = list[pIdx];
       if (Array.isArray(container.effects)) {
         for (let eIdx = 0; eIdx < container.effects.length; eIdx++) {
           if (container.effects[eIdx].id === effectId) {
@@ -232,49 +285,67 @@ class CharacterModel {
       combat: { ATK: 0, DEF: 0 },
       saves: { Toughness: 0, Fortitude: 0, Reflex: 0, Will: 0 },
       skills: {},
-      feats: {}
+      feats: {},
+      powers: {}
     };
 
     const powerContainers = this.powers || [];
     powerContainers.forEach(container => {
       const effects = Array.isArray(container.effects) ? container.effects : [container];
       effects.forEach(eff => {
-        if ((eff.effectName === "Enhanced Trait" || eff.effectName === "Enhance Trait") && eff.subPowers) {
-          eff.subPowers.forEach(sub => {
-            const r = (parseInt(sub.rank) || 0) * (sub.isReduced ? -1 : 1);
-            const raw = (sub.type || sub.name || "").trim();
-            const clean = raw.replace(/\s*\[.*?\]/g, '').trim();
+        const applySub = (sub) => {
+          const r = (parseInt(sub.rank) || 0) * (sub.isReduced ? -1 : 1);
+          const raw = (sub.type || sub.name || "").trim();
+          const clean = raw.replace(/\s*\[.*?\]/g, '').trim();
 
-            if (/^Strength\b/i.test(clean) || clean === "STR" || clean.includes("(STR)")) {
-              res.abilities.STR += r;
-            } else if (/^Dexterity\b/i.test(clean) || clean === "DEX" || clean.includes("(DEX)")) {
-              res.abilities.DEX += r;
-            } else if (/^Constitution\b/i.test(clean) || clean === "CON" || clean.includes("(CON)")) {
-              res.abilities.CON += r;
-            } else if (/^Intelligence\b/i.test(clean) || clean === "INT" || clean.includes("(INT)")) {
-              res.abilities.INT += r;
-            } else if (/^Wisdom\b/i.test(clean) || clean === "WIS" || clean.includes("(WIS)")) {
-              res.abilities.WIS += r;
-            } else if (/^Charisma\b/i.test(clean) || clean === "CHA" || clean.includes("(CHA)")) {
-              res.abilities.CHA += r;
-            } else if (/^Attack\b/i.test(clean) || clean === "ATK") {
-              res.combat.ATK += r;
-            } else if (/^Defense\b/i.test(clean) || clean === "DEF") {
-              res.combat.DEF += r;
-            } else if (/^Toughness\b/i.test(clean)) {
-              res.saves.Toughness += r;
-            } else if (/^Fortitude\b/i.test(clean)) {
-              res.saves.Fortitude += r;
-            } else if (/^Reflex\b/i.test(clean)) {
-              res.saves.Reflex += r;
-            } else if (/^Will\b/i.test(clean)) {
-              res.saves.Will += r;
-            } else if (typeof SKILLS_LIST !== 'undefined' && SKILLS_LIST.some(s => s.name.toLowerCase() === clean.toLowerCase())) {
-              const sk = SKILLS_LIST.find(s => s.name.toLowerCase() === clean.toLowerCase());
-              const skName = sk ? sk.name : clean;
-              res.skills[skName] = (res.skills[skName] || 0) + r;
-            } else {
-              res.feats[clean] = (res.feats[clean] || 0) + r;
+          if (/^Strength\b/i.test(clean) || clean === "STR" || clean.includes("(STR)")) {
+            res.abilities.STR += r;
+          } else if (/^Dexterity\b/i.test(clean) || clean === "DEX" || clean.includes("(DEX)")) {
+            res.abilities.DEX += r;
+          } else if (/^Constitution\b/i.test(clean) || clean === "CON" || clean.includes("(CON)")) {
+            res.abilities.CON += r;
+          } else if (/^Intelligence\b/i.test(clean) || clean === "INT" || clean.includes("(INT)")) {
+            res.abilities.INT += r;
+          } else if (/^Wisdom\b/i.test(clean) || clean === "WIS" || clean.includes("(WIS)")) {
+            res.abilities.WIS += r;
+          } else if (/^Charisma\b/i.test(clean) || clean === "CHA" || clean.includes("(CHA)")) {
+            res.abilities.CHA += r;
+          } else if (/^Attack\b/i.test(clean) || clean === "ATK") {
+            res.combat.ATK += r;
+          } else if (/^Defense\b/i.test(clean) || clean === "DEF") {
+            res.combat.DEF += r;
+          } else if (/^Toughness\b/i.test(clean)) {
+            res.saves.Toughness += r;
+          } else if (/^Fortitude\b/i.test(clean)) {
+            res.saves.Fortitude += r;
+          } else if (/^Reflex\b/i.test(clean)) {
+            res.saves.Reflex += r;
+          } else if (/^Will\b/i.test(clean)) {
+            res.saves.Will += r;
+          } else if (typeof SKILLS_LIST !== 'undefined' && SKILLS_LIST.some(s => s.name.toLowerCase() === clean.toLowerCase())) {
+            const sk = SKILLS_LIST.find(s => s.name.toLowerCase() === clean.toLowerCase());
+            const skName = sk ? sk.name : clean;
+            res.skills[skName] = (res.skills[skName] || 0) + r;
+          } else if (this.houseRules && this.houseRules.enhancedTraitBoostsEffects && typeof POWER_EFFECTS_LIST !== 'undefined' && POWER_EFFECTS_LIST.some(p => p.name.toLowerCase() === clean.toLowerCase())) {
+            const pwr = POWER_EFFECTS_LIST.find(p => p.name.toLowerCase() === clean.toLowerCase());
+            const pwrName = pwr ? pwr.name : clean;
+            res.powers[pwrName] = (res.powers[pwrName] || 0) + r;
+          } else {
+            res.feats[clean] = (res.feats[clean] || 0) + r;
+          }
+        };
+
+        if ((eff.effectName === "Enhanced Trait" || eff.effectName === "Enhance Trait") && eff.subPowers) {
+          eff.subPowers.forEach(applySub);
+        }
+
+        // Active Container / Battle Form contained traits
+        if (CharacterModel.isContainerEffect(eff) && eff.formActive !== false && Array.isArray(eff.containedPowers)) {
+          eff.containedPowers.forEach(cp => {
+            if (cp.type === "trait" || cp.isTrait || (!cp.effectName && cp.name)) {
+              applySub(cp);
+            } else if (cp.effectName === "Enhanced Trait" && Array.isArray(cp.subPowers)) {
+              cp.subPowers.forEach(applySub);
             }
           });
         }
@@ -318,6 +389,7 @@ class CharacterModel {
 
   getFeatMaxRank(feat) {
     if (!feat) return 20;
+    if (feat.ranked === false) return 1;
     if (feat.maxRanks === "pl") return this.powerLevel;
     if (feat.maxRanks === "plHalf") return Math.ceil(this.powerLevel / 2);
     return typeof feat.maxRanks === "number" ? feat.maxRanks : 20;
@@ -325,6 +397,24 @@ class CharacterModel {
 
   getAdvantageMaxRank(adv) {
     return this.getFeatMaxRank(adv);
+  }
+
+  removeFeat(featName) {
+    if (this.feats && this.feats[featName] !== undefined) {
+      delete this.feats[featName];
+    }
+    if (this.featDetails && this.featDetails[featName] !== undefined) {
+      delete this.featDetails[featName];
+    }
+  }
+
+  removeSkill(skillName) {
+    if (this.skills && this.skills[skillName] !== undefined) {
+      delete this.skills[skillName];
+    }
+    if (this.skillDetails && this.skillDetails[skillName] !== undefined) {
+      delete this.skillDetails[skillName];
+    }
   }
 
   get advantageLimitsCheck() {
@@ -341,6 +431,26 @@ class CharacterModel {
 
   get activePowers() {
     return (typeof window !== 'undefined' && window.activePowerContext === 'blueprints') ? this.blueprints : this.powers;
+  }
+
+  static isContainerEffect(eff) {
+    if (!eff) return false;
+    const name = (eff.effectName || eff.name || "").trim();
+    return name === "Battle Form" || name === "Container" || name.includes("Alternate Form") || !!eff.isContainer;
+  }
+
+  static getContainerPool(eff) {
+    if (!eff) return 0;
+    const rank = Math.max(1, parseInt(eff.rank) || 1);
+    const name = (eff.effectName || eff.name || "").trim();
+    if (name === "Battle Form") {
+      let pool = rank * 5;
+      if (eff.modifiers && eff.modifiers.some(m => m.name && m.name.includes("Second Stage"))) {
+        pool += rank * 3;
+      }
+      return pool;
+    }
+    return rank * 5;
   }
 
   // --- 2nd Edition progression formulas ---
@@ -406,13 +516,13 @@ class CharacterModel {
       let totalSubCost = 0;
       let totalRank = 0;
       
-      if (effect.effectName === "Summon" || effect.effectName === "Illusion") {
+      if (effect.effectName === "Summon" || effect.effectName === "Illusion" || effect.effectName === "Battle Form" || effect.effectName === "Container" || (effect.name && effect.name.includes("Alternate Form"))) {
         totalRank = parseInt(effect.rank) || 1;
         totalSubCost = (parseInt(effect.rank) || 1) * pBaseCost;
       } else if (effect.effectName === "Morph") {
         totalRank = parseInt(effect.rank) || 1;
         totalSubCost = (parseInt(effect.rank) || 1) * pBaseCost;
-      } else if (effect.effectName === "Variable" || effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait" || effect.effectName === "Movement" || effect.effectName === "Enhanced Movement" || effect.effectName === "Immunity" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses" || effect.effectName === "Comprehend") {
+      } else if (effect.effectName === "Variable" || effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait" || effect.effectName === "Movement" || effect.effectName === "Enhanced Movement" || effect.effectName === "Immunity" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses" || effect.effectName === "Super-Senses" || effect.effectName === "Super-Movement" || effect.effectName === "Comprehend") {
         effect.subPowers.forEach(sub => {
           let sRank = parseInt(sub.rank) || 1;
           totalRank += sRank;
@@ -429,17 +539,25 @@ class CharacterModel {
               });
           }
           let sRate = sBase + sPerRank;
-          if (sRate < 1) sRate = 1;
-          let sCost = (sRate * sRank) + sFlat;
+          let sCost = 0;
+          if (sRate >= 1 || effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait") {
+            sCost = (sRate * sRank) + sFlat;
+          } else {
+            const ranksPerPoint = 2 - sRate;
+            sCost = Math.ceil(sRank / (ranksPerPoint > 1 ? ranksPerPoint : 2)) + sFlat;
+          }
           
           if (sRemovable > 0) {
               let discount = Math.floor(sCost / 5) * sRemovable;
               sCost -= discount;
           }
 
-          if (sCost < 1) sCost = 1;
+          if (sCost < 1 && (effect.effectName !== "Enhanced Trait" && effect.effectName !== "Enhance Trait")) sCost = 1;
           totalSubCost += sCost;
         });
+        if (effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait") {
+          totalSubCost = Math.ceil(totalSubCost);
+        }
       }
       
       effect.rank = totalRank || 1;
@@ -455,7 +573,15 @@ class CharacterModel {
           });
       }
 
-      let finalCost = totalSubCost + (pPerRank * effect.rank) + pFlat;
+      let parentBaseRate = effect.rank > 0 ? (totalSubCost / effect.rank) : 1;
+      let netParentRate = parentBaseRate + pPerRank;
+      let finalCost = 0;
+      if (netParentRate >= 1 || effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait") {
+        finalCost = totalSubCost + (pPerRank * effect.rank) + pFlat;
+      } else {
+        const ranksPerPoint = 2 - Math.round(netParentRate);
+        finalCost = Math.ceil(effect.rank / (ranksPerPoint > 1 ? ranksPerPoint : 2)) + pFlat;
+      }
       if (pRemovable > 0) finalCost -= Math.floor(finalCost / 5) * pRemovable;
       return finalCost < 1 ? 1 : finalCost;
 
@@ -471,8 +597,15 @@ class CharacterModel {
           });
       }
       let netRate = pBaseCost + pPerRank;
-      if (netRate < 1) netRate = 1;
-      let finalCost = (netRate * (parseInt(effect.rank)||1)) + pFlat;
+      let rank = parseInt(effect.rank) || 1;
+      let baseCostTotal = 0;
+      if (netRate >= 1) {
+        baseCostTotal = netRate * rank;
+      } else {
+        const ranksPerPoint = 2 - netRate;
+        baseCostTotal = Math.ceil(rank / (ranksPerPoint > 1 ? ranksPerPoint : 2));
+      }
+      let finalCost = baseCostTotal + pFlat;
       if (pRemovable > 0) finalCost -= Math.floor(finalCost / 5) * pRemovable;
       return finalCost < 1 ? 1 : finalCost;
     }
@@ -545,6 +678,21 @@ class CharacterModel {
     return this.calculateEffectCost(power);
   }
 
+  calculateContainedCost(effect) {
+    if (!effect || !Array.isArray(effect.containedPowers)) return 0;
+    let total = 0;
+    effect.containedPowers.forEach(cp => {
+      if (cp.cost !== undefined && cp.cost !== null) {
+        total += Number(cp.cost) || 0;
+      } else if (cp.effectName) {
+        total += this.calculateEffectCost(cp);
+      } else {
+        total += Number(cp.rank) || 1;
+      }
+    });
+    return total;
+  }
+
   // Aggregated benefits from active power effects
   get powerTraitModifiers() {
     let protectionToughness = 0;
@@ -566,6 +714,18 @@ class CharacterModel {
           if (p.effectName === "Flight") flightRank = (flightRank === null ? rank : Math.max(flightRank, rank));
           if (p.effectName === "Swimming") swimRank += rank;
           if (p.effectName === "Lifting") extraLifting += rank;
+
+          if (CharacterModel.isContainerEffect(p) && p.formActive !== false && Array.isArray(p.containedPowers)) {
+            p.containedPowers.forEach(cp => {
+              const cRank = Number(cp.rank) || 0;
+              const cpName = cp.effectName || cp.name;
+              if (cpName === "Protection") protectionToughness += cRank;
+              if (cpName === "Speed") speedBonus += cRank;
+              if (cpName === "Flight") flightRank = (flightRank === null ? cRank : Math.max(flightRank, cRank));
+              if (cpName === "Swimming") swimRank += cRank;
+              if (cpName === "Lifting" || cpName === "Super-Strength") extraLifting += cRank;
+            });
+          }
         });
       });
     }
@@ -657,8 +817,9 @@ class CharacterModel {
     
     // Defensive Roll is lost when flat-footed unless the character has Uncanny Dodge
     const flatDefensiveRoll = hasUncannyDodge ? defensiveRollRanks : 0;
-    const toughness = (con === null) ? 0 : (con + defensiveRollRanks + (effFeats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0));
-    const flatFootedToughness = (con === null) ? 0 : (con + flatDefensiveRoll + (effFeats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0));
+    const baseConToughness = (con === null) ? (this.purchasedResistances.Toughness || 0) : con;
+    const toughness = baseConToughness + defensiveRollRanks + (effFeats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0);
+    const flatFootedToughness = baseConToughness + flatDefensiveRoll + (effFeats["Tough"] || 0) + (pMods.protectionToughness || 0) + (sizeData.toughness || 0);
 
     const will = (wis === null) ? null : (wis + (this.purchasedResistances.Will || 0) + (pMods.enhancedWill || 0) + (ironWillRanks * 2));
     const knockback = -Math.floor(toughness / 2);
@@ -700,11 +861,21 @@ class CharacterModel {
 
   get powerPointsSummary() {
     let abilityPP = 0;
-    for (const key of Object.keys(this.abilities)) {
-      if (this.absentAbilities[key]) {
-        abilityPP -= 10;
-      } else {
-        abilityPP += (this.abilities[key] * 2);
+    if (this.isMecha) {
+      // Mecha & Manga rules: Mecha only purchase STR and DEX (and mental scores if AI equipped)
+      abilityPP += ((this.abilities.STR || 0) * 2) + ((this.abilities.DEX || 0) * 2);
+      if (this.hasAI) {
+        if (!this.absentAbilities.INT) abilityPP += ((this.abilities.INT || 0) * 2);
+        if (!this.absentAbilities.WIS) abilityPP += ((this.abilities.WIS || 0) * 2);
+        if (!this.absentAbilities.CHA) abilityPP += ((this.abilities.CHA || 0) * 2);
+      }
+    } else {
+      for (const key of Object.keys(this.abilities)) {
+        if (this.absentAbilities[key]) {
+          abilityPP -= 10;
+        } else {
+          abilityPP += (this.abilities[key] * 2);
+        }
       }
     }
 
@@ -712,7 +883,8 @@ class CharacterModel {
 
     const resistancePP = (this.purchasedResistances.Reflex || 0) +
                          (this.purchasedResistances.Fortitude || 0) +
-                         (this.purchasedResistances.Will || 0);
+                         (this.purchasedResistances.Will || 0) +
+                         (this.purchasedResistances.Toughness || 0);
 
     let totalSkillRanks = 0;
     for (const rank of Object.values(this.skills)) {
@@ -744,7 +916,8 @@ class CharacterModel {
       feats: featsPP,
       powers: powersPP,
       totalSpent: totalSpent,
-      remaining: remaining
+      remaining: remaining,
+      pointUnit: this.isMecha ? "MP" : "PP"
     };
   }
 

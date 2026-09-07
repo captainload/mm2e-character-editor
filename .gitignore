@@ -34,5 +34,7 @@ update_descriptions.js
 
 # Extracted character portfolio folders
 Doctor_Midnight_extracted/
+_POR/
+temp_dm/
 *.stock
 *.por

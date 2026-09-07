@@ -342,6 +342,12 @@ char.calculateTotalPowerCost = function(powerContainer) {
 };
 char.calculatePowerCost = char.calculateTotalPowerCost;
 
+window.invalidateContainerDeclaredCost = function(pIdx) {
+  if (typeof char !== 'undefined' && char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].declaredCost !== undefined) {
+    delete char.activePowers[pIdx].declaredCost;
+  }
+};
+
 window.getMaxPowerRank = function(effect, subPower) {
   if (subPower) {
      let type = subPower.type || subPower.name || "";
@@ -3528,6 +3534,7 @@ window.saveSkillMastery = function(modal) {
 
 window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = false) {
   if (!char.activePowers[pIdx] || !char.activePowers[pIdx].effects[eIdx]) return;
+  window.invalidateContainerDeclaredCost(pIdx);
   const effect = char.activePowers[pIdx].effects[eIdx];
 
   const targetProfile = profileName || "";
@@ -3670,6 +3677,7 @@ window.toggleAllProfiles = function(pIdx, eIdx, isChecked) {
 
 window.updateEffectAssociation = function(pIdx, eIdx, val) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx]) {
+      window.invalidateContainerDeclaredCost(pIdx);
       const container = char.activePowers[pIdx];
       
       if (val === 'primary') {
@@ -5274,6 +5282,7 @@ function buildPowersUI() {
 window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
   const sel = document.getElementById(selectId);
   if (!sel || !sel.value || sel.value.startsWith("- Select")) return;
+  window.invalidateContainerDeclaredCost(pIdx);
   const optChoice = sel.value;
   const effect = char.activePowers[pIdx].effects[eIdx];
 
@@ -5358,6 +5367,7 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
 window.addSubPowerMeta = function(pIdx, eIdx, subIdx, selectId) {
   const sel = document.getElementById(selectId);
   if (!sel || !sel.value || sel.value.startsWith("- Select") || sel.value.startsWith("- None")) return;
+  window.invalidateContainerDeclaredCost(pIdx);
   const metaName = sel.value;
   const effect = char.activePowers[pIdx].effects[eIdx];
 
@@ -5416,6 +5426,7 @@ window.addSubPowerMeta = function(pIdx, eIdx, subIdx, selectId) {
 
 window.removeSubPower = function(pIdx, eIdx, subIdx) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].subPowers) {
+    window.invalidateContainerDeclaredCost(pIdx);
     char.activePowers[pIdx].effects[eIdx].subPowers.splice(subIdx, 1);
     
     let maxR = window.getMaxPowerRank(char.activePowers[pIdx].effects[eIdx]);
@@ -5431,6 +5442,7 @@ window.removeSubPower = function(pIdx, eIdx, subIdx) {
 
 window.stepSubPowerRank = function(pIdx, eIdx, subIdx, delta, minVal, maxVal) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].subPowers && char.activePowers[pIdx].effects[eIdx].subPowers[subIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     let sub = char.activePowers[pIdx].effects[eIdx].subPowers[subIdx];
     let val = (parseInt(sub.rank) || 1) + delta;
     if (minVal !== undefined && val < minVal) val = minVal;
@@ -5445,6 +5457,7 @@ window.stepSubPowerRank = function(pIdx, eIdx, subIdx, delta, minVal, maxVal) {
 window.addSubPowerModifier = function(pIdx, eIdx, subIdx, selectId, category) {
   const sel = document.getElementById(selectId);
   if (!sel || !sel.value) return;
+  window.invalidateContainerDeclaredCost(pIdx);
   const modName = sel.value;
 
   let modData = POWER_MODIFIERS_LIST.find(m => m.name === modName) || { name: modName, cost: 1, costType: "flat", category: category };
@@ -5467,6 +5480,7 @@ window.addSubPowerModifier = function(pIdx, eIdx, subIdx, selectId, category) {
 
 window.stepSubPowerModifierRank = function(pIdx, eIdx, subIdx, modIdx, delta, minVal, maxVal) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].subPowers && char.activePowers[pIdx].effects[eIdx].subPowers[subIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     let sMod = char.activePowers[pIdx].effects[eIdx].subPowers[subIdx].modifiers[modIdx];
     if (sMod) {
        let val = (parseInt(sMod.ranks) || 1) + delta;
@@ -5482,6 +5496,7 @@ window.stepSubPowerModifierRank = function(pIdx, eIdx, subIdx, modIdx, delta, mi
 
 window.removeSubPowerModifier = function(pIdx, eIdx, subIdx, modIdx) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].subPowers && char.activePowers[pIdx].effects[eIdx].subPowers[subIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     char.activePowers[pIdx].effects[eIdx].subPowers[subIdx].modifiers.splice(modIdx, 1);
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_submod");
     buildPowersUI();
@@ -5492,6 +5507,7 @@ window.removeSubPowerModifier = function(pIdx, eIdx, subIdx, modIdx) {
 window.addAfflictionCondition = function(pIdx, eIdx, degKey, selectId) {
     const sel = document.getElementById(selectId);
     if(!sel || !sel.value || sel.value.startsWith("-")) return;
+    window.invalidateContainerDeclaredCost(pIdx);
     if(!char.activePowers[pIdx].effects[eIdx].options) char.activePowers[pIdx].effects[eIdx].options = {};
     char.activePowers[pIdx].effects[eIdx].options[degKey] = sel.value;
     sel.selectedIndex = 0;
@@ -5502,6 +5518,7 @@ window.addAfflictionCondition = function(pIdx, eIdx, degKey, selectId) {
 
 window.removeAfflictionCondition = function(pIdx, eIdx, degKey) {
     if(char.activePowers[pIdx].effects[eIdx].options) {
+        window.invalidateContainerDeclaredCost(pIdx);
         char.activePowers[pIdx].effects[eIdx].options[degKey] = "";
         if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_affliction");
         buildPowersUI();
@@ -5697,6 +5714,7 @@ window.resetEffect = function(pIdx, eIdx) {
 
 window.addEffectToPower = function(pIdx) {
     if (char.activePowers[pIdx]) {
+        window.invalidateContainerDeclaredCost(pIdx);
         let assoc = "primary";
         if (char.activePowers[pIdx].effects.length > 0) {
             assoc = "alternate";
@@ -5890,6 +5908,7 @@ window.updateEffectDirect = function(pIdx, eIdx, value, skipHistory = false) {
 
 window.updatePowerProp = function(pIdx, eIdx, prop, value) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     if (prop === 'rank') {
       let val = parseInt(value) || 1;
       let effect = char.activePowers[pIdx].effects[eIdx];
@@ -5908,6 +5927,7 @@ window.updatePowerProp = function(pIdx, eIdx, prop, value) {
 
 window.stepEffectRank = function(pIdx, eIdx, delta) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     let effect = char.activePowers[pIdx].effects[eIdx];
     let maxRank = window.getMaxPowerRank(effect);
     
@@ -5943,6 +5963,7 @@ window.deletePowerContainer = function(index) {
 
 window.deleteEffect = function(pIdx, eIdx) {
     if (char.activePowers[pIdx] && char.activePowers[pIdx].effects) {
+        window.invalidateContainerDeclaredCost(pIdx);
         char.activePowers[pIdx].effects.splice(eIdx, 1);
         if (char.activePowers[pIdx].effects.length === 0) {
             char.activePowers.splice(pIdx, 1);
@@ -5958,6 +5979,7 @@ window.deleteEffect = function(pIdx, eIdx) {
 window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
   const sel = document.getElementById(selectElemId);
   if (!sel || !sel.value) return;
+  window.invalidateContainerDeclaredCost(pIdx);
   const modName = sel.value;
   const effect = char.activePowers[pIdx].effects[eIdx];
 
@@ -5997,6 +6019,7 @@ window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
 
 window.stepModifierRank = function(pIdx, eIdx, modIdx, delta, minVal, maxVal) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].modifiers && char.activePowers[pIdx].effects[eIdx].modifiers[modIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     let val = (parseInt(char.activePowers[pIdx].effects[eIdx].modifiers[modIdx].ranks) || 1) + delta;
     if (minVal !== undefined && val < minVal) val = minVal;
     if (maxVal !== undefined && val > maxVal) val = maxVal;
@@ -6009,6 +6032,7 @@ window.stepModifierRank = function(pIdx, eIdx, modIdx, delta, minVal, maxVal) {
 
 window.removeModifier = function(pIdx, eIdx, modIdx) {
   if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].modifiers) {
+    window.invalidateContainerDeclaredCost(pIdx);
     char.activePowers[pIdx].effects[eIdx].modifiers.splice(modIdx, 1);
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_modifier");
     buildPowersUI();
@@ -6038,6 +6062,7 @@ window.addContainedPowerToEffect = function(pIdx, eIdx, selectElemId) {
   if (!sel || !sel.value) return;
   const val = sel.value;
   if (!char.activePowers || !char.activePowers[pIdx] || !char.activePowers[pIdx].effects || !char.activePowers[pIdx].effects[eIdx]) return;
+  window.invalidateContainerDeclaredCost(pIdx);
   const effect = char.activePowers[pIdx].effects[eIdx];
   if (!effect.containedPowers) effect.containedPowers = [];
 
@@ -6075,6 +6100,7 @@ window.addContainedPowerToEffect = function(pIdx, eIdx, selectElemId) {
 
 window.stepContainedPowerRank = function(pIdx, eIdx, cpIdx, delta) {
   if (char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].effects && char.activePowers[pIdx].effects[eIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     const effect = char.activePowers[pIdx].effects[eIdx];
     if (effect.containedPowers && effect.containedPowers[cpIdx]) {
       const cp = effect.containedPowers[cpIdx];
@@ -6091,6 +6117,7 @@ window.stepContainedPowerRank = function(pIdx, eIdx, cpIdx, delta) {
 
 window.removeContainedPower = function(pIdx, eIdx, cpIdx) {
   if (char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].effects && char.activePowers[pIdx].effects[eIdx]) {
+    window.invalidateContainerDeclaredCost(pIdx);
     const effect = char.activePowers[pIdx].effects[eIdx];
     if (effect.containedPowers && effect.containedPowers[cpIdx]) {
       effect.containedPowers.splice(cpIdx, 1);

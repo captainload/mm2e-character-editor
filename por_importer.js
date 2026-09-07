@@ -1041,18 +1041,26 @@
 
     // 5. Feats (Excluding feats chained from powers to prevent double-charging)
     const chainedFeatNames = new Set();
+    function scanChainedFeatsRecursively(p) {
+      const cfCont = getDirectChild(p, "chainedfeats");
+      if (cfCont) {
+        getDirectChildren(cfCont, "chainedfeat").forEach(cf => {
+          const cfName = cf.getAttribute("name");
+          if (cfName) chainedFeatNames.add(cfName.trim());
+        });
+      }
+      const otherContainer = getDirectChild(p, "otherpowers");
+      if (otherContainer) {
+        getDirectChildren(otherContainer, "power").forEach(scanChainedFeatsRecursively);
+      }
+      const altContainer = getDirectChild(p, "alternatepowers");
+      if (altContainer) {
+        getDirectChildren(altContainer, "power").forEach(scanChainedFeatsRecursively);
+      }
+    }
     const powersContainer = getDirectChild(charNode, "powers");
     if (powersContainer) {
-      const allPowers = getDirectChildren(powersContainer, "power");
-      allPowers.forEach(p => {
-        const cfCont = getDirectChild(p, "chainedfeats");
-        if (cfCont) {
-          getDirectChildren(cfCont, "chainedfeat").forEach(cf => {
-            const cfName = cf.getAttribute("name");
-            if (cfName) chainedFeatNames.add(cfName.trim());
-          });
-        }
-      });
+      getDirectChildren(powersContainer, "power").forEach(scanChainedFeatsRecursively);
     }
 
     const featsContainer = getDirectChild(charNode, "feats");

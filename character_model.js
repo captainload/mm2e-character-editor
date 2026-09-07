@@ -615,6 +615,11 @@ class CharacterModel {
   calculateTotalPowerCost(powerContainer) {
     if (!powerContainer || !powerContainer.effects || powerContainer.effects.length === 0) return 0;
     
+    // If the container has an explicit declaredCost from Hero Lab, respect it
+    if (powerContainer.declaredCost !== undefined && powerContainer.declaredCost !== null && !isNaN(powerContainer.declaredCost) && powerContainer.declaredCost >= 0) {
+      return powerContainer.declaredCost;
+    }
+
     let slots = [];
     let currentSlot = null;
     
@@ -655,11 +660,13 @@ class CharacterModel {
       let maxPrimaryCost = slot.combinedCost;
       let alts = slot.alts || [];
       
-      alts.forEach(alt => {
-        if (alt.combinedCost > maxPrimaryCost) {
-          maxPrimaryCost = alt.combinedCost;
-        }
-      });
+      if (maxPrimaryCost <= 0 && alts.length > 0) {
+        alts.forEach(alt => {
+          if (alt.combinedCost > maxPrimaryCost) {
+            maxPrimaryCost = alt.combinedCost;
+          }
+        });
+      }
       
       let slotTotal = maxPrimaryCost;
       alts.forEach(alt => {

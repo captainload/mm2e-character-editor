@@ -78,12 +78,12 @@ const MODIFIER_CATEGORY_MAP = {
 
 const SENSE_TYPE_MAP = {
   "Normal Sight": "Visual", "Normal Vision": "Visual", "Darkvision": "Visual", "Dark-Vision": "Visual", "Infravision": "Visual", "Infra-Vision": "Visual", 
-  "Low-Light Vision": "Visual", "Microscopic Vision": "Visual", "Ultravision": "Visual", "Ultra-Vision": "Visual", "X-Ray Vision": "Visual",
+  "Low-Light Vision": "Visual", "Microscopic Vision": "Visual", "Ultravision": "Visual", "Ultra-Vision": "Visual", "X-Ray Vision": "Visual", "Penetrates Concealment (X-Ray)": "Visual",
   "Normal Hearing": "Auditory", "Ultra-Hearing": "Auditory",
   "Normal Smell": "Olfactory", "Normal Scent": "Olfactory", "Normal Taste": "Olfactory", "Scent": "Olfactory", "Tracking": "Olfactory",
-  "Normal Touch": "Tactile", "Tremorsense": "Tactile",
+  "Normal Touch": "Tactile", "Tremorsense": "Tactile", "Blindsight": "Tactile",
   "Normal Radio": "Radio", "Radio": "Radio",
-  "Normal Mental": "Mental", "Awareness": "Mental", "Danger Sense": "Mental", "Postcognition": "Mental", "Precognition": "Mental", "Time Sense": "Mental", "Communication Link": "Mental"
+  "Normal Mental": "Mental", "Awareness": "Mental", "Danger Sense": "Mental", "Postcognition": "Mental", "Precognition": "Mental", "Time Sense": "Mental", "Communication Link": "Mental", "Direction Sense": "Mental", "Distance Sense": "Mental", "Detect": "Mental"
 };
 
 
@@ -282,8 +282,14 @@ char.calculateEffectCost = function(effect) {
       if (effect.effectName === "Enhanced Trait") {
         totalSubCost = Math.ceil(totalSubCost);
       }
+      let subTotalRank = totalRank;
+      totalRank = Math.max(subTotalRank, parseInt(effect.rank) || 1);
+      if (totalRank > subTotalRank) {
+        totalSubCost += (totalRank - subTotalRank) * pBaseCost;
+      }
     } else {
-      totalRank = 1; 
+      totalRank = parseInt(effect.rank) || 1; 
+      totalSubCost = totalRank * pBaseCost;
     }
     
     effect.rank = totalRank || 1;
@@ -373,10 +379,10 @@ window.getMaxPowerRank = function(effect, subPower) {
      if (type.includes("Dimensional")) return 3;
      
      if (effect.effectName === "Immunity") {
-         if (type.includes("Custom Immunity")) return 30;
+         if (type.includes("Custom Immunity")) return 80;
          const rMatch = type.match(/\[(\d+)\s*ranks?\]/i) || (subPower.name && subPower.name.match(/\[(\d+)\s*ranks?\]/i));
          if (rMatch) return parseInt(rMatch[1]);
-         return 30;
+         return 80;
      }
 
      if (type.includes("Custom Sense")) return 20;
@@ -404,16 +410,27 @@ window.getMaxPowerRank = function(effect, subPower) {
      return 4;
   }
 
+  let subTotalRank = 0;
+  if (effect.subPowers && effect.subPowers.length > 0) {
+      effect.subPowers.forEach(sub => {
+          subTotalRank += (parseInt(sub.rank) || 1);
+      });
+  }
+
+  if (nameToCheck === "Immunity") {
+      return Math.max(subTotalRank, 80);
+  }
+
   if (effect.subPowers && effect.subPowers.length > 0) {
      let highest = 0;
      let hasUncapped = false;
      effect.subPowers.forEach(sub => {
          let cap = window.getMaxPowerRank(effect, sub);
-         if (cap === 20) hasUncapped = true;
+         if (cap >= 20) hasUncapped = true;
          if (cap > highest) highest = cap;
      });
-     if (hasUncapped) return 20;
-     return highest > 0 ? highest : 20;
+     if (hasUncapped) return Math.max(subTotalRank, 20);
+     return Math.max(subTotalRank, highest > 0 ? highest : 20);
   }
 
   return 20;
@@ -4534,15 +4551,18 @@ function buildPowersUI() {
             }
 
             let isImmunityLocked = effect.effectName === "Immunity" && !sType.includes("Custom");
+            const rankedSenses = ["Extended", "Rapid", "Tracking", "Microscopic Vision", "Radius", "Custom"];
+            let isSenseLocked = effect.effectName === "Super-Senses" && !rankedSenses.some(rs => sType.includes(rs));
+            let isSubRankLocked = isImmunityLocked || isSenseLocked;
             let isFlatAdvantage = effect.effectName === "Enhanced Trait" && typeof ADVANTAGES_LIST !== 'undefined' && ADVANTAGES_LIST.some(a => a.name === sType && !(a.hasRanks || a.ranked));
             let allowsRanks = (sub.costType === "per_rank") || (effect.effectName === "Enhanced Trait" && !isFlatAdvantage);
 
-            let stepperControls = subMaxR > 1 && allowsRanks && !isImmunityLocked ? `
+            let stepperControls = subMaxR > 1 && allowsRanks && !isSubRankLocked ? `
               <button type="button" class="stepper-btn stepper-dec" style="width: 26px !important; min-width: 26px !important;" onclick="stepSubPowerRank(${pIdx}, ${eIdx}, ${sIdx}, -1, 1, ${subMaxR})">−</button>
               <input type="number" class="stepper-input" style="width: 38px !important; min-width: 38px !important; font-size: var(--font-size-minor-controls);" value="${sRank}" min="1" max="${subMaxR}" readonly>
               <button type="button" class="stepper-btn stepper-inc" style="width: 26px !important; min-width: 26px !important;" onclick="stepSubPowerRank(${pIdx}, ${eIdx}, ${sIdx}, 1, 1, ${subMaxR})">+</button>
             ` : `
-              <input type="number" class="stepper-input" style="width: 50px !important; min-width: 50px !important; font-size: var(--font-size-minor-controls); background: transparent; border: none;" value="${sRank}" readonly title="${isImmunityLocked ? 'Rank Locked by Tier' : (isFlatAdvantage ? 'Rank 1 (Standard Feat)' : 'Rank Locked')}">
+              <input type="number" class="stepper-input" style="width: 50px !important; min-width: 50px !important; font-size: var(--font-size-minor-controls); background: transparent; border: none;" value="${sRank}" readonly title="${isSubRankLocked ? 'Rank Locked by Tier' : (isFlatAdvantage ? 'Rank 1 (Standard Feat)' : 'Rank Locked')}">
             `;
 
             let cardStyle = "background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;";
@@ -4879,7 +4899,7 @@ function buildPowersUI() {
         let rankStepperHtml = "";
         if (effect.effectName === "") {
             rankStepperHtml = `<span class="secondary-text">Select an effect first</span>`;
-        } else if (isComposite) {
+        } else if (effect.effectName === "Enhanced Trait") {
           rankStepperHtml = `
             <div class="stepper-group" style="background: var(--bg-app); width: 60px; min-width: 60px;">
               <input type="number" class="stepper-input" style="width: 100% !important; max-width: none !important; background: transparent !important; border: none !important; color: var(--text-muted);" value="${effect.rank}" readonly title="Auto-calculated from options">
@@ -5314,7 +5334,7 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
   let cleanName = optChoice.split(" [")[0];
   let coreName = cleanName.split(" (")[0]; 
   
-  if (effect.effectName === "Immunity" || effect.effectName === "Enhanced Trait") {
+  if (effect.effectName === "Immunity" || effect.effectName === "Super-Senses" || effect.effectName === "Enhanced Trait") {
       coreName = cleanName;
   } else {
       if (cleanName.includes("Dimensional Travel")) coreName = "Dimensional Travel";
@@ -5333,13 +5353,19 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
   }
 
   if (effect.effectName === "Immunity") {
-      const rankMatch = optChoice.match(/\[(\d+)\s*ranks?\]/i);
-      if (rankMatch) {
-          r = parseInt(rankMatch[1]);
-      }
-      if (optChoice.includes("Custom Immunity")) {
-          r = 1;
-      }
+      let ptsVal = 1;
+      const match = optChoice.match(/\[(\+?\d+)\+?\s*pts?(?:\/r)?\]/i) || optChoice.match(/\[(\+?\d+)\s*pt/i) || optChoice.match(/\[(\d+)\s*ranks?\]/i);
+      if (match) ptsVal = parseInt(match[1].replace('+', ''));
+      bCost = 1;
+      cType = "per_rank";
+      r = optChoice.includes("/r") ? 1 : ptsVal;
+  } else if (effect.effectName === "Super-Senses") {
+      let ptsVal = 1;
+      const match = optChoice.match(/\[(\+?\d+)\+?\s*pts?(?:\/r)?\]/i) || optChoice.match(/\[(\+?\d+)\s*pt/i) || optChoice.match(/\[(\d+)\s*ranks?\]/i);
+      if (match) ptsVal = parseInt(match[1].replace('+', ''));
+      bCost = 1;
+      cType = "per_rank";
+      r = optChoice.includes("/r") ? 1 : ptsVal;
   } else {
       if (cleanName.includes("Dimensional Travel (1 other)") || cleanName.includes("Space Travel (Solar system)") || cleanName.includes("Wall-Crawling (Speed -1)") || cleanName.includes("Permeate (Speed 0)") || cleanName === "Swinging") r = 2;
       if (cleanName.includes("Dimensional Travel (Related group)") || cleanName.includes("Space Travel (Interstellar)") || cleanName.includes("Permeate (Speed 1)") || cleanName.includes("Wall-Crawling (Full Speed)")) r = 4;
@@ -5358,6 +5384,11 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
     modifiers: [],
     isReduced: isReduced
   });
+
+  let subTotalRank = effect.subPowers.reduce((sum, sp) => sum + (parseInt(sp.rank) || 1), 0);
+  if ((parseInt(effect.rank) || 1) < subTotalRank) {
+      effect.rank = subTotalRank;
+  }
 
   sel.selectedIndex = 0;
   buildPowersUI();
@@ -5913,8 +5944,12 @@ window.updatePowerProp = function(pIdx, eIdx, prop, value) {
       let val = parseInt(value) || 1;
       let effect = char.activePowers[pIdx].effects[eIdx];
       let maxRank = window.getMaxPowerRank(effect);
+      let minRank = 1;
+      if (effect.subPowers && effect.subPowers.length > 0) {
+        minRank = effect.subPowers.reduce((sum, sp) => sum + (parseInt(sp.rank) || 1), 0);
+      }
       if (val > maxRank) val = maxRank;
-      if (val < 1) val = 1;
+      if (val < minRank) val = minRank;
       char.activePowers[pIdx].effects[eIdx][prop] = val;
     } else {
       char.activePowers[pIdx].effects[eIdx][prop] = value;
@@ -5930,9 +5965,13 @@ window.stepEffectRank = function(pIdx, eIdx, delta) {
     window.invalidateContainerDeclaredCost(pIdx);
     let effect = char.activePowers[pIdx].effects[eIdx];
     let maxRank = window.getMaxPowerRank(effect);
+    let minRank = 1;
+    if (effect.subPowers && effect.subPowers.length > 0) {
+      minRank = effect.subPowers.reduce((sum, sp) => sum + (parseInt(sp.rank) || 1), 0);
+    }
     
     let val = (parseInt(effect.rank) || 1) + delta;
-    if (val < 1) val = 1;
+    if (val < minRank) val = minRank;
     if (val > maxRank) val = maxRank;
     
     effect.rank = val;

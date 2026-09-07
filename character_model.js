@@ -558,6 +558,11 @@ class CharacterModel {
         if (effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait") {
           totalSubCost = Math.ceil(totalSubCost);
         }
+        let subTotalRank = totalRank;
+        totalRank = Math.max(subTotalRank, parseInt(effect.rank) || 1);
+        if (totalRank > subTotalRank) {
+          totalSubCost += (totalRank - subTotalRank) * pBaseCost;
+        }
       }
       
       effect.rank = totalRank || 1;

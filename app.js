@@ -2811,6 +2811,51 @@ function setupSessionAndGMHub() {
       updateSilentModeUI();
       syncGMRosterUI();
     });
+
+    SessionNetwork.addEventListener("onRequestCharacterSheet", () => {
+      if (typeof char !== 'undefined' && char) {
+        const hero = window.primaryHero || char;
+        const serialized = hero.serialize();
+        SessionNetwork.sendCharacterSheetData(serialized);
+      }
+    });
+
+    SessionNetwork.addEventListener("onCharacterSheetData", (packet) => {
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.ingestCharacterSheet(packet.playerId, packet.sheet, packet.playerName, packet.characterName);
+        syncGMRosterUI();
+        if (typeof showToast === 'function') {
+          showToast(`Received character sheet for "${packet.characterName}" (${packet.playerName})!`, "success");
+        }
+      }
+    });
+
+    SessionNetwork.addEventListener("onGMPushCharacter", (packet) => {
+      if (packet.sheet) {
+        const timeStr = packet.versionTimestamp ? new Date(packet.versionTimestamp).toLocaleTimeString() : "";
+        const verStr = packet.version ? `v${packet.version}` : "";
+        const msg = `⚠️ GM Pushed Character Sheet Update\n\n` +
+          `The GM has pushed a character sheet revision for "${packet.characterName || 'your character'}" (${verStr} saved at ${timeStr}).\n\n` +
+          `Would you like to restore and load this sheet now? (This will update your editor)`;
+
+        if (confirm(msg)) {
+          applyLoadedCharacter(packet.sheet);
+          if (typeof showToast === 'function') showToast("Character sheet restored from GM revision!", "success");
+        }
+      }
+    });
+
+    SessionNetwork.addEventListener("onGMTransfer", (packet) => {
+      if (typeof CampaignManager !== 'undefined') {
+        const netStatus = (typeof SessionNetwork !== 'undefined' && SessionNetwork.getStatus) ? SessionNetwork.getStatus() : null;
+        if (packet.newGmPlayerId === 'local_player' || (netStatus && packet.newGmPlayerId === netStatus.code)) {
+          alert("👑 You have been designated as the GM for this campaign!");
+        } else {
+          if (typeof showToast === 'function') showToast("GM status was transferred to another player.", "info");
+        }
+        syncGMUI();
+      }
+    });
   }
 
   // 2. Session UI Helpers
@@ -3282,6 +3327,7 @@ function setupSessionAndGMHub() {
     if (!camp) return;
 
     const roster = [];
+    const designatedGMId = CampaignManager.getGMPlayerId();
 
     // Current local hero
     if (char && char.name) {
@@ -3289,6 +3335,8 @@ function setupSessionAndGMHub() {
         id: "local_hero",
         isLocal: true,
         isNPC: false,
+        isGM: designatedGMId === "local_player",
+        sheetHistoryCount: 1,
         playerName: "You (Local Sheet)",
         characterName: char.name,
         powerLevel: char.powerLevel || 10,
@@ -3305,10 +3353,13 @@ function setupSessionAndGMHub() {
     // Connected/Approved Players
     (camp.acceptedPlayers || []).forEach(p => {
       if (p.characterName !== char?.name) {
+        const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
         roster.push({
           id: p.id,
           isLocal: false,
           isNPC: false,
+          isGM: designatedGMId === p.id,
+          sheetHistoryCount: histCount,
           playerName: p.playerName,
           characterName: p.characterName,
           powerLevel: p.characterSummary?.powerLevel || 10,
@@ -3329,6 +3380,8 @@ function setupSessionAndGMHub() {
         id: n.id,
         isLocal: false,
         isNPC: true,
+        isGM: false,
+        sheetHistoryCount: 1,
         playerName: "GM (NPC)",
         characterName: n.name,
         powerLevel: n.powerLevel || 10,
@@ -3357,10 +3410,30 @@ function setupSessionAndGMHub() {
       return `
         <tr style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(220, 38, 38, 0.05)' : 'transparent'};">
           <td style="padding: 8px;">
-            <div style="font-weight: bold; font-size: var(--font-size-labels);">${item.characterName}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">
+            <div class="gm-char-menu-wrapper">
+              <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for Character Sheet &amp; File Operations">
+                ${item.characterName} <span style="font-size: 10px; opacity: 0.7;">▾</span>
+              </button>
+              <div id="gmCharMenu_${item.id}" class="gm-char-dropdown-menu" style="display: none;">
+                ${item.isNPC ? `
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}')">💾 Export NPC (.mm2e)</button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}')">👁️ Load into Editor</button>
+                ` : `
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}')">📜 Version History (${item.sheetHistoryCount || 0})</button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}')">💾 Export Sheet (.mm2e)</button>
+                  ${item.isLocal ? '' : `
+                    <button type="button" class="gm-char-menu-item" onclick="window.gmRequestSheet('${item.id}')">🔄 Request Fresh Sheet</button>
+                    ${!item.isGM ? `
+                      <div class="gm-char-menu-divider"></div>
+                      <button type="button" class="gm-char-menu-item danger" onclick="window.gmTransferGMClick('${item.id}', '${item.playerName.replace(/'/g, "\\'")}', '${item.characterName.replace(/'/g, "\\'")}')">👑 Transfer GM Status</button>
+                    ` : ''}
+                  `}
+                `}
+              </div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
               ${item.isNPC ? '<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #ef4444;">NPC</span>' : '<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7;">PC</span>'}
-              ${item.playerName}
+              ${item.playerName} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold;">👑 GM</span>' : ''}
             </div>
           </td>
           <td style="text-align: center; font-size: 12px;">
@@ -3561,9 +3634,22 @@ function setupSessionAndGMHub() {
 
   if (btnGMNewCamp) {
     btnGMNewCamp.addEventListener("click", () => {
+      if (typeof SessionNetwork !== 'undefined') {
+        const netStatus = SessionNetwork.getStatus();
+        if (netStatus.role === 'CLIENT' && netStatus.status !== 'disconnected') {
+          alert("You cannot create a campaign while logged into or connected to an existing campaign session. Please disconnect from your current session first.");
+          return;
+        }
+        if (netStatus.role === 'HOST' && SessionNetwork.getClientConnections().length > 0) {
+          if (!confirm("You are currently hosting an active campaign with connected players. Creating a new campaign will switch your active campaign. Proceed?")) {
+            return;
+          }
+        }
+      }
+
       const name = prompt("Enter new campaign name:", "New Campaign");
       if (name && typeof CampaignManager !== 'undefined') {
-        const c = CampaignManager.createCampaign(name);
+        const c = CampaignManager.createCampaign(name, null, 'local_player');
         syncGMUI();
         if (typeof showToast === 'function') showToast(`Created campaign ${c.name}!`, "success");
       }
@@ -3606,16 +3692,42 @@ function setupSessionAndGMHub() {
   if (btnGMExport) {
     btnGMExport.addEventListener("click", () => {
       if (typeof CampaignManager === 'undefined') return;
-      const json = CampaignManager.exportCampaign();
-      if (!json) return;
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${CampaignManager.getActiveCampaign()?.code || "campaign"}_backup.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      if (typeof showToast === 'function') showToast("Campaign backup downloaded!", "success");
+      const camp = CampaignManager.getActiveCampaign();
+      if (!camp) return;
+
+      // 1. Check offline players and log explicit notices
+      if (typeof SessionNetwork !== 'undefined') {
+        const connectedClients = SessionNetwork.getClientConnections();
+        (camp.acceptedPlayers || []).forEach(p => {
+          const isOnline = connectedClients.some(c => c.peerId === p.id);
+          if (!isOnline) {
+            const lastVer = (p.sheetHistory && p.sheetHistory.length > 0)
+              ? `v${p.sheetHistory[p.sheetHistory.length - 1].version}`
+              : 'no cached';
+            CampaignManager.addFileOperationLog(`Backup notice: Player "${p.playerName}" (${p.characterName}) is offline; backup contains ${lastVer} sheet history.`, 'offline_notice');
+          }
+        });
+
+        // 2. Command connected remote clients to send their character sheets
+        SessionNetwork.requestCharacterSheets();
+      }
+
+      if (typeof showToast === 'function') showToast("Requesting latest sheets & compiling backup...", "info");
+
+      // Give a brief window (400ms) for local/fast peer sheet replies before packaging file
+      setTimeout(() => {
+        const json = CampaignManager.exportCampaign();
+        if (!json) return;
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${camp.code || "campaign"}_backup.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        if (typeof showToast === 'function') showToast("Campaign backup downloaded!", "success");
+        syncGMUI();
+      }, 400);
     });
   }
 
@@ -3664,6 +3776,373 @@ function setupSessionAndGMHub() {
       syncGMRosterUI();
       if (typeof showToast === 'function') showToast(`Attached ${char.name} as NPC to campaign!`, "success");
     });
+  }
+
+  // --- GM Character Operations & Menu Logic ---
+  window.gmToggleCharMenu = function(event, charId) {
+    if (event) event.stopPropagation();
+    const menuId = `gmCharMenu_${charId}`;
+    const allMenus = document.querySelectorAll(".gm-char-dropdown-menu");
+    allMenus.forEach(m => {
+      if (m.id !== menuId) m.style.display = "none";
+    });
+
+    const targetMenu = document.getElementById(menuId);
+    if (targetMenu) {
+      targetMenu.style.display = targetMenu.style.display === "none" ? "flex" : "none";
+    }
+  };
+
+  // Close menus when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".gm-char-menu-wrapper")) {
+      document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
+    }
+  });
+
+  function downloadCharJson(jsonString, filename) {
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  window.gmExportCharSheet = function(charId) {
+    if (charId === "local_hero") {
+      if (typeof FileManager !== 'undefined' && FileManager.saveHeroAs) {
+        FileManager.saveHeroAs();
+      }
+      return;
+    }
+
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    // NPC check
+    const npc = (camp.npcs || []).find(n => n.id === charId);
+    if (npc) {
+      const payload = JSON.stringify({
+        format: 'MM2E_CHARACTER',
+        version: '1.0',
+        character: npc.characterData || {}
+      }, null, 2);
+      downloadCharJson(payload, `${npc.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mm2e`);
+      if (typeof showToast === 'function') showToast(`Exported ${npc.name} sheet!`, "success");
+      return;
+    }
+
+    // Player check
+    const player = (camp.acceptedPlayers || []).find(p => p.id === charId);
+    if (player) {
+      let sheetToExport = player.characterSheet;
+      if (!sheetToExport && player.sheetHistory && player.sheetHistory.length > 0) {
+        sheetToExport = player.sheetHistory[player.sheetHistory.length - 1].sheet;
+      }
+      if (!sheetToExport) {
+        alert(`No character sheet archived yet for ${player.characterName}. Click "Request Fresh Sheet" first.`);
+        return;
+      }
+      const payload = JSON.stringify(sheetToExport, null, 2);
+      downloadCharJson(payload, `${player.characterName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mm2e`);
+      if (typeof showToast === 'function') showToast(`Exported ${player.characterName} sheet!`, "success");
+    }
+  };
+
+  window.gmLoadNpcToEditor = function(npcId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const npc = (camp?.npcs || []).find(n => n.id === npcId);
+    if (!npc || !npc.characterData) return;
+
+    if (confirm(`Load NPC "${npc.name}" into your character editor? (This will replace the currently loaded sheet)`)) {
+      applyLoadedCharacter(npc.characterData);
+      if (typeof showToast === 'function') showToast(`Loaded NPC "${npc.name}" into editor!`, "success");
+    }
+  };
+
+  window.gmRequestSheet = function(playerId) {
+    if (typeof SessionNetwork === 'undefined') return;
+    SessionNetwork.requestCharacterSheets(playerId);
+    if (typeof showToast === 'function') showToast("Requested character sheet from player...", "info");
+  };
+
+  window.gmTransferGMClick = function(targetPlayerId, playerName, characterName) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    const warnMsg = `⚠️ TRANSFER GM STATUS (ONE-WAY OPERATION)\n\n` +
+      `Are you sure you want to transfer GM authority of campaign "${camp.name}" to:\n` +
+      `Player: ${playerName} (${characterName})?\n\n` +
+      `This is a permanent, ONE-WAY operation. You will surrender host controls and become a regular player in this campaign.`;
+
+    if (confirm(warnMsg)) {
+      const ok = CampaignManager.transferGM(targetPlayerId);
+      if (ok) {
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendGMTransfer(targetPlayerId);
+        }
+        syncGMUI();
+        if (typeof showToast === 'function') {
+          showToast(`GM status transferred to ${playerName}!`, "warning");
+        }
+      }
+    }
+  };
+
+  window.gmOpenCharHistory = function(charId) {
+    const modal = document.getElementById("charHistoryModal");
+    const modalTitle = document.getElementById("charHistoryModalTitle");
+    const summaryBox = document.getElementById("charHistoryHeroSummary");
+    const bodyBox = document.getElementById("charHistoryModalBody");
+    const btnReq = document.getElementById("btnRequestSheetFromPlayer");
+    if (!modal || !bodyBox) return;
+
+    if (charId === "local_hero") {
+      if (modalTitle) modalTitle.textContent = `📜 Version History: ${char?.name || 'Local Hero'}`;
+      if (summaryBox) {
+        summaryBox.innerHTML = `<strong>${char?.name || 'Hero'}</strong> — <em>Active Local Sheet (Current)</em>`;
+      }
+      if (btnReq) btnReq.style.display = "none";
+      bodyBox.innerHTML = `
+        <div class="gm-history-card">
+          <div>
+            <strong>Current Live Sheet</strong><br>
+            <span style="font-size: 11px; color: var(--text-muted);">PL ${char?.powerLevel || 10} • Active in Editor</span>
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="window.gmExportCharSheet('local_hero')">💾 Export .mm2e</button>
+        </div>
+      `;
+      modal.classList.add("active");
+      return;
+    }
+
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+    if (!player) return;
+
+    const isConnected = (typeof SessionNetwork !== 'undefined') ? SessionNetwork.isPeerConnected(player.id) : false;
+
+    if (modalTitle) modalTitle.textContent = `📜 Version History: ${player.characterName}`;
+    if (summaryBox) {
+      summaryBox.innerHTML = `
+        <strong>${player.characterName}</strong> (Player: ${player.playerName}) &nbsp;
+        <span class="badge" style="background: ${isConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(107, 114, 128, 0.2)'}; color: ${isConnected ? '#10b981' : 'var(--text-muted)'}; font-weight: bold;">
+          ${isConnected ? '● Connected / Online' : '○ Offline'}
+        </span>
+      `;
+    }
+
+    if (btnReq) {
+      btnReq.style.display = isConnected ? "inline-block" : "none";
+      btnReq.onclick = () => window.gmRequestSheet(player.id);
+    }
+
+    const history = player.sheetHistory || [];
+
+    if (history.length === 0) {
+      bodyBox.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+          <em>No character sheet revisions archived yet for ${player.characterName}.</em><br>
+          <span style="font-size: 12px;">Sheets are automatically archived when backups are made or when requested.</span>
+        </div>
+      `;
+    } else {
+      bodyBox.innerHTML = [...history].reverse().map(rev => {
+        const dateStr = new Date(rev.timestamp).toLocaleString();
+        return `
+          <div class="gm-history-card">
+            <div>
+              <strong style="font-size: var(--font-size-labels); color: var(--accent-primary);">Revision v${rev.version}</strong>
+              <span style="margin-left: 8px; font-size: 11px; color: var(--text-muted);">${dateStr}</span>
+              <div style="font-size: 12px; margin-top: 2px;">
+                PL ${rev.powerLevel || 10} • Character: ${rev.characterName || player.characterName}
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" style="font-size: 12px; padding: 4px 10px;" ${isConnected ? '' : 'disabled title="Player is currently offline"'} onclick="window.gmPushRevision('${player.id}', ${rev.version})">
+                🚀 Push to Client
+              </button>
+              <button type="button" class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;" onclick="window.gmDownloadRevision('${player.id}', ${rev.version})">
+                💾 Export .mm2e
+              </button>
+              <button type="button" class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;" onclick="window.gmLoadRevisionToEditor('${player.id}', ${rev.version})">
+                👁️ Load to Editor
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    modal.classList.add("active");
+  };
+
+  window.gmPushRevision = function(playerId, version) {
+    if (typeof CampaignManager === 'undefined' || typeof SessionNetwork === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === playerId);
+    if (!player) return;
+
+    const rev = (player.sheetHistory || []).find(r => r.version === version);
+    if (!rev || !rev.sheet) {
+      alert("Revision data not found.");
+      return;
+    }
+
+    if (confirm(`Push Revision v${rev.version} of "${player.characterName}" to player "${player.playerName}"? This will overwrite the player's current active character sheet.`)) {
+      SessionNetwork.sendPushCharacter(player.id, rev.sheet, player.characterName, rev.timestamp, rev.version);
+      CampaignManager.addFileOperationLog(`GM pushed character sheet revision v${rev.version} for "${player.characterName}" to player "${player.playerName}".`, 'sheet_push');
+      if (typeof showToast === 'function') showToast(`Pushed Revision v${rev.version} to ${player.playerName}!`, "success");
+    }
+  };
+
+  window.gmDownloadRevision = function(playerId, version) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === playerId);
+    if (!player) return;
+    const rev = (player.sheetHistory || []).find(r => r.version === version);
+    if (!rev || !rev.sheet) return;
+
+    const payload = JSON.stringify(rev.sheet, null, 2);
+    downloadCharJson(payload, `${player.characterName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_v${version}.mm2e`);
+  };
+
+  window.gmLoadRevisionToEditor = function(playerId, version) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === playerId);
+    if (!player) return;
+    const rev = (player.sheetHistory || []).find(r => r.version === version);
+    if (!rev || !rev.sheet) return;
+
+    if (confirm(`Load Revision v${rev.version} of "${player.characterName}" into your character editor? (This will replace your current sheet)`)) {
+      applyLoadedCharacter(rev.sheet);
+      if (typeof showToast === 'function') showToast(`Loaded Revision v${version} into editor!`, "success");
+    }
+  };
+
+  // --- Campaign File Operations Log UI Viewer ---
+  const btnGMFileLog = document.getElementById("btnGMFileLog");
+  const modalGMFileLog = document.getElementById("campaignFileLogModal");
+  const bodyGMFileLog = document.getElementById("campaignFileLogBody");
+  const txtGMFileLogSearch = document.getElementById("txtCampaignFileLogSearch");
+  const btnExportFileLog = document.getElementById("btnExportCampaignFileLog");
+  const btnClearFileLog = document.getElementById("btnClearCampaignFileLog");
+
+  function renderCampaignFileLog() {
+    if (!bodyGMFileLog || typeof CampaignManager === 'undefined') return;
+    const logs = CampaignManager.getFileOperationsLog();
+    const q = (txtGMFileLogSearch ? txtGMFileLogSearch.value.trim().toLowerCase() : "");
+
+    const filtered = q ? logs.filter(l => l.message.toLowerCase().includes(q) || l.type.toLowerCase().includes(q) || l.timestamp.includes(q)) : logs;
+
+    if (filtered.length === 0) {
+      bodyGMFileLog.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+          <em>${q ? 'No file operations match your search.' : 'No file operations recorded yet.'}</em>
+        </div>
+      `;
+      return;
+    }
+
+    bodyGMFileLog.innerHTML = [...filtered].reverse().map(l => {
+      const timeStr = new Date(l.timestamp).toLocaleString();
+      return `
+        <div class="gm-log-entry">
+          <span class="gm-log-badge ${l.type}">${l.type.replace('_', ' ')}</span>
+          <div style="flex: 1;">
+            <div>${l.message}</div>
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${timeStr}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (btnGMFileLog && modalGMFileLog) {
+    btnGMFileLog.addEventListener("click", () => {
+      renderCampaignFileLog();
+      modalGMFileLog.classList.add("active");
+    });
+  }
+
+  if (txtGMFileLogSearch) {
+    txtGMFileLogSearch.addEventListener("input", renderCampaignFileLog);
+  }
+
+  if (btnExportFileLog) {
+    btnExportFileLog.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const logs = CampaignManager.getFileOperationsLog();
+      const camp = CampaignManager.getActiveCampaign();
+      const txt = logs.map(l => `[${l.timestamp}] [${l.type.toUpperCase()}] ${l.message}`).join('\n');
+      const blob = new Blob([txt], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${camp?.code || "campaign"}_file_operations.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  if (btnClearFileLog) {
+    btnClearFileLog.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      if (confirm("Are you sure you want to clear the Campaign File Operations Log?")) {
+        CampaignManager.clearFileOperationsLog();
+        renderCampaignFileLog();
+        if (typeof showToast === 'function') showToast("File Operations Log cleared.", "info");
+      }
+    });
+  }
+
+  // --- Unsaved Campaign Recovery Check on Startup ---
+  if (typeof CampaignManager !== 'undefined' && CampaignManager.isAutoBackupDirty()) {
+    const meta = CampaignManager.getAutoBackupMeta();
+    const modalRestore = document.getElementById("unsavedSessionRestoreModal");
+    const metaBox = document.getElementById("boxUnsavedRestoreMeta");
+    const btnRestore = document.getElementById("btnConfirmUnsavedRestore");
+    const btnDiscard = document.getElementById("btnDismissUnsavedRestore");
+    const btnCloseRestore = document.getElementById("btnCloseUnsavedRestoreModal");
+
+    if (modalRestore && metaBox && meta) {
+      metaBox.innerHTML = `
+        <strong>Campaign:</strong> ${meta.campaignName || 'Campaign'} (Code: <code>${meta.code || 'code'}</code>)<br>
+        <strong>Last Auto-Saved:</strong> ${new Date(meta.savedAt).toLocaleString()}
+      `;
+      modalRestore.classList.add("active");
+
+      if (btnRestore) {
+        btnRestore.onclick = () => {
+          CampaignManager.restoreAutoBackup();
+          modalRestore.classList.remove("active");
+          syncGMUI();
+          if (typeof showToast === 'function') showToast("Restored unsaved campaign session!", "success");
+        };
+      }
+
+      if (btnDiscard) {
+        btnDiscard.onclick = () => {
+          CampaignManager.clearAutoBackupDirty();
+          modalRestore.classList.remove("active");
+          if (typeof showToast === 'function') showToast("Autosave dismissed.", "info");
+        };
+      }
+
+      if (btnCloseRestore) {
+        btnCloseRestore.onclick = () => {
+          modalRestore.classList.remove("active");
+        };
+      }
+    }
   }
 
   // Auto-connect check from URL query parameter

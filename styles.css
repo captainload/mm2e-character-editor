@@ -1836,5 +1836,123 @@ button.row-title-btn.row-title,
   margin: 4px 0;
 }
 
+/* GM Character Dropdown Menu & File Controls */
+.gm-char-menu-wrapper {
+  position: relative;
+  display: inline-block;
+}
 
+.gm-char-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: var(--font-size-labels);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
 
+.gm-char-name-btn:hover {
+  color: var(--accent-primary);
+}
+
+.gm-char-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1200;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.gm-char-menu-item {
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: var(--font-size-secondary);
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s ease;
+}
+
+.gm-char-menu-item:hover {
+  background: var(--bg-card);
+  color: var(--accent-primary);
+}
+
+.gm-char-menu-item.danger {
+  color: #ef4444;
+}
+
+.gm-char-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.gm-char-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+/* GM File Operations Log & History */
+.gm-log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: var(--font-size-secondary);
+}
+
+.gm-log-badge {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gm-log-badge.backup { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.gm-log-badge.autosave { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.gm-log-badge.sheet_receive { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+.gm-log-badge.sheet_push { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+.gm-log-badge.offline_notice { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.gm-log-badge.gm_transfer { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+.gm-log-badge.restore { background: rgba(6, 182, 212, 0.2); color: #06b6d4; }
+.gm-log-badge.info { background: rgba(107, 114, 128, 0.2); color: var(--text-muted); }
+
+.gm-history-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  gap: 12px;
+  flex-wrap: wrap;
+}

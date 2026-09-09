@@ -36,7 +36,11 @@
     onForcedMode: [],
     onStateSync: [],
     onChat: [],
-    onRosterUpdate: []
+    onRosterUpdate: [],
+    onRequestCharacterSheet: [],
+    onCharacterSheetData: [],
+    onGMPushCharacter: [],
+    onGMTransfer: []
   };
 
   function initBroadcastChannel() {
@@ -127,6 +131,29 @@
         if (packet.playerId === peerInstance?.id || packet.targetCharacter === localPlayerInfo.characterName) {
           emit('onGMStatusOverride', packet);
         }
+        break;
+
+      case 'REQUEST_CHARACTER_SHEET':
+        // GM requesting character sheet from client
+        emit('onRequestCharacterSheet', packet);
+        break;
+
+      case 'CHARACTER_SHEET_DATA':
+        // GM receiving character sheet from client
+        if (role === 'HOST') {
+          emit('onCharacterSheetData', packet);
+        }
+        break;
+
+      case 'GM_PUSH_CHARACTER':
+        // Client receiving pushed character sheet revision from GM
+        if (role === 'CLIENT' || packet.targetPlayerId === (peerInstance?.id || localPlayerInfo.playerName)) {
+          emit('onGMPushCharacter', packet);
+        }
+        break;
+
+      case 'GM_TRANSFER':
+        emit('onGMTransfer', packet);
         break;
 
       case 'POPOUT_DOCKED':
@@ -454,6 +481,92 @@
     }
   }
 
+  function requestCharacterSheets(targetPlayerId = null) {
+    const packet = {
+      type: 'REQUEST_CHARACTER_SHEET',
+      targetPlayerId: targetPlayerId || 'all',
+      requestedAt: new Date().toISOString()
+    };
+    if (targetPlayerId && clientConns.has(targetPlayerId)) {
+      const conn = clientConns.get(targetPlayerId);
+      if (conn && conn.open) {
+        try { conn.send(packet); } catch (e) { console.error('Error sending sheet request:', e); }
+      }
+    } else {
+      broadcastPacket(packet, true);
+    }
+  }
+
+  function sendCharacterSheetData(sheet) {
+    const packet = {
+      type: 'CHARACTER_SHEET_DATA',
+      playerId: peerInstance?.id || 'local_player',
+      playerName: localPlayerInfo.playerName,
+      characterName: localPlayerInfo.characterName,
+      characterSummary: localPlayerInfo.characterSummary,
+      sheet: sheet,
+      timestamp: new Date().toISOString()
+    };
+    broadcastPacket(packet, true);
+    return packet;
+  }
+
+  function sendPushCharacter(playerId, sheet, characterName, versionTimestamp, version) {
+    if (role !== 'HOST') return false;
+    const packet = {
+      type: 'GM_PUSH_CHARACTER',
+      targetPlayerId: playerId,
+      characterName: characterName,
+      version: version,
+      versionTimestamp: versionTimestamp || new Date().toISOString(),
+      sheet: sheet
+    };
+    if (playerId && clientConns.has(playerId)) {
+      const conn = clientConns.get(playerId);
+      if (conn && conn.open) {
+        try {
+          conn.send(packet);
+          return true;
+        } catch (e) {
+          console.error('Error sending push character to client:', e);
+        }
+      }
+    }
+    broadcastPacket(packet, true);
+    return true;
+  }
+
+  function sendGMTransfer(newGmPlayerId) {
+    const packet = {
+      type: 'GM_TRANSFER',
+      newGmPlayerId: newGmPlayerId,
+      previousGmPlayerId: peerInstance?.id || 'host',
+      timestamp: new Date().toISOString()
+    };
+    broadcastPacket(packet, true);
+    emit('onGMTransfer', packet);
+  }
+
+  function getClientConnections() {
+    const list = [];
+    clientConns.forEach((conn, peerId) => {
+      if (conn && conn.open) {
+        list.push({ peerId, open: true });
+      }
+    });
+    return list;
+  }
+
+  function isPeerConnected(peerId) {
+    if (role === 'HOST') {
+      const conn = clientConns.get(peerId);
+      return !!(conn && conn.open);
+    } else if (role === 'CLIENT') {
+      return !!(hostConn && hostConn.open);
+    }
+    return false;
+  }
+
   return {
     initBroadcastChannel,
     startHost,
@@ -468,6 +581,12 @@
     sendLocalBroadcast,
     sendChat,
     sendStateSync,
+    requestCharacterSheets,
+    sendCharacterSheetData,
+    sendPushCharacter,
+    sendGMTransfer,
+    getClientConnections,
+    isPeerConnected,
     toggleSilentMode,
     isSilent,
     getStatus: () => ({ status: connectionStatus, role, code: currentCode, isSilent: isSilent(), isForcedSilent }),

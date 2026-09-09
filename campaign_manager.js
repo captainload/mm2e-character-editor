@@ -13,6 +13,8 @@
   'use strict';
 
   const STORAGE_KEY = 'mm2e_campaigns_data';
+  const STORAGE_AUTOSAVE_DATA_KEY = 'mm2e_campaign_autosave_data';
+  const STORAGE_AUTOSAVE_META_KEY = 'mm2e_campaign_autosave_meta';
   let memoryStore = { activeCampaignId: null, campaigns: [] };
 
   function generateSlug(name) {
@@ -59,7 +61,12 @@
       data.activeCampaignId = data.campaigns[0].id;
       saveStorageData(data);
     }
-    return data.campaigns.find(c => c.id === data.activeCampaignId) || null;
+    const camp = data.campaigns.find(c => c.id === data.activeCampaignId) || null;
+    if (camp) {
+      if (!camp.gmPlayerId) camp.gmPlayerId = 'local_player';
+      if (!Array.isArray(camp.fileOperationsLog)) camp.fileOperationsLog = [];
+    }
+    return camp;
   }
 
   function setActiveCampaign(id) {
@@ -73,7 +80,7 @@
     return false;
   }
 
-  function createCampaign(name, customCode = null) {
+  function createCampaign(name, customCode = null, creatorPlayerId = 'local_player') {
     const data = getStorageData();
     const campName = (name && name.trim()) ? name.trim() : 'New Campaign';
     const code = customCode ? customCode.trim().toLowerCase() : generateSlug(campName);
@@ -83,6 +90,7 @@
       name: campName,
       code: code,
       createdAt: new Date().toISOString(),
+      gmPlayerId: creatorPlayerId || 'local_player',
       npcs: [],
       acceptedPlayers: [],
       pendingRequests: [],
@@ -91,6 +99,14 @@
         forceSilentPlayers: {}
       },
       sessionLog: [],
+      fileOperationsLog: [
+        {
+          id: 'flog_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          timestamp: new Date().toISOString(),
+          message: `Campaign "${campName}" created. Designated GM: ${creatorPlayerId || 'local_player'}.`,
+          type: 'info'
+        }
+      ],
       combatState: {
         round: 1,
         activeTurnId: null,
@@ -101,6 +117,7 @@
     data.campaigns.push(newCamp);
     data.activeCampaignId = newCamp.id;
     saveStorageData(data);
+    saveAutoBackup(false);
     return newCamp;
   }
 
@@ -111,6 +128,7 @@
 
     Object.assign(camp, patch);
     saveStorageData(data);
+    saveAutoBackup(true);
     return camp;
   }
 
@@ -298,12 +316,209 @@
     updateActiveCampaign({ sessionLog: [] });
   }
 
+  // --- Campaign File Operations Log ---
+  function addFileOperationLog(message, type = 'info') {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    if (!Array.isArray(camp.fileOperationsLog)) camp.fileOperationsLog = [];
+
+    const entry = {
+      id: 'flog_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: new Date().toISOString(),
+      message: String(message || ''),
+      type: type || 'info'
+    };
+
+    camp.fileOperationsLog.push(entry);
+    if (camp.fileOperationsLog.length > 200) {
+      camp.fileOperationsLog = camp.fileOperationsLog.slice(-200);
+    }
+
+    const data = getStorageData();
+    const c = data.campaigns.find(x => x.id === camp.id);
+    if (c) c.fileOperationsLog = camp.fileOperationsLog;
+    saveStorageData(data);
+    return entry;
+  }
+
+  function getFileOperationsLog() {
+    const camp = getActiveCampaign();
+    return camp && Array.isArray(camp.fileOperationsLog) ? [...camp.fileOperationsLog] : [];
+  }
+
+  function clearFileOperationsLog() {
+    const camp = getActiveCampaign();
+    if (!camp) return;
+    camp.fileOperationsLog = [];
+    const data = getStorageData();
+    const c = data.campaigns.find(x => x.id === camp.id);
+    if (c) c.fileOperationsLog = [];
+    saveStorageData(data);
+  }
+
+  // --- Designated GM & GM Transfer ---
+  function getGMPlayerId() {
+    const camp = getActiveCampaign();
+    return camp ? (camp.gmPlayerId || 'local_player') : 'local_player';
+  }
+
+  function isDesignatedGM(playerId) {
+    const camp = getActiveCampaign();
+    if (!camp) return false;
+    const currentGM = camp.gmPlayerId || 'local_player';
+    return currentGM === playerId || (currentGM === 'local_player' && (!playerId || playerId === 'local_player'));
+  }
+
+  function transferGM(newGmPlayerId, previousGmPlayerId = null) {
+    const camp = getActiveCampaign();
+    if (!camp) return false;
+
+    const prev = previousGmPlayerId || camp.gmPlayerId || 'local_player';
+    const player = (camp.acceptedPlayers || []).find(p => p.id === newGmPlayerId);
+    const targetLabel = player ? `${player.playerName} (${player.characterName})` : newGmPlayerId;
+
+    updateActiveCampaign({ gmPlayerId: newGmPlayerId });
+    addFileOperationLog(`GM status transferred from ${prev} to ${targetLabel}.`, 'gm_transfer');
+    return true;
+  }
+
+  // --- Remote Character Sheet Ingestion & Revision History ---
+  function ingestCharacterSheet(playerId, sheetData, playerName = null, characterName = null) {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    if (!Array.isArray(camp.acceptedPlayers)) camp.acceptedPlayers = [];
+
+    let player = camp.acceptedPlayers.find(p => p.id === playerId);
+    if (!player && characterName) {
+      player = camp.acceptedPlayers.find(p => p.characterName === characterName);
+    }
+    if (!player) return null;
+
+    if (!Array.isArray(player.sheetHistory)) player.sheetHistory = [];
+
+    const nextVer = player.sheetHistory.length > 0 ? (player.sheetHistory[player.sheetHistory.length - 1].version + 1) : 1;
+    const heroName = characterName || sheetData?.character?.name || player.characterName || 'Hero';
+    const pl = sheetData?.character?.powerLevel || player.characterSummary?.powerLevel || 10;
+
+    const revision = {
+      version: nextVer,
+      timestamp: new Date().toISOString(),
+      characterName: heroName,
+      powerLevel: pl,
+      sheet: JSON.parse(JSON.stringify(sheetData))
+    };
+
+    player.characterSheet = JSON.parse(JSON.stringify(sheetData));
+    player.sheetHistory.push(revision);
+    if (player.sheetHistory.length > 20) {
+      player.sheetHistory = player.sheetHistory.slice(-20);
+    }
+
+    if (playerName) player.playerName = playerName;
+    if (characterName) player.characterName = characterName;
+
+    updateActiveCampaign({ acceptedPlayers: camp.acceptedPlayers });
+    addFileOperationLog(`Received character sheet for "${heroName}" from ${playerName || player.playerName} (v${nextVer}).`, 'sheet_receive');
+    return revision;
+  }
+
+  function getCharacterSheetHistory(playerId) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.acceptedPlayers)) return [];
+    const player = camp.acceptedPlayers.find(p => p.id === playerId || p.characterName === playerId);
+    return player && Array.isArray(player.sheetHistory) ? [...player.sheetHistory] : [];
+  }
+
+  // --- Campaign Auto-Backup & Crash Recovery ---
+  function saveAutoBackup(isDirty = true) {
+    try {
+      const camp = getActiveCampaign();
+      if (!camp) return;
+
+      const snapshot = JSON.stringify(camp);
+      const meta = {
+        campaignId: camp.id,
+        campaignName: camp.name,
+        code: camp.code,
+        savedAt: new Date().toISOString(),
+        isDirty: !!isDirty
+      };
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_AUTOSAVE_DATA_KEY, snapshot);
+        localStorage.setItem(STORAGE_AUTOSAVE_META_KEY, JSON.stringify(meta));
+      }
+    } catch (e) {
+      console.warn('CampaignManager: saveAutoBackup error', e);
+    }
+  }
+
+  function getAutoBackupMeta() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(STORAGE_AUTOSAVE_META_KEY);
+        if (raw) return JSON.parse(raw);
+      }
+    } catch (e) {
+      console.warn('CampaignManager: getAutoBackupMeta error', e);
+    }
+    return null;
+  }
+
+  function isAutoBackupDirty() {
+    const meta = getAutoBackupMeta();
+    return !!(meta && meta.isDirty);
+  }
+
+  function clearAutoBackupDirty() {
+    try {
+      const meta = getAutoBackupMeta();
+      if (meta && typeof localStorage !== 'undefined') {
+        meta.isDirty = false;
+        localStorage.setItem(STORAGE_AUTOSAVE_META_KEY, JSON.stringify(meta));
+      }
+    } catch (e) {
+      console.warn('CampaignManager: clearAutoBackupDirty error', e);
+    }
+  }
+
+  function restoreAutoBackup() {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      const raw = localStorage.getItem(STORAGE_AUTOSAVE_DATA_KEY);
+      if (!raw) return null;
+
+      const restoredCamp = JSON.parse(raw);
+      if (!restoredCamp || !restoredCamp.id || !restoredCamp.name) return null;
+
+      const data = getStorageData();
+      const existingIdx = data.campaigns.findIndex(c => c.id === restoredCamp.id);
+      if (existingIdx >= 0) {
+        data.campaigns[existingIdx] = restoredCamp;
+      } else {
+        data.campaigns.push(restoredCamp);
+      }
+      data.activeCampaignId = restoredCamp.id;
+      saveStorageData(data);
+
+      addFileOperationLog(`Restored campaign session from autosave snapshot (${restoredCamp.name}).`, 'restore');
+      clearAutoBackupDirty();
+      return restoredCamp;
+    } catch (e) {
+      console.error('CampaignManager: restoreAutoBackup error', e);
+      return null;
+    }
+  }
+
   // --- Export & Import ---
   function exportCampaign(id = null) {
     const data = getStorageData();
     const targetId = id || data.activeCampaignId;
     const camp = data.campaigns.find(c => c.id === targetId);
     if (!camp) return null;
+
+    clearAutoBackupDirty();
+    addFileOperationLog(`Manual backup exported as JSON (${camp.name}).`, 'backup');
 
     return JSON.stringify({
       format: 'MM2E_CAMPAIGN',
@@ -325,10 +540,20 @@
       const data = getStorageData();
       campData.id = 'camp_' + Math.random().toString(36).substring(2, 9);
       if (!campData.code) campData.code = generateSlug(campData.name);
+      if (!campData.gmPlayerId) campData.gmPlayerId = 'local_player';
+      if (!Array.isArray(campData.fileOperationsLog)) campData.fileOperationsLog = [];
+
+      campData.fileOperationsLog.push({
+        id: 'flog_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        timestamp: new Date().toISOString(),
+        message: `Campaign imported from JSON file.`,
+        type: 'restore'
+      });
 
       data.campaigns.push(campData);
       data.activeCampaignId = campData.id;
       saveStorageData(data);
+      saveAutoBackup(false);
       return { success: true, campaign: campData };
     } catch (e) {
       return { success: false, error: e.message };
@@ -357,6 +582,19 @@
     addLogEntry,
     clearLog,
     exportCampaign,
-    importCampaign
+    importCampaign,
+    addFileOperationLog,
+    getFileOperationsLog,
+    clearFileOperationsLog,
+    getGMPlayerId,
+    isDesignatedGM,
+    transferGM,
+    ingestCharacterSheet,
+    getCharacterSheetHistory,
+    saveAutoBackup,
+    getAutoBackupMeta,
+    isAutoBackupDirty,
+    clearAutoBackupDirty,
+    restoreAutoBackup
   };
 }));

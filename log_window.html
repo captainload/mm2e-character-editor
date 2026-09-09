@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MM2CG — Session Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      background: var(--bg-app, #18181b);
+      color: var(--text-main, #f4f4f5);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .log-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color, #27272a);
+      flex-shrink: 0;
+    }
+    .search-filter-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+    .filter-chips {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      margin-top: 6px;
+      padding-bottom: 4px;
+      flex-shrink: 0;
+    }
+    .filter-chip {
+      padding: 2px 8px;
+      font-size: var(--font-size-fine-print, 12px);
+      border-radius: 12px;
+      border: 1px solid var(--border-color, #3f3f46);
+      background: var(--bg-panel, #27272a);
+      color: var(--text-muted, #a1a1aa);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .filter-chip.active {
+      background: var(--accent-primary, #dc2626);
+      color: #fff;
+      border-color: var(--accent-primary, #dc2626);
+      font-weight: 600;
+    }
+    .party-hud-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-color, #27272a);
+      flex-shrink: 0;
+    }
+    .log-feed-container {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .quick-dice-tray {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-color, #27272a);
+      flex-shrink: 0;
+    }
+    .roll-card {
+      background: var(--bg-panel, #27272a);
+      border: 1px solid var(--border-color, #3f3f46);
+      border-radius: 6px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: opacity 0.2s;
+    }
+    .roll-card.nat20 {
+      border-color: #10b981;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.25);
+    }
+    .roll-card.nat1 {
+      border-color: #ef4444;
+      box-shadow: 0 0 6px rgba(239, 68, 68, 0.25);
+    }
+    .roll-card.silent {
+      border-style: dashed;
+      background: rgba(39, 39, 42, 0.6);
+    }
+    .roll-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: var(--font-size-secondary, 13px);
+    }
+    .roll-math {
+      font-family: monospace;
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--accent-primary, #dc2626);
+    }
+    .roll-result {
+      font-size: var(--font-size-secondary, 13px);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="log-header-bar">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <strong style="font-size: var(--font-size-labels, 16px); display: flex; align-items: center; gap: 6px;">
+        📜 Session Log
+      </strong>
+      <span class="badge" id="lblPopoutStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px;">🟢 Active</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <button type="button" class="btn btn-secondary" id="btnClearLog" style="font-size: var(--font-size-fine-print, 12px); padding: 2px 8px; height: 24px;">Clear</button>
+      <button type="button" class="btn btn-secondary" onclick="redockWindow()" style="font-size: var(--font-size-fine-print, 12px); padding: 2px 8px; height: 24px;" title="Close and re-dock into main window">Re-dock</button>
+    </div>
+  </div>
+
+  <!-- Search & Filter Bar -->
+  <div class="search-filter-box">
+    <input type="text" id="txtLogSearch" placeholder="Search rolls... (e.g. Doctor, Toughness, Failed, nat20)" style="flex: 1; height: 28px; font-size: var(--font-size-secondary, 13px); background: var(--bg-card, #18181b); border: 1px solid var(--border-color, #3f3f46); color: var(--text-main, #f4f4f5); border-radius: 4px; padding: 0 8px;">
+    <button type="button" class="btn btn-secondary" id="btnClearSearch" style="height: 28px; padding: 0 8px; font-size: 12px;" title="Clear search">✕</button>
+  </div>
+
+  <!-- Filter Chips -->
+  <div class="filter-chips">
+    <button type="button" class="filter-chip active" data-filter="all">All</button>
+    <button type="button" class="filter-chip" data-filter="attack">Attacks</button>
+    <button type="button" class="filter-chip" data-filter="save">Saves</button>
+    <button type="button" class="filter-chip" data-filter="check">Checks</button>
+    <button type="button" class="filter-chip" data-filter="nat20">Nat 20</button>
+    <button type="button" class="filter-chip" data-filter="failed">Failed</button>
+    <button type="button" class="filter-chip" data-filter="silent">Silent</button>
+  </div>
+
+  <!-- Party Status HUD -->
+  <div class="party-hud-bar" id="popoutPartyHud">
+    <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); font-style: italic;">Party Status: Standby</span>
+  </div>
+
+  <!-- Log Feed -->
+  <div class="log-feed-container" id="popoutLogFeed">
+    <div style="text-align: center; color: var(--text-muted, #a1a1aa); font-size: var(--font-size-secondary, 13px); margin-top: 24px; font-style: italic;">
+      No rolls or events recorded yet in this session.
+    </div>
+  </div>
+
+  <!-- Quick Dice Tray -->
+  <div class="quick-dice-tray">
+    <input type="text" id="txtPopoutDice" placeholder="1d20+5, 2d6+3..." style="flex: 1; height: 28px; font-size: var(--font-size-secondary, 13px); background: var(--bg-card, #18181b); border: 1px solid var(--border-color, #3f3f46); color: var(--text-main, #f4f4f5); border-radius: 4px; padding: 0 8px;">
+    <button type="button" class="btn btn-primary" id="btnPopoutRoll" style="height: 28px; padding: 0 12px; font-weight: bold; font-size: var(--font-size-secondary, 13px);">🎲 Roll</button>
+  </div>
+
+  <!-- Scripts -->
+  <script src="dice_notation.js"></script>
+  <script src="session_network.js"></script>
+  <script>
+    const allRollCards = [];
+    let currentFilter = 'all';
+    let searchQuery = '';
+
+    const feed = document.getElementById('popoutLogFeed');
+    const txtSearch = document.getElementById('txtLogSearch');
+    const btnClearSearch = document.getElementById('btnClearSearch');
+    const filterButtons = document.querySelectorAll('.filter-chip');
+    const txtDice = document.getElementById('txtPopoutDice');
+    const btnRoll = document.getElementById('btnPopoutRoll');
+    const btnClear = document.getElementById('btnClearLog');
+
+    SessionNetwork.initBroadcastChannel();
+
+    function renderFeed() {
+      if (allRollCards.length === 0) {
+        feed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 24px; font-style: italic;">No rolls or events recorded yet in this session.</div>`;
+        return;
+      }
+
+      const q = searchQuery.toLowerCase().trim();
+      const filtered = allRollCards.filter(item => {
+        // Filter chips
+        if (currentFilter === 'attack' && !item.rollType?.toLowerCase().includes('attack')) return false;
+        if (currentFilter === 'save' && !item.rollType?.toLowerCase().includes('save') && !item.rollType?.toLowerCase().includes('toughness')) return false;
+        if (currentFilter === 'check' && !item.rollType?.toLowerCase().includes('check')) return false;
+        if (currentFilter === 'nat20' && !item.isNat20) return false;
+        if (currentFilter === 'failed' && !item.result?.toLowerCase().includes('fail')) return false;
+        if (currentFilter === 'silent' && !item.isSilent) return false;
+
+        // Search expression
+        if (!q) return true;
+        const searchTarget = `${item.characterName || ''} ${item.playerName || ''} ${item.rollType || ''} ${item.expression || ''} ${item.result || ''} ${item.breakdown || ''}`.toLowerCase();
+        return searchTarget.includes(q);
+      });
+
+      if (filtered.length === 0) {
+        feed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 24px; font-style: italic;">No rolls match current search / filter.</div>`;
+        return;
+      }
+
+      feed.innerHTML = filtered.map(item => {
+        const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+        const natClass = item.isNat20 ? 'nat20' : (item.isNat1 ? 'nat1' : '');
+        const silentClass = item.isSilent ? 'silent' : '';
+        const silentBadge = item.isSilent ? `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px;">🔇 Silent</span>` : '';
+        const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 10px;">★ Natural 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; font-size: 10px;">⚠ Natural 1</span>` : '');
+
+        return `
+          <div class="roll-card ${natClass} ${silentClass}">
+            <div class="roll-header">
+              <div>
+                <strong>${item.characterName || 'Hero'}</strong>
+                <span style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">(${item.playerName || 'Player'})</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                ${silentBadge}
+                ${natBadge}
+                <span style="color: var(--text-muted); font-size: 11px;">${time}</span>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px;">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">${item.rollType || 'Roll'}</span>
+              <span class="roll-math">${item.breakdown || item.total}</span>
+            </div>
+            ${item.result ? `<div class="roll-result" style="color: ${item.result.toLowerCase().includes('fail') ? '#ef4444' : '#10b981'};">${item.result}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    SessionNetwork.addEventListener('onRoll', (roll) => {
+      allRollCards.unshift(roll);
+      renderFeed();
+    });
+
+    SessionNetwork.addEventListener('onConditionUpdate', (update) => {
+      // Update party status
+      const hud = document.getElementById('popoutPartyHud');
+      if (hud) {
+        hud.innerHTML = `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c9; border: 1px solid #0284c9;">${update.characterName}: Bruises ${update.bruises || 0}</span>`;
+      }
+    });
+
+    // Search and Filters
+    txtSearch.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      renderFeed();
+    });
+
+    btnClearSearch.addEventListener('click', () => {
+      txtSearch.value = '';
+      searchQuery = '';
+      renderFeed();
+    });
+
+    filterButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter || 'all';
+        renderFeed();
+      });
+    });
+
+    // Quick Dice Roll
+    btnRoll.addEventListener('click', () => {
+      const expr = txtDice.value.trim() || '1d20';
+      const rolled = DiceNotation.roll(expr);
+      SessionNetwork.sendRoll({
+        characterName: 'Popout User',
+        rollType: 'Dice Roll',
+        expression: expr,
+        total: rolled.total,
+        breakdown: rolled.breakdown,
+        isNat20: rolled.isNat20,
+        isNat1: rolled.isNat1
+      });
+    });
+
+    txtDice.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        btnRoll.click();
+      }
+    });
+
+    btnClear.addEventListener('click', () => {
+      allRollCards.length = 0;
+      renderFeed();
+    });
+
+    // --- Window Bounds Persistence (Size & Position) ---
+    function saveWindowBounds() {
+      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+      const width = window.outerWidth || window.innerWidth;
+      const height = window.outerHeight || window.innerHeight;
+
+      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 200) {
+        try {
+          localStorage.setItem('mm2e_session_log_bounds', JSON.stringify({
+            left,
+            top,
+            width,
+            height
+          }));
+        } catch (e) {}
+      }
+    }
+
+    function restoreWindowBounds() {
+      try {
+        const saved = localStorage.getItem('mm2e_session_log_bounds');
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (b.width && b.height && (window.outerWidth !== b.width || window.outerHeight !== b.height)) {
+            try { window.resizeTo(b.width, b.height); } catch (e) {}
+          }
+          if (typeof b.left === 'number' && typeof b.top === 'number' && (window.screenX !== b.left || window.screenY !== b.top)) {
+            try { window.moveTo(b.left, b.top); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Try restoring bounds on start
+    restoreWindowBounds();
+
+    // Track resize
+    window.addEventListener('resize', () => {
+      clearTimeout(window._resTimer);
+      window._resTimer = setTimeout(saveWindowBounds, 250);
+    });
+
+    // Periodic poll for position changes (handling user dragging the window)
+    setInterval(() => {
+      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+      const width = window.outerWidth || window.innerWidth;
+      const height = window.outerHeight || window.innerHeight;
+
+      if (!window._lastBounds ||
+          window._lastBounds.left !== left ||
+          window._lastBounds.top !== top ||
+          window._lastBounds.width !== width ||
+          window._lastBounds.height !== height) {
+        window._lastBounds = { left, top, width, height };
+        saveWindowBounds();
+      }
+    }, 1000);
+
+    window.addEventListener('beforeunload', () => {
+      saveWindowBounds();
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+      }
+    });
+
+    window.addEventListener('unload', saveWindowBounds);
+
+    function redockWindow() {
+      saveWindowBounds();
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+      }
+      window.close();
+    }
+  </script>
+</body>
+</html>

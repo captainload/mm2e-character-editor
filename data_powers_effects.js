@@ -102,6 +102,90 @@ const POWER_EFFECTS_LIST = [
     ]
   },
   {
+    "name": "Boost",
+    "type": "Trait",
+    "action": "Standard",
+    "range": "Touch",
+    "duration": "Instant",
+    "savingThrow": "Fortitude (Harmless)",
+    "baseCost": 1,
+    "book": "Ultimate Power",
+    "fullText": "<p>You can temporarily increase one of your traits or the traits of another character. Each rank of Boost provides 1 power point you can use to increase the chosen trait (or 1 rank under the Rank-Boosting house rule). Boost cannot increase a trait beyond normal power level limits.</p><p>The base cost of Boost depends on the scope of traits it can enhance:</p><ul><li><strong>1 point per rank:</strong> Boosts one specific, fixed trait (e.g. Strength, Blast, or Reflex save).</li><li><strong>2 points per rank:</strong> Boosts any one trait matching your descriptor at a time (e.g. any Fire power).</li><li><strong>3 points per rank:</strong> Boosts all traits of a descriptor group simultaneously.</li><li><strong>4 points per rank:</strong> Boosts all of the subject's powers simultaneously.</li><li><strong>5 points per rank:</strong> Boosts all of the subject's traits (abilities, skills, powers) simultaneously.</li></ul><p>Boosted traits fade at a rate of 1 power point per round (at the start of your turn) until they return to normal.</p><p><strong>EXTRAS</strong></p><p>• Action (Reaction) (+1 or +2): Boost occurs automatically in response to a particular circumstance (e.g. taking damage or getting angry).</p><p>• Range (Ranged) (+1): Enhances Boost from touch to ranged.</p><p>• Selective Attack (+1): Allows an Area Boost to benefit only chosen allies.</p><p>• Slow Fade (+1 flat per rank): Reduces the fade rate one step along the Progression Table (1 rd, 1 min, 5 min, 20 min, 1 hr...).</p><p>• Total Fade (+1 flat): The boosted trait retains its full bonus until the duration expires, then vanishes all at once.</p><p>• Alternate Save (Will) (+0): Changes saving throw to Will.</p><p><strong>FLAWS</strong></p><p>• Personal (-1): Affects only yourself, not others.</p><p>• Others Only (-1): Affects only other characters, not yourself.</p><p>• Restorative (-1): Only restores traits up to their normal values (countering Drain); restored points do not fade.</p><p>• Tiring (-1): Using Boost fatigues you.</p><p>• Emotional (-1): Only usable when experiencing or surrounded by a particular emotion.</p>",
+    "scopePricing": [
+      { "name": "One Specific Trait (Fixed at purchase)", "cost": 1, "desc": "Boosts one specific, fixed trait chosen when acquired (e.g. Strength, Blast, Reflex)" },
+      { "name": "Any One Trait of Descriptor (Flexible per use)", "cost": 2, "desc": "Boosts any one trait matching your descriptor at a time, chosen dynamically per use" },
+      { "name": "All Traits of Descriptor (Simultaneous)", "cost": 3, "desc": "Boosts all traits of a descriptor group simultaneously" },
+      { "name": "All Powers of Subject (Simultaneous)", "cost": 4, "desc": "Boosts all powers of the subject at once" },
+      { "name": "All Traits of Subject (Simultaneous)", "cost": 5, "desc": "Boosts all traits (abilities, skills, powers) at once" }
+    ],
+    "specificExtras": [
+      {
+        "name": "Action (Reaction)",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Action (Reaction): Activates automatically in response to a trigger (taking damage, getting angry, etc.)."
+      },
+      {
+        "name": "Range (Ranged)",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Range (Ranged): Enhances Boost from touch to ranged."
+      },
+      {
+        "name": "Selective Attack",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Selective Attack: When combined with Area, allows you to selectively choose which allies receive the Boost."
+      },
+      {
+        "name": "Slow Fade",
+        "cost": 1,
+        "costType": "flat",
+        "hasRanks": true,
+        "maxRanks": 10,
+        "desc": "Slow Fade: Increases the fade interval step-by-step along the Time and Value Progression Table (1 rd, 1 min, 5 min, 20 min, 1 hr...)."
+      },
+      {
+        "name": "Total Fade",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Total Fade: Trait retains its full boosted bonus until the fade duration expires, then drops all at once."
+      }
+    ],
+    "specificFlaws": [
+      {
+        "name": "Personal",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Personal (-1): Your Boost is personal range and affects only you."
+      },
+      {
+        "name": "Others Only",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Others Only (-1): You can Boost other characters, but not yourself."
+      },
+      {
+        "name": "Restorative",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Restorative (-1): Only restores traits up to their normal purchased values (e.g. recovering from Drain); points restored do not fade."
+      },
+      {
+        "name": "Tiring",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Tiring (-1): Using Boost tires you, leaving you fatigued."
+      },
+      {
+        "name": "Emotional",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Emotional (-1): Limited to when you or those around you feel a strong specific emotion (anger, love, fear)."
+      }
+    ]
+  },
+  {
     "name": "Burrowing",
     "type": "Movement",
     "action": "Move (active)",
@@ -148,6 +232,15 @@ const POWER_EFFECTS_LIST = [
     "duration": "Continuous",
     "savingThrow": "None",
     "baseCost": 2,
+    "options": [
+      { "name": "Languages", "cost": 2, "costType": "per_rank" },
+      { "name": "Animals", "cost": 2, "costType": "per_rank" },
+      { "name": "Plants", "cost": 2, "costType": "per_rank" },
+      { "name": "Machines / Computers", "cost": 2, "costType": "per_rank" },
+      { "name": "Objects", "cost": 4, "costType": "flat" },
+      { "name": "Spirits", "cost": 2, "costType": "per_rank" },
+      { "name": "Custom Comprehend", "cost": 2, "costType": "per_rank" }
+    ],
     "fullText": "<p>You can comprehend different sorts of communication. Each rank allows you to choose one of the following options:</p>\n<p>• Languages: You can either speak or understand the language of any intelligent creature. You can speak only one language at a time, although you can understand several languages at once. For two ranks you can both speak and understand all languages. For an additional rank anyone able to hear you can understand what you’re saying, regardless of language. Being able to read any language requires one more rank.</p>\n<p>• Animals: You can either speak to or comprehend animals (creatures with Int 1 or 2). For two ranks you can both speak to and understand animals.</p>\n<p>• Plants: You can either comprehend or communicate with plants. For two ranks you can both speak to and understand plants.</p>\n<p>• Machines: You can verbally communicate with electronic devices. For two ranks you can both speak to machines and understand their replies.</p>\n<p>• Objects: You can communicate with inanimate objects, granting them the ability to speak to you or simply “reading” impressions from them. This requires two Comprehend ranks.</p>\n<p><strong>FLAWS</strong></p>\n<p>• Broad Type (–1): You can only comprehend a general type of subject (only elves, canines, avians, or sea creatures, for example).</p>\n<p>• Narrow Type (–2): You can only comprehend a particular type of subject (dogs, falcons, or dolphins, for example).</p>",
     "specificFlaws": [
       {
@@ -544,6 +637,39 @@ const POWER_EFFECTS_LIST = [
     "duration": "Permanent",
     "savingThrow": "None",
     "baseCost": 1,
+    "options": [
+      { "name": "Absolute Timing / Internal Clock", "cost": 1, "costType": "flat" },
+      { "name": "Animal Harmony", "cost": 1, "costType": "flat" },
+      { "name": "Autopilot", "cost": 1, "costType": "flat" },
+      { "name": "Battery", "cost": 1, "costType": "flat" },
+      { "name": "Built-in Equipment", "cost": 1, "costType": "flat" },
+      { "name": "Cable", "cost": 1, "costType": "flat" },
+      { "name": "Cell Phone / Video Screen", "cost": 1, "costType": "flat" },
+      { "name": "Charmed Life", "cost": 1, "costType": "flat" },
+      { "name": "Chill", "cost": 1, "costType": "flat" },
+      { "name": "Compass / Internal Compass", "cost": 1, "costType": "flat" },
+      { "name": "Cosmetic Alteration", "cost": 1, "costType": "flat" },
+      { "name": "Distracting Look", "cost": 1, "costType": "flat" },
+      { "name": "Flashlight / Projector", "cost": 1, "costType": "flat" },
+      { "name": "Fur / Insulating Fur", "cost": 1, "costType": "flat" },
+      { "name": "Gyroscope", "cost": 1, "costType": "flat" },
+      { "name": "Hidden Compartment", "cost": 1, "costType": "flat" },
+      { "name": "Iron Stomach", "cost": 1, "costType": "flat" },
+      { "name": "Light Sleeper", "cost": 1, "costType": "flat" },
+      { "name": "Mimicry", "cost": 1, "costType": "flat" },
+      { "name": "Oil Slick", "cost": 1, "costType": "flat" },
+      { "name": "Quick Change", "cost": 1, "costType": "flat" },
+      { "name": "Resistor", "cost": 1, "costType": "flat" },
+      { "name": "Reversible", "cost": 1, "costType": "flat" },
+      { "name": "Skids / Treads", "cost": 1, "costType": "flat" },
+      { "name": "Special Dispensation", "cost": 1, "costType": "flat" },
+      { "name": "Temporal Inertia", "cost": 1, "costType": "flat" },
+      { "name": "Universal Tool", "cost": 1, "costType": "flat" },
+      { "name": "Virtual Reality", "cost": 1, "costType": "flat" },
+      { "name": "Weather-Sense", "cost": 1, "costType": "flat" },
+      { "name": "Winch", "cost": 1, "costType": "flat" },
+      { "name": "Custom Feature", "cost": 1, "costType": "per_rank" }
+    ],
     "fullText": "<p>You have one or more minor features or effects. Features are minor traits that provide small, useful benefits, such as an internal clock, compass, flashlight, fur coat providing warmth, or unusual cosmetic alterations.</p>"
   },
   {
@@ -697,6 +823,26 @@ const POWER_EFFECTS_LIST = [
     "savingThrow": "None",
     "baseCost": 1,
     "fullText": "<p>You are immune to certain effects, automatically succeeding on any saving throws or ability checks against them:</p>\n<p>• 1 rank: aging, disease, poison, one environmental condition, one type of suffocation, starvation and thirst, need for sleep, rare descriptor.</p>\n<p>• 2 ranks: critical hits, suffocation (no need to breathe), uncommon descriptor.</p>\n<p>• 5 ranks: alteration effects, dazzle effects, emotion effects, entrapment, fatigue effects, interaction skills, trait effects, or a particular damage type.</p>\n<p>• 9 ranks: life support (disease, poison, all environments, suffocation).</p>\n<p>• 10 ranks: mental effects, common descriptor.</p>\n<p>• 20 ranks: all nonlethal/lethal physical damage or all nonlethal/lethal energy damage.</p>\n<p>• 30 ranks: any effect calling for a particular saving throw (Fortitude, Reflex, or Will).</p>\n<p><strong>FLAWS</strong></p>\n<p>• Limited (–1): Half effect rather than total immunity.</p>",
+    "specificExtras": [
+      {
+        "name": "Redirect (Reaction)",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Redirect (Reaction) (+1 pt): You can redirect attacks of the type to which you are immune against another target in range as a reaction (requires Sustained Immunity)."
+      },
+      {
+        "name": "Redirect (Sustained)",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Redirect (Sustained) (+1 pt/r): You can redirect attacks of the type to which you are immune against another target in range (requires reaction for Continuous Immunity or free action for Sustained Immunity)."
+      },
+      {
+        "name": "Redirect (Continuous)",
+        "cost": 2,
+        "costType": "per_rank",
+        "desc": "Redirect (Continuous) (+2 pts/r): You can redirect attacks of the type to which you are immune against another target in range as a free action (Continuous Immunity)."
+      }
+    ],
     "specificFlaws": [
       {
         "name": "Limited (–1)",
@@ -1397,6 +1543,22 @@ const POWER_EFFECTS_LIST = [
     "duration": "Sustained",
     "savingThrow": "None",
     "baseCost": 2,
+    "options": [
+      { "name": "Air Walking", "cost": 2, "costType": "per_rank" },
+      { "name": "Dimensional Movement", "cost": 2, "costType": "per_rank" },
+      { "name": "Environmental Adaptation", "cost": 2, "costType": "per_rank" },
+      { "name": "Permeate", "cost": 2, "costType": "per_rank" },
+      { "name": "Slithering", "cost": 2, "costType": "flat" },
+      { "name": "Slow Fall", "cost": 2, "costType": "flat" },
+      { "name": "Space Travel", "cost": 2, "costType": "per_rank" },
+      { "name": "Sure-Footed", "cost": 2, "costType": "per_rank" },
+      { "name": "Swinging", "cost": 2, "costType": "flat" },
+      { "name": "Temporal Movement", "cost": 2, "costType": "per_rank" },
+      { "name": "Trackless", "cost": 2, "costType": "per_rank" },
+      { "name": "Wall-Crawling", "cost": 2, "costType": "per_rank" },
+      { "name": "Water Walking", "cost": 2, "costType": "per_rank" },
+      { "name": "Custom Movement", "cost": 2, "costType": "per_rank" }
+    ],
     "fullText": "<p>You have a special form of movement. Each rank grants one of the following:</p>\n<p>• Air Walking (1 rank half speed, 2 ranks full speed)</p>\n<p>• Dimensional Movement (1 rank home+1, 2 ranks related group, 3 ranks any dimension)</p>\n<p>• Permeate (pass through solid objects: 1 rank 1/4 speed, 2 ranks 1/2 speed, 3 ranks full speed)</p>\n<p>• Slithering (full speed while prone)</p>\n<p>• Slow Fall (fall any distance without harm)</p>\n<p>• Swinging (swing through air at ground speed)</p>\n<p>• Sure-Footed (reduce speed penalty for hampered terrain)</p>\n<p>• Temporal Movement (1 rank fixed point, 2 ranks past or future, 3 ranks any time)</p>\n<p>• Trackless (leave no trail)</p>\n<p>• Wall-Crawling (1 rank half speed, 2 ranks full speed)</p>\n<p>• Water Walking (move or stand on liquid surfaces)</p>"
   },
   {
@@ -1409,42 +1571,41 @@ const POWER_EFFECTS_LIST = [
     "baseCost": 1,
     "fullText": "<p>One or more of your senses are enhanced. Each rank gives one effect:</p>\n<p>• Accurate (2 or 4 ranks): Pinpoint exact location for combat targeting.</p>\n<p>• Acute (1 or 2 ranks): Sense fine details.</p>\n<p>• Extended (1 rank per factor of 10 range increment).</p>\n<p>• Radius (1–5 ranks): Perceive all around you (360 degrees).</p>\n<p>• Ranged (1 rank): Use taste or touch at range.</p>\n<p>• Awareness (1 rank): Sense powers of a particular descriptor.</p>\n<p>• Blindsight (4 ranks): Maneuver using non-visual accurate sense.</p>\n<p>• Communication Link (1 rank): Mental link with specific individual.</p>\n<p>• Danger Sense (1 rank): Notice check to avoid being surprised.</p>\n<p>• Darkvision (2 ranks): See normally in total darkness.</p>\n<p>• Detect (1 rank): Sense presence or absence of a trait/object.</p>\n<p>• Direction Sense / Distance Sense / Time Sense (1 rank each).</p>\n<p>• Infravision (1 rank): See heat patterns and infrared spectrum.</p>\n<p>• Low-Light Vision (1 rank): See twice as far in dim light.</p>\n<p>• Microscopic Vision (1–4 ranks): View tiny objects down to atomic scale.</p>\n<p>• Postcognition / Precognition (4 ranks each): Perceive past or future.</p>\n<p>• Radio (1 rank): Hear radio frequencies.</p>\n<p>• Scent (1 rank): Acute sense of smell.</p>\n<p>• Tracking (1–3 ranks): Follow trails using a sense.</p>\n<p>• Tremorsense (3 ranks): Feel location of ground vibrations.</p>\n<p>• Ultra-Hearing / Ultravision (1 rank each).</p>\n<p>• X-Ray Vision (4 ranks): See through solid objects.</p>",
     "options": [
-      { "name": "Accurate (Sense Type)", "cost": 2, "costType": "flat" },
-      { "name": "Accurate (All Senses)", "cost": 4, "costType": "flat" },
-      { "name": "Acute (Sense Type)", "cost": 1, "costType": "flat" },
-      { "name": "Acute (All Senses)", "cost": 2, "costType": "flat" },
-      { "name": "Analytical (Sense Type)", "cost": 1, "costType": "flat" },
-      { "name": "Awareness", "cost": 1, "costType": "flat" },
-      { "name": "Blindsight", "cost": 4, "costType": "flat" },
-      { "name": "Communication Link", "cost": 1, "costType": "flat" },
-      { "name": "Counters Concealment (One Descriptor)", "cost": 2, "costType": "flat" },
-      { "name": "Counters Concealment (All)", "cost": 5, "costType": "flat" },
-      { "name": "Counters Illusion", "cost": 2, "costType": "flat" },
-      { "name": "Counters Obscure (One Descriptor)", "cost": 2, "costType": "flat" },
-      { "name": "Counters Obscure (All)", "cost": 5, "costType": "flat" },
-      { "name": "Danger Sense", "cost": 1, "costType": "flat" },
-      { "name": "Darkvision", "cost": 2, "costType": "flat" },
-      { "name": "Detect", "cost": 1, "costType": "flat" },
-      { "name": "Direction Sense", "cost": 1, "costType": "flat" },
-      { "name": "Distance Sense", "cost": 1, "costType": "flat" },
-      { "name": "Extended", "cost": 1, "costType": "per_rank" },
-      { "name": "Infravision", "cost": 1, "costType": "flat" },
-      { "name": "Low-Light Vision", "cost": 1, "costType": "flat" },
-      { "name": "Microscopic Vision", "cost": 1, "costType": "per_rank" },
-      { "name": "Penetrates Concealment (X-Ray)", "cost": 4, "costType": "flat" },
-      { "name": "Postcognition", "cost": 4, "costType": "flat" },
-      { "name": "Precognition", "cost": 4, "costType": "flat" },
-      { "name": "Radio", "cost": 1, "costType": "flat" },
-      { "name": "Radius", "cost": 1, "costType": "per_rank" },
-      { "name": "Ranged (Sense Type)", "cost": 1, "costType": "flat" },
-      { "name": "Rapid", "cost": 1, "costType": "per_rank" },
-      { "name": "Scent", "cost": 1, "costType": "flat" },
-      { "name": "Time Sense", "cost": 1, "costType": "flat" },
-      { "name": "Tracking", "cost": 1, "costType": "per_rank" },
-      { "name": "Tremorsense", "cost": 3, "costType": "flat" },
-      { "name": "Ultra-Hearing", "cost": 1, "costType": "flat" },
-      { "name": "Ultravision", "cost": 1, "costType": "flat" },
-      { "name": "Custom Sense", "cost": 1, "costType": "per_rank" }
+      { "name": "Visual Sense Type", "cost": 0, "costType": "flat", "isSenseType": true, "senseCategory": "Visual" },
+      { "name": "Auditory Sense Type", "cost": 0, "costType": "flat", "isSenseType": true, "senseCategory": "Auditory" },
+      { "name": "Olfactory Sense Type", "cost": 0, "costType": "flat", "isSenseType": true, "senseCategory": "Olfactory" },
+      { "name": "Tactile Sense Type", "cost": 0, "costType": "flat", "isSenseType": true, "senseCategory": "Tactile" },
+      { "name": "Radio Sense Type", "cost": 0, "costType": "flat", "isSenseType": true, "senseCategory": "Radio" },
+      { "name": "Mental Sense Type", "cost": 0, "costType": "flat", "isSenseType": true, "senseCategory": "Mental" },
+      { "name": "Normal Sight", "cost": 0, "costType": "flat", "senseCategory": "Visual" },
+      { "name": "Darkvision", "cost": 2, "costType": "flat", "senseCategory": "Visual" },
+      { "name": "Infravision", "cost": 1, "costType": "flat", "senseCategory": "Visual" },
+      { "name": "Low-Light Vision", "cost": 1, "costType": "flat", "senseCategory": "Visual" },
+      { "name": "Microscopic Vision", "cost": 1, "costType": "per_rank", "senseCategory": "Visual" },
+      { "name": "Ultravision", "cost": 1, "costType": "flat", "senseCategory": "Visual" },
+      { "name": "X-Ray Vision", "cost": 4, "costType": "flat", "senseCategory": "Visual" },
+      { "name": "Normal Hearing", "cost": 0, "costType": "flat", "senseCategory": "Auditory" },
+      { "name": "Ultra-Hearing", "cost": 1, "costType": "flat", "senseCategory": "Auditory" },
+      { "name": "Sonar / Ultrasonic", "cost": 2, "costType": "flat", "senseCategory": "Auditory" },
+      { "name": "Normal Smell", "cost": 0, "costType": "flat", "senseCategory": "Olfactory" },
+      { "name": "Scent", "cost": 1, "costType": "flat", "senseCategory": "Olfactory" },
+      { "name": "Tracking Scent", "cost": 2, "costType": "flat", "senseCategory": "Olfactory" },
+      { "name": "Normal Touch", "cost": 0, "costType": "flat", "senseCategory": "Tactile" },
+      { "name": "Tremorsense", "cost": 3, "costType": "flat", "senseCategory": "Tactile" },
+      { "name": "Blindsight", "cost": 4, "costType": "flat", "senseCategory": "Tactile" },
+      { "name": "Radio", "cost": 1, "costType": "flat", "senseCategory": "Radio" },
+      { "name": "Radar", "cost": 3, "costType": "flat", "senseCategory": "Radio" },
+      { "name": "Mental Sense", "cost": 0, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Awareness", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Communication Link", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Danger Sense", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Detect", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Direction Sense", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Distance Sense", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Time Sense", "cost": 1, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Postcognition", "cost": 4, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Precognition", "cost": 4, "costType": "flat", "senseCategory": "Mental" },
+      { "name": "Custom Sense", "cost": 1, "costType": "per_rank", "senseCategory": "Special" }
     ]
   },
   {

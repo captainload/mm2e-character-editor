@@ -789,7 +789,7 @@ const POWER_PROFILES_LIST = [
     "baseCost": 2,
     "modifiers": [
       { "name": "Perception Range", "ranks": 1, "cost": 1, "costType": "per_rank", "category": "extra", "hasRanks": false, "isMeta": false },
-      { "name": "Limited", "ranks": 1, "cost": -1, "costType": "per_rank", "category": "flaw", "hasRanks": false, "isMeta": false }
+      { "name": "Limited", "ranks": 1, "cost": 1, "costType": "per_rank", "category": "flaw", "hasRanks": false, "isMeta": false }
     ],
     "options": {
       "Medium": "Earth, Stone, Minerals"

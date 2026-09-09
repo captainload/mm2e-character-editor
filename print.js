@@ -334,11 +334,27 @@ function generatePrintSheet() {
 
     if (char.blueprints && char.blueprints.length > 0) {
         hasExtraContent = true;
-        html += `<div class="print-box-title" style="margin: 16px 0 8px 0;">Improvised Effects</div>`;
+        html += `<div class="print-box-title" style="margin: 16px 0 8px 0;">Plans &amp; Blueprints (Inventions, Rituals, Devices)</div>`;
         char.blueprints.forEach(imp => {
+            const cost = (char.calculateTotalPowerCost) ? char.calculateTotalPowerCost(imp) : (imp.cost || 0);
+            const effSummary = Array.isArray(imp.effects) ? imp.effects.map(e => {
+                const r = e.rank !== undefined ? e.rank : (e.ranks || 1);
+                const dc = (typeof window !== 'undefined' && window.getEffectSaveDc) ? window.getEffectSaveDc(e) : "None";
+                const dcBadge = (dc && dc !== "None" && dc !== "—" && !dc.startsWith("No attack")) ? ` [${dc}]` : "";
+                return `${e.effectName || e.name || 'Effect'} ${r}${dcBadge}`;
+            }).join(', ') : '';
             html += `<div class="print-avoid-break print-box" style="margin-bottom: 8px;">`;
-            html += `<strong>${imp.name}</strong> (${imp.cost || 0} PP)<br>`;
-            html += `<span class="print-muted">${imp.description || 'No description.'}</span>`;
+            html += `<div style="display: flex; justify-content: space-between; align-items: baseline;">`;
+            html += `<strong>${imp.name}</strong> <span><strong>${cost} PP</strong></span>`;
+            html += `</div>`;
+            if (effSummary) {
+                html += `<div style="font-size: 12px; margin-top: 2px;"><strong>Effects:</strong> ${effSummary}</div>`;
+            }
+            html += `<div class="print-muted" style="font-size: 11px; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap;">`;
+            html += `<span><strong>Design:</strong> DC ${10 + cost} (${cost}h)</span>`;
+            html += `<span><strong>Construction:</strong> ${cost * 4} hrs (DC ${10 + cost})</span>`;
+            html += `<span><strong>Performance:</strong> ${cost * 10} min (DC ${10 + cost})</span>`;
+            html += `</div>`;
             html += `</div>`;
         });
     }

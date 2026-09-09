@@ -2,7 +2,7 @@
 
 class CharacterModel {
   constructor() {
-    this.name = "New Hero";
+    this.name = "";
     this.playerName = "";
     this.powerLevel = 10;
     this.totalPointsAllowed = 150;
@@ -49,12 +49,27 @@ class CharacterModel {
 
     // House Rules
     this.houseRules = {
-      enhancedTraitBoostsEffects: false
+      enhancedTraitBoostsEffects: false,
+      allowAltFormVariablePL: false,
+      boostAltersRanks: false,
+      enableLegacyCoreModifiers: false,
+      disablePerceptionRange: false
+    };
+
+    // Status Tracker State
+    this.trackerState = {
+      initiativeRoll: null,
+      initiativeAdjustment: 0,
+      generalD20Roll: null,
+      generalD20Adj: 0,
+      conditions: {},
+      customPoints: [],
+      fadeStates: {}
     };
   }
 
   reset() {
-    this.name = "New Hero";
+    this.name = "";
     this.playerName = "";
     this.powerLevel = 10;
     this.totalPointsAllowed = 150;
@@ -87,7 +102,21 @@ class CharacterModel {
     this.history = "";
 
     this.houseRules = {
-      enhancedTraitBoostsEffects: false
+      enhancedTraitBoostsEffects: false,
+      allowAltFormVariablePL: false,
+      boostAltersRanks: false,
+      enableLegacyCoreModifiers: false,
+      disablePerceptionRange: false
+    };
+
+    this.trackerState = {
+      initiativeRoll: null,
+      initiativeAdjustment: 0,
+      generalD20Roll: null,
+      generalD20Adj: 0,
+      conditions: {},
+      customPoints: [],
+      fadeStates: {}
     };
   }
 
@@ -123,7 +152,14 @@ class CharacterModel {
         motivation: this.motivation || "",
         complications: this.complications || "",
         history: this.history || "",
-        houseRules: { ...this.houseRules }
+        heroPoints: typeof this.heroPoints === "number" ? this.heroPoints : 1,
+        heroPointsLocked: !!this.heroPointsLocked,
+        houseRules: { ...this.houseRules },
+        trackerState: JSON.parse(JSON.stringify(this.trackerState || {
+          conditions: {},
+          customPoints: [],
+          fadeStates: {}
+        }))
       }
     };
   }
@@ -132,10 +168,12 @@ class CharacterModel {
     if (!raw) return;
     const data = (raw.format === "MM2E_CHARACTER" && raw.character) ? raw.character : raw;
 
-    this.name = data.name || "New Hero";
+    this.name = (data.name && data.name !== "New Hero") ? data.name : "";
     this.playerName = data.playerName || "";
     this.powerLevel = typeof data.powerLevel === "number" ? data.powerLevel : (data.pl || 10);
     this.totalPointsAllowed = typeof data.totalPointsAllowed === "number" ? data.totalPointsAllowed : (this.powerLevel * 15);
+    this.heroPoints = typeof data.heroPoints === "number" ? data.heroPoints : 1;
+    this.heroPointsLocked = !!data.heroPointsLocked;
     this.sizeCategory = data.sizeCategory || data.size || "Medium";
     this.massRank = typeof data.massRank === "number" ? data.massRank : 3;
     this.isMecha = !!(data.isMecha || data.nature === "mecha" || data.type === "Mecha");
@@ -183,6 +221,7 @@ class CharacterModel {
           let prevAssoc = "primary";
           container.effects.forEach((eff, eIdx) => {
             if (!eff.id) eff.id = "eff_" + Math.random().toString(36).substr(2, 9) + "_" + eIdx;
+            if (eff.rank === undefined && eff.ranks !== undefined) eff.rank = eff.ranks;
             
             // Legacy migration: association === 'linked'
             if (eff.association === "linked") {
@@ -193,6 +232,7 @@ class CharacterModel {
               if (!eff.association) eff.association = "primary";
               prevAssoc = eff.association;
             }
+            CharacterModel.normalizeEffectSubPowers(eff);
           });
         }
       });
@@ -205,10 +245,13 @@ class CharacterModel {
       loadedBlueprints = loadedBlueprints.map(oldEff => {
         const cName = oldEff.name || "Imported Blueprint";
         const cCol = oldEff.collapsed || false;
+        const eRank = oldEff.rank !== undefined ? oldEff.rank : (oldEff.ranks !== undefined ? oldEff.ranks : 1);
+        const effObj = { ...oldEff, rank: eRank, ranks: eRank, id: oldEff.id || ("imp_" + Math.random().toString(36).substr(2, 9)), association: "primary", linkedTo: null, name: cName };
+        CharacterModel.normalizeEffectSubPowers(effObj);
         return {
           name: cName,
           collapsed: cCol,
-          effects: [{ ...oldEff, id: oldEff.id || ("imp_" + Math.random().toString(36).substr(2, 9)), association: "primary", linkedTo: null, name: cName }]
+          effects: [effObj]
         };
       });
     } else {
@@ -216,6 +259,8 @@ class CharacterModel {
         if (Array.isArray(container.effects)) {
           container.effects.forEach((eff, eIdx) => {
             if (!eff.id) eff.id = "imp_" + Math.random().toString(36).substr(2, 9) + "_" + eIdx;
+            if (eff.rank === undefined && eff.ranks !== undefined) eff.rank = eff.ranks;
+            CharacterModel.normalizeEffectSubPowers(eff);
           });
         }
       });
@@ -237,7 +282,23 @@ class CharacterModel {
     // House Rules
     this.houseRules = {
       enhancedTraitBoostsEffects: false,
+      allowAltFormVariablePL: false,
+      enableBoostEffect: false,
+      boostAltersRanks: false,
+      enableLegacyCoreModifiers: false,
+      disablePerceptionRange: false,
       ...(data.houseRules || {})
+    };
+
+    // Status Tracker State
+    this.trackerState = data.trackerState ? JSON.parse(JSON.stringify(data.trackerState)) : {
+      initiativeRoll: null,
+      initiativeAdjustment: 0,
+      generalD20Roll: null,
+      generalD20Adj: 0,
+      conditions: {},
+      customPoints: [],
+      fadeStates: {}
     };
   }
 
@@ -263,6 +324,10 @@ class CharacterModel {
     }
   }
 
+  get activePowers() {
+    return (typeof window !== 'undefined' && window.activePowerContext === 'blueprints') ? this.blueprints : this.powers;
+  }
+
   findEffectById(effectId) {
     const list = this.activePowers || this.powers;
     if (!effectId || !Array.isArray(list)) return null;
@@ -286,13 +351,16 @@ class CharacterModel {
       saves: { Toughness: 0, Fortitude: 0, Reflex: 0, Will: 0 },
       skills: {},
       feats: {},
-      powers: {}
+      powers: {},
+      boostAbilities: { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 }
     };
 
     const powerContainers = this.powers || [];
     powerContainers.forEach(container => {
+      if (container.active === false) return;
       const effects = Array.isArray(container.effects) ? container.effects : [container];
       effects.forEach(eff => {
+        if (eff.active === false) return;
         const applySub = (sub) => {
           const r = (parseInt(sub.rank) || 0) * (sub.isReduced ? -1 : 1);
           const raw = (sub.type || sub.name || "").trim();
@@ -339,6 +407,34 @@ class CharacterModel {
           eff.subPowers.forEach(applySub);
         }
 
+        if (eff.effectName === "Boost") {
+          const isActive = (container.active !== false) && (eff.active !== false) && (eff.boostActive !== false) && (!eff.options || eff.options.boostActive !== false);
+          if (isActive) {
+            const target = (eff.options && eff.options.boostTarget) || eff.boostTarget;
+            if (target) {
+              const clean = target.replace(/\s*\[.*?\]/g, '').trim();
+              const isAbility = /^(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma|STR|DEX|CON|INT|WIS|CHA)\b/i.test(clean);
+              if (isAbility || (this.houseRules && this.houseRules.boostAltersRanks)) {
+                let r = parseInt(eff.rank) || 1;
+                const effId = eff.id;
+                if (effId && this.trackerState && this.trackerState.fadeStates && this.trackerState.fadeStates[effId] !== undefined) {
+                  r = this.trackerState.fadeStates[effId];
+                }
+                if (r > 0) {
+                  applySub({ type: target, rank: r });
+                  res.powers[target] = (res.powers[target] || 0) + r;
+                  if (/^Strength\b/i.test(clean) || clean === "STR" || clean.includes("(STR)")) res.boostAbilities.STR += r;
+                  else if (/^Dexterity\b/i.test(clean) || clean === "DEX" || clean.includes("(DEX)")) res.boostAbilities.DEX += r;
+                  else if (/^Constitution\b/i.test(clean) || clean === "CON" || clean.includes("(CON)")) res.boostAbilities.CON += r;
+                  else if (/^Intelligence\b/i.test(clean) || clean === "INT" || clean.includes("(INT)")) res.boostAbilities.INT += r;
+                  else if (/^Wisdom\b/i.test(clean) || clean === "WIS" || clean.includes("(WIS)")) res.boostAbilities.WIS += r;
+                  else if (/^Charisma\b/i.test(clean) || clean === "CHA" || clean.includes("(CHA)")) res.boostAbilities.CHA += r;
+                }
+              }
+            }
+          }
+        }
+
         // Active Container / Battle Form contained traits
         if (CharacterModel.isContainerEffect(eff) && eff.formActive !== false && Array.isArray(eff.containedPowers)) {
           eff.containedPowers.forEach(cp => {
@@ -346,6 +442,32 @@ class CharacterModel {
               applySub(cp);
             } else if (cp.effectName === "Enhanced Trait" && Array.isArray(cp.subPowers)) {
               cp.subPowers.forEach(applySub);
+            } else if (cp.effectName === "Boost") {
+              const isActive = (cp.active !== false) && (cp.boostActive !== false) && (!cp.options || cp.options.boostActive !== false);
+              if (isActive) {
+                const target = (cp.options && cp.options.boostTarget) || cp.boostTarget;
+                if (target) {
+                  const clean = target.replace(/\s*\[.*?\]/g, '').trim();
+                  const isAbility = /^(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma|STR|DEX|CON|INT|WIS|CHA)\b/i.test(clean);
+                  if (isAbility || (this.houseRules && this.houseRules.boostAltersRanks)) {
+                    let r = parseInt(cp.rank) || 1;
+                    const effId = cp.id;
+                    if (effId && this.trackerState && this.trackerState.fadeStates && this.trackerState.fadeStates[effId] !== undefined) {
+                      r = this.trackerState.fadeStates[effId];
+                    }
+                    if (r > 0) {
+                      applySub({ type: target, rank: r });
+                      res.powers[target] = (res.powers[target] || 0) + r;
+                      if (/^Strength\b/i.test(clean) || clean === "STR" || clean.includes("(STR)")) res.boostAbilities.STR += r;
+                      else if (/^Dexterity\b/i.test(clean) || clean === "DEX" || clean.includes("(DEX)")) res.boostAbilities.DEX += r;
+                      else if (/^Constitution\b/i.test(clean) || clean === "CON" || clean.includes("(CON)")) res.boostAbilities.CON += r;
+                      else if (/^Intelligence\b/i.test(clean) || clean === "INT" || clean.includes("(INT)")) res.boostAbilities.INT += r;
+                      else if (/^Wisdom\b/i.test(clean) || clean === "WIS" || clean.includes("(WIS)")) res.boostAbilities.WIS += r;
+                      else if (/^Charisma\b/i.test(clean) || clean === "CHA" || clean.includes("(CHA)")) res.boostAbilities.CHA += r;
+                    }
+                  }
+                }
+              }
             }
           });
         }
@@ -375,6 +497,10 @@ class CharacterModel {
     const base = Number(this.abilities[key]) || 0;
     const enh = (this.enhancedTraits && this.enhancedTraits.abilities[key]) ? this.enhancedTraits.abilities[key] : 0;
     return base + enh;
+  }
+
+  getEffectiveAbilityRank(key) {
+    return this.getAbilityRank(key);
   }
 
   getBaseCombatRank(key) {
@@ -522,17 +648,17 @@ class CharacterModel {
       } else if (effect.effectName === "Morph") {
         totalRank = parseInt(effect.rank) || 1;
         totalSubCost = (parseInt(effect.rank) || 1) * pBaseCost;
-      } else if (effect.effectName === "Variable" || effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait" || effect.effectName === "Movement" || effect.effectName === "Enhanced Movement" || effect.effectName === "Immunity" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses" || effect.effectName === "Super-Senses" || effect.effectName === "Super-Movement" || effect.effectName === "Comprehend") {
+      } else if (effect.effectName === "Variable" || effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait" || effect.effectName === "Movement" || effect.effectName === "Enhanced Movement" || effect.effectName === "Immunity" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses" || effect.effectName === "Super-Senses" || effect.effectName === "Super-Movement" || effect.effectName === "Comprehend" || effect.effectName === "Feature" || effect.effectName === "Features") {
         effect.subPowers.forEach(sub => {
           let sRank = parseInt(sub.rank) || 1;
-          totalRank += sRank;
-          let sBase = sub.baseCost || (pBaseCost);
+          let sBase = sub.baseCost !== undefined ? sub.baseCost : pBaseCost;
           let sPerRank = 0, sFlat = 0, sRemovable = 0;
           
           if (sub.modifiers && sub.modifiers.length > 0) {
               sub.modifiers.forEach(m => {
                   let mult = (m.category === 'extra' || m.category === 'feat') ? 1 : -1;
-                  let mC = (m.cost || 1) * (parseInt(m.ranks)||1);
+                  let rawCost = m.cost !== undefined ? Math.abs(m.cost) : 1;
+                  let mC = rawCost * (parseInt(m.ranks)||1);
                   if (m.costType === 'per_rank') sPerRank += mult * mC;
                   else if (m.costType === 'flat') sFlat += mult * mC;
                   else if (m.costType === 'removable') sRemovable += parseInt(m.ranks)||1;
@@ -552,8 +678,13 @@ class CharacterModel {
               sCost -= discount;
           }
 
-          if (sCost < 1 && (effect.effectName !== "Enhanced Trait" && effect.effectName !== "Enhance Trait")) sCost = 1;
+          if (sCost < 1 && effect.effectName !== "Enhanced Trait" && effect.effectName !== "Enhance Trait" && !sub.isSenseType && sub.baseCost !== 0) sCost = 1;
           totalSubCost += sCost;
+          if (effect.effectName === "Super-Senses" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses") {
+            totalRank += sCost;
+          } else {
+            totalRank += sRank;
+          }
         });
         if (effect.effectName === "Enhanced Trait" || effect.effectName === "Enhance Trait") {
           totalSubCost = Math.ceil(totalSubCost);
@@ -571,7 +702,8 @@ class CharacterModel {
       if (effect.modifiers && effect.modifiers.length > 0) {
           effect.modifiers.forEach(m => {
               let mult = (m.category === 'extra' || m.category === 'feat') ? 1 : -1;
-              let mC = (m.cost || 1) * (parseInt(m.ranks)||1);
+              let rawCost = m.cost !== undefined ? Math.abs(m.cost) : 1;
+              let mC = rawCost * (parseInt(m.ranks)||1);
               if (m.costType === 'per_rank') pPerRank += mult * mC;
               else if (m.costType === 'flat') pFlat += mult * mC;
               else if (m.costType === 'removable') pRemovable += parseInt(m.ranks)||1;
@@ -595,7 +727,8 @@ class CharacterModel {
       if (effect.modifiers && effect.modifiers.length > 0) {
           effect.modifiers.forEach(m => {
               let mult = (m.category === 'extra' || m.category === 'feat') ? 1 : -1;
-              let mC = (m.cost || 1) * (parseInt(m.ranks)||1);
+              let rawCost = m.cost !== undefined ? Math.abs(m.cost) : 1;
+              let mC = rawCost * (parseInt(m.ranks)||1);
               if (m.costType === 'per_rank') pPerRank += mult * mC;
               else if (m.costType === 'flat') pFlat += mult * mC;
               else if (m.costType === 'removable') pRemovable += parseInt(m.ranks)||1;
@@ -679,8 +812,64 @@ class CharacterModel {
       });
       totalCost += slotTotal;
     });
+
+    // Apply Boost PP subsidies if active and not altering ranks
+    if (!this.houseRules || !this.houseRules.boostAltersRanks) {
+      const { subsidies } = this.getBoostSubsidies();
+      let containerSubsidy = 0;
+      if (powerContainer.name && subsidies[powerContainer.name]) {
+        containerSubsidy = Math.max(containerSubsidy, subsidies[powerContainer.name]);
+      }
+      if (powerContainer.effects) {
+        powerContainer.effects.forEach(eff => {
+          if (eff.id && subsidies[eff.id]) containerSubsidy = Math.max(containerSubsidy, subsidies[eff.id]);
+          if (eff.name && subsidies[eff.name]) containerSubsidy = Math.max(containerSubsidy, subsidies[eff.name]);
+          if (eff.effectName && subsidies[eff.effectName]) containerSubsidy = Math.max(containerSubsidy, subsidies[eff.effectName]);
+        });
+      }
+      if (containerSubsidy > 0) {
+        totalCost = Math.max(0, totalCost - containerSubsidy);
+      }
+    }
     
     return totalCost;
+  }
+
+  getBoostSubsidies() {
+    const subsidies = {};
+    const rankBonuses = {};
+    const altersRanks = !!((this.houseRules && this.houseRules.boostAltersRanks) || (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true"));
+    const powers = this.powers || [];
+    powers.forEach(p => {
+      if (p.active === false) return;
+      (p.effects || []).forEach(eff => {
+        if (eff.effectName === "Boost") {
+          const isActive = (p.active !== false) && (eff.active !== false) && (eff.boostActive !== false) && (!eff.options || eff.options.boostActive !== false);
+          const target = (eff.options && eff.options.boostTarget) || eff.boostTarget;
+          const r = parseInt(eff.rank) || 1;
+          if (isActive && target) {
+            let targetAliases = [target];
+            for (const otherP of powers) {
+              for (const otherEff of (otherP.effects || [])) {
+                if (otherEff.id === target || otherEff.name === target || otherEff.effectName === target) {
+                  targetAliases.push(otherEff.id, otherEff.name, otherEff.effectName, otherP.name);
+                  break;
+                }
+              }
+            }
+            targetAliases = [...new Set(targetAliases.filter(Boolean))];
+            targetAliases.forEach(alias => {
+              if (altersRanks) {
+                rankBonuses[alias] = (rankBonuses[alias] || 0) + r;
+              } else {
+                subsidies[alias] = (subsidies[alias] || 0) + r;
+              }
+            });
+          }
+        }
+      });
+    });
+    return { subsidies, rankBonuses };
   }
 
   calculatePowerCost(power) {
@@ -718,8 +907,10 @@ class CharacterModel {
 
     if (this.powers && Array.isArray(this.powers)) {
       this.powers.forEach(container => {
+        if (container.active === false) return;
         const effects = Array.isArray(container.effects) ? container.effects : [container];
         effects.forEach(p => {
+          if (p.active === false) return;
           const rank = Number(p.rank) || 0;
           if (p.effectName === "Protection") protectionToughness += rank;
           if (p.effectName === "Speed") speedBonus += rank;
@@ -727,7 +918,7 @@ class CharacterModel {
           if (p.effectName === "Swimming") swimRank += rank;
           if (p.effectName === "Lifting") extraLifting += rank;
 
-          if (CharacterModel.isContainerEffect(p) && p.formActive !== false && Array.isArray(p.containedPowers)) {
+          if (CharacterModel.isContainerEffect(p) && p.active !== false && p.formActive !== false && Array.isArray(p.containedPowers)) {
             p.containedPowers.forEach(cp => {
               const cRank = Number(cp.rank) || 0;
               const cpName = cp.effectName || cp.name;
@@ -940,4 +1131,108 @@ class CharacterModel {
   getFeatsPP() { return this.powerPointsSummary.feats; }
   getAdvantagePP() { return this.powerPointsSummary.feats; }
   getPowersPP() { return this.powerPointsSummary.powers; }
+
+  static normalizeEffectSubPowers(eff) {
+    if (!eff) return;
+    if (!eff.subPowers) eff.subPowers = [];
+    if (!Array.isArray(eff.modifiers) || eff.modifiers.length === 0) return;
+
+    // Migrate trait_boost modifiers (e.g. from older imports or legacy blueprints)
+    const traitBoosts = eff.modifiers.filter(m => m.category === "trait_boost");
+    if (traitBoosts.length > 0) {
+      traitBoosts.forEach(tb => {
+        const cleanLabel = (tb.name || "").replace(/^Enhanced\s+/i, '').replace(/\s*\+\d+$/, '').trim();
+        const modRanks = parseInt(tb.ranks) || 1;
+        const lower = cleanLabel.toLowerCase();
+        let bCost = 1;
+        let r = modRanks;
+        const isAbility = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma", "str", "dex", "con", "int", "wis", "cha"].includes(lower);
+        const isCombat = ["attack", "attack bonus", "defense", "defense bonus"].includes(lower);
+        const isSkill = (typeof SKILLS_LIST !== 'undefined' && SKILLS_LIST.some(s => s.name.toLowerCase() === lower)) ||
+                        lower.startsWith("craft") || lower.startsWith("knowledge") || lower.startsWith("perform") || lower.startsWith("profession") ||
+                        ["gambling", "navigation"].includes(lower);
+
+        if (isAbility) {
+          bCost = 2;
+          r = modRanks / 2;
+        } else if (isCombat) {
+          bCost = 2;
+          r = modRanks;
+        } else if (isSkill) {
+          bCost = 0.25;
+          r = modRanks;
+        }
+
+        if (!eff.subPowers.some(sp => (sp.type || sp.name || "").toLowerCase() === lower || (sp.type || sp.name || "").toLowerCase().includes(lower))) {
+          eff.subPowers.push({
+            name: `${cleanLabel} (+${modRanks})`,
+            type: cleanLabel,
+            rank: r,
+            baseCost: bCost,
+            costType: "per_rank",
+            details: "",
+            modifiers: [],
+            isReduced: modRanks < 0
+          });
+        }
+      });
+      eff.modifiers = eff.modifiers.filter(m => m.category !== "trait_boost");
+      if (eff.effectName === "Enhanced Trait") {
+        eff.rank = Math.max(1, Math.round(eff.subPowers.reduce((sum, sp) => sum + (sp.rank * (sp.baseCost || 1)), 0)));
+        eff.ranks = eff.rank;
+      }
+    }
+
+    // Migrate option modifiers for composite option effects (Immunity, Super-Senses, etc.)
+    const optMods = eff.modifiers.filter(m => m.category === "option");
+    if (optMods.length > 0 && ["Immunity", "Super-Senses", "Super-Movement", "Comprehend", "Enhanced Movement"].includes(eff.effectName)) {
+      optMods.forEach(om => {
+        const oName = om.name;
+        let r = 1;
+        let bCost = 1;
+        if (eff.effectName === "Immunity") {
+          const immunityRankMap = {
+            "aging": 1, "disease": 1, "poison": 1, "starvation and thirst": 1, "need for sleep": 1,
+            "suffocation (all)": 2, "suffocation (one type)": 1, "critical hits": 2,
+            "alteration effects": 5, "dazzle effects": 5, "emotion effects": 5, "entrapment": 5,
+            "fatigue effects": 5, "interaction skills": 5, "trait effects": 5, "damage type": 5, "damage": 5,
+            "life support": 9, "mental effects": 10,
+            "rare descriptor": 1, "uncommon descriptor": 2, "common descriptor": 5, "very common descriptor": 10,
+            "all nonlethal physical damage": 20, "all lethal physical damage": 20,
+            "all nonlethal energy damage": 20, "all lethal energy damage": 20
+          };
+          r = immunityRankMap[oName.toLowerCase().trim()] || 1;
+        } else if (eff.effectName === "Super-Senses") {
+          const senseRankMap = { "darkvision": 2, "x-ray vision": 4, "tremorsense": 3, "blindsight": 4, "postcognition": 4, "precognition": 4, "accurate": 2 };
+          r = senseRankMap[oName.toLowerCase().trim()] || 1;
+        } else if (eff.effectName === "Super-Movement") {
+          bCost = 2;
+        } else if (eff.effectName === "Comprehend") {
+          bCost = 2;
+          r = (oName.toLowerCase().includes("languages") ? 1 : 2);
+        }
+        if (!eff.subPowers.some(sp => (sp.type || sp.name || "").toLowerCase() === oName.toLowerCase())) {
+          eff.subPowers.push({
+            name: oName,
+            type: oName,
+            rank: r,
+            baseCost: bCost,
+            costType: "per_rank",
+            details: "",
+            modifiers: [],
+            isReduced: false
+          });
+        }
+      });
+      eff.modifiers = eff.modifiers.filter(m => m.category !== "option");
+      if (["Immunity", "Super-Senses"].includes(eff.effectName)) {
+        eff.rank = eff.subPowers.reduce((sum, sp) => sum + (sp.rank || 1), 0);
+        eff.ranks = eff.rank;
+      }
+    }
+  }
 }
+
+if (typeof module !== 'undefined') {
+  module.exports = CharacterModel;
+}

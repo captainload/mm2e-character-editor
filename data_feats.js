@@ -177,6 +177,7 @@ const FEATS_LIST = [
     "name": "Deep Ties",
     "category": "Fortune",
     "ranked": true,
+    "maxRanks": 3,
     "fullText": "<p>Your emotions run deep when it comes to a particular situation. Choose one of your complications. When you encounter the complication, it awards two hero points instead of one. If you don’t use the extra hero point by the end of the encounter when you gained it, it is lost. A complication with Deep Ties is an integral part of the hero, and resolving it should be a major character plot point in any series. You can only take up to three ranks of this feat. Each rank allows you to choose a new complication.</p>"
   },
   {
@@ -225,6 +226,7 @@ const FEATS_LIST = [
     "name": "Distract",
     "category": "Skill",
     "ranked": true,
+    "maxRanks": 2,
     "fullText": "<p>You can make a Bluff or Intimidate check (choose one when you acquire the feat) to cause an opponent to hesitate in combat. Take a standard action and make a skill check against your target’s opposing check (the same skill, Sense Motive, or Will save, whichever has the highest bonus). If you succeed, your target is dazed for one round (defending normally, but taking no action). Targets gain a +1 bonus on checks to resist Distract per attempt against them in the same encounter. You can take this feat twice (gaining the ability to use it with either Bluff or Intimidate).</p>"
   },
   {
@@ -285,6 +287,7 @@ const FEATS_LIST = [
     "name": "Fascinate",
     "category": "Skill",
     "ranked": true,
+    "maxRanks": 4,
     "fullText": "<p>One of your interaction skills is so effective you can capture and hold someone’s attention with it. Choose Bluff, Diplomacy, Intimidate, or Perform when you acquire this feat. You are subject to the normal guidelines for interaction skills, and combat or other immediate danger makes this feat ineffective. Take a standard action and make an interaction skill check against your target’s opposing check (the same skill, Sense Motive, or Will save, whichever has the highest bonus). If you succeed, the target becomes fascinated (see Condition Summary, page 170). You can maintain the effect (requiring a standard action each round). The fascination ends when you stop or the target overcomes it. You may take this feat more than once. Each time, it applies to a different interaction skill. Like all interaction skills, you can use Fascinate on a group, but you must affect everyone in the group equally.</p>"
   },
   {
@@ -886,6 +889,12 @@ const FEATS_LIST = [
     "category": "Combat",
     "ranked": false,
     "fullText": "<p>Your long years in harsh combat have taught you how to exploit your deadliest blows for lasting and sometimes unexpected effect. When you score a critical hit with a particular attack, you may spend a hero point and choose for the hit to have a different additional effect of up to 10 power points in value (in place of the normal +5 bonus to saving throw DC). This includes any power effect the Gamemaster judges suitable for the attack. Particular effects most likely to be associated with critical hits include Dazzle, Drain, Fatigue, Nauseate, or Stun, but others may be appropriate at the GM’s discretion.</p>"
+  },
+  {
+    "name": "Wallop",
+    "category": "Combat",
+    "ranked": false,
+    "fullText": "<p>Your unarmed blows carry significantly greater force than normal, sending your targets flying backward on impact. This is essentially 1 rank of the Knockback power feat (see Ultimate Power) applied to your Strength.</p>"
   },
   {
     "name": "Weapon Bind",

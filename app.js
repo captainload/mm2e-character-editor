@@ -77,15 +77,182 @@ const MODIFIER_CATEGORY_MAP = {
 
 
 const SENSE_TYPE_MAP = {
-  "Normal Sight": "Visual", "Normal Vision": "Visual", "Darkvision": "Visual", "Dark-Vision": "Visual", "Infravision": "Visual", "Infra-Vision": "Visual", 
+  "Visual Sense Type": "Visual", "Normal Sight": "Visual", "Normal Vision": "Visual", "Darkvision": "Visual", "Dark-Vision": "Visual", "Infravision": "Visual", "Infra-Vision": "Visual", 
   "Low-Light Vision": "Visual", "Microscopic Vision": "Visual", "Ultravision": "Visual", "Ultra-Vision": "Visual", "X-Ray Vision": "Visual", "Penetrates Concealment (X-Ray)": "Visual",
-  "Normal Hearing": "Auditory", "Ultra-Hearing": "Auditory",
-  "Normal Smell": "Olfactory", "Normal Scent": "Olfactory", "Normal Taste": "Olfactory", "Scent": "Olfactory", "Tracking": "Olfactory",
-  "Normal Touch": "Tactile", "Tremorsense": "Tactile", "Blindsight": "Tactile",
-  "Normal Radio": "Radio", "Radio": "Radio",
-  "Normal Mental": "Mental", "Awareness": "Mental", "Danger Sense": "Mental", "Postcognition": "Mental", "Precognition": "Mental", "Time Sense": "Mental", "Communication Link": "Mental", "Direction Sense": "Mental", "Distance Sense": "Mental", "Detect": "Mental"
+  "Auditory Sense Type": "Auditory", "Normal Hearing": "Auditory", "Ultra-Hearing": "Auditory", "Sonar / Ultrasonic": "Auditory",
+  "Olfactory Sense Type": "Olfactory", "Normal Smell": "Olfactory", "Normal Scent": "Olfactory", "Normal Taste": "Olfactory", "Scent": "Olfactory", "Tracking Scent": "Olfactory", "Tracking": "Olfactory",
+  "Tactile Sense Type": "Tactile", "Normal Touch": "Tactile", "Tremorsense": "Tactile", "Blindsight": "Tactile",
+  "Radio Sense Type": "Radio", "Normal Radio": "Radio", "Radio": "Radio", "Radar": "Radio",
+  "Mental Sense Type": "Mental", "Mental Sense": "Mental", "Normal Mental": "Mental", "Awareness": "Mental", "Danger Sense": "Mental", "Postcognition": "Mental", "Precognition": "Mental", "Time Sense": "Mental", "Communication Link": "Mental", "Direction Sense": "Mental", "Distance Sense": "Mental", "Detect": "Mental",
+  "Custom Sense": "Special"
 };
 
+const INHERENT_SENSE_TRAITS = {
+  "Visual Sense Type": ["Accurate", "Acute", "Ranged"],
+  "Normal Sight": ["Accurate", "Acute", "Ranged"],
+  "Darkvision": ["Accurate", "Acute", "Ranged", "Counters Concealment (Darkness)"],
+  "Infravision": ["Accurate", "Acute", "Ranged"],
+  "Low-Light Vision": ["Accurate", "Acute", "Ranged"],
+  "Microscopic Vision": ["Accurate", "Acute", "Ranged"],
+  "Ultravision": ["Accurate", "Acute", "Ranged"],
+  "X-Ray Vision": ["Accurate", "Acute", "Ranged", "Penetrates Concealment"],
+  "Auditory Sense Type": ["Acute", "Radius", "Ranged"],
+  "Normal Hearing": ["Acute", "Radius", "Ranged"],
+  "Ultra-Hearing": ["Acute", "Radius", "Ranged"],
+  "Sonar / Ultrasonic": ["Accurate", "Acute", "Radius", "Ranged"],
+  "Olfactory Sense Type": ["Radius"],
+  "Normal Smell": ["Radius"],
+  "Scent": ["Acute", "Radius"],
+  "Tracking Scent": ["Acute", "Radius", "Tracking"],
+  "Tactile Sense Type": ["Accurate", "Acute", "Radius"],
+  "Normal Touch": ["Accurate", "Acute", "Radius"],
+  "Tremorsense": ["Accurate", "Radius", "Ranged"],
+  "Blindsight": ["Accurate", "Radius", "Ranged"],
+  "Radio Sense Type": ["Ranged"],
+  "Radio": ["Ranged"],
+  "Radar": ["Accurate", "Radius", "Ranged"],
+  "Mental Sense Type": [],
+  "Mental Sense": [],
+  "Awareness": ["Ranged"],
+  "Detect": ["Ranged"],
+  "Danger Sense": [],
+  "Direction Sense": [],
+  "Distance Sense": [],
+  "Time Sense": [],
+  "Communication Link": [],
+  "Postcognition": [],
+  "Precognition": [],
+  "Custom Sense": []
+};
+
+const ALL_POSSIBLE_MODIFIERS_BY_CATEGORY = {
+  "Visual": ["Analytical", "Counters Concealment", "Counters Illusion", "Counters Obscure", "Extended", "Penetrates Concealment", "Radius", "Rapid", "Tracking"],
+  "Auditory": ["Accurate", "Analytical", "Counters Concealment", "Counters Illusion", "Counters Obscure", "Extended", "Penetrates Concealment", "Rapid", "Tracking"],
+  "Olfactory": ["Accurate", "Acute", "Analytical", "Counters Concealment", "Counters Illusion", "Counters Obscure", "Extended", "Penetrates Concealment", "Ranged", "Rapid", "Tracking"],
+  "Tactile": ["Analytical", "Counters Concealment", "Counters Illusion", "Counters Obscure", "Extended", "Penetrates Concealment", "Ranged", "Rapid", "Tracking"],
+  "Radio": ["Accurate", "Acute", "Analytical", "Counters Concealment", "Counters Illusion", "Counters Obscure", "Extended", "Penetrates Concealment", "Radius", "Rapid", "Tracking"],
+  "Mental": ["Accurate", "Acute", "Analytical", "Counters Concealment", "Counters Illusion", "Counters Obscure", "Extended", "Penetrates Concealment", "Radius", "Ranged", "Rapid", "Tracking"]
+};
+
+function isSenseCategoryMaxed(cat, effect) {
+  if (!effect || !effect.subPowers) return false;
+  const possibleMods = ALL_POSSIBLE_MODIFIERS_BY_CATEGORY[cat];
+  if (!possibleMods || possibleMods.length === 0) return false;
+  const typeSub = effect.subPowers.find(sp => {
+    let tName = sp.name || sp.type || "";
+    return tName.includes("Sense Type") && (sp.senseCategory === cat || tName.includes(cat));
+  });
+  if (!typeSub || !typeSub.modifiers || typeSub.modifiers.length === 0) return false;
+  const assigned = typeSub.modifiers.map(m => m.name.split(" (")[0].trim());
+  return possibleMods.every(pm => assigned.some(am => am.startsWith(pm)));
+}
+
+const EFFECT_OPTION_SUBSETS = {
+  "Immunity": {
+    "Suffocation (All / No need to breathe)": [
+      "Suffocation (One Type)"
+    ],
+    "Life Support": [
+      "Disease",
+      "Poison",
+      "Environmental Condition (Cold)",
+      "Environmental Condition (Heat)",
+      "Environmental Condition (High Pressure)",
+      "Environmental Condition (Radiation)",
+      "Environmental Condition (Vacuum)",
+      "Suffocation (All / No need to breathe)",
+      "Suffocation (One Type)"
+    ],
+    "All Fortitude Effects": [
+      "Life Support",
+      "Disease",
+      "Poison",
+      "Environmental Condition (Cold)",
+      "Environmental Condition (Heat)",
+      "Environmental Condition (High Pressure)",
+      "Environmental Condition (Radiation)",
+      "Environmental Condition (Vacuum)",
+      "Suffocation (All / No need to breathe)",
+      "Suffocation (One Type)",
+      "Aging",
+      "Starvation and Thirst",
+      "Need for Sleep",
+      "Fatigue Effects"
+    ],
+    "All Will Effects": [
+      "Mental Effects",
+      "Emotion Effects",
+      "Interaction Skills"
+    ],
+    "All Reflex Effects": [
+      "Entrapment",
+      "Dazzle Effects"
+    ]
+  },
+  "Super-Senses": {
+    "Visual Sense Type": [
+      "Normal Sight", "Darkvision", "Infravision", "Low-Light Vision", "Microscopic Vision", "Ultravision", "X-Ray Vision"
+    ],
+    "Auditory Sense Type": [
+      "Normal Hearing", "Ultra-Hearing", "Sonar / Ultrasonic"
+    ],
+    "Olfactory Sense Type": [
+      "Normal Smell", "Scent", "Tracking Scent"
+    ],
+    "Tactile Sense Type": [
+      "Normal Touch", "Tremorsense", "Blindsight"
+    ],
+    "Radio Sense Type": [
+      "Radio", "Radar"
+    ],
+    "Mental Sense Type": [
+      "Mental Sense", "Awareness", "Communication Link", "Danger Sense", "Detect", "Direction Sense", "Distance Sense", "Time Sense", "Postcognition", "Precognition"
+    ]
+  }
+};
+
+function getSubsetsForOption(effectName, optionName) {
+  const map = EFFECT_OPTION_SUBSETS[effectName];
+  if (!map) return [];
+  const clean = (optionName || "").split(" [")[0].trim();
+  const direct = map[clean] || [];
+  let allSubsets = [...direct];
+  direct.forEach(sub => {
+    const deeper = getSubsetsForOption(effectName, sub);
+    deeper.forEach(d => {
+      if (!allSubsets.includes(d)) allSubsets.push(d);
+    });
+  });
+  return allSubsets;
+}
+
+function getSupersetsForOption(effectName, optionName) {
+  const map = EFFECT_OPTION_SUBSETS[effectName];
+  if (!map) return [];
+  const clean = (optionName || "").split(" [")[0].trim();
+  let supersets = [];
+  for (const [parentName, children] of Object.entries(map)) {
+    if (children.includes(clean)) {
+      if (!supersets.includes(parentName)) supersets.push(parentName);
+      const higher = getSupersetsForOption(effectName, parentName);
+      higher.forEach(h => {
+        if (!supersets.includes(h)) supersets.push(h);
+      });
+    }
+  }
+  return supersets;
+}
+
+function isOptionCoveredByExisting(effect, optionName) {
+  if (!effect || !effect.subPowers || effect.subPowers.length === 0) return false;
+  const clean = (optionName || "").split(" [")[0].trim();
+  const supersets = getSupersetsForOption(effect.effectName, clean);
+  if (supersets.length === 0) return false;
+  return effect.subPowers.some(sp => {
+    const spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+    return supersets.includes(spClean);
+  });
+}
 
 window.generateSmartModifiers = function(effect) {
     if (!effect || !effect.effectName) return { extras: [], flaws: [] };
@@ -99,26 +266,57 @@ window.generateSmartModifiers = function(effect) {
     let baseDur = effectData.duration || "Instant";
     let baseAct = effectData.action || "Standard";
 
+    const profile = typeof POWER_PROFILES_LIST !== 'undefined' ? POWER_PROFILES_LIST.find(p => p.name === effect.name) : null;
+    if (profile) {
+      if (profile.range) baseRange = profile.range;
+      if (profile.duration) baseDur = profile.duration;
+      if (profile.action) baseAct = profile.action;
+    }
+
     const DURATION_TIERS = { "Instant": 1, "Concentration": 2, "Sustained": 3, "Continuous": 4, "Permanent": 5 };
     const ACTION_TIERS = { "Full": 1, "Standard": 2, "Move": 3, "Free": 4, "Reaction": 5, "None": 6 };
 
+    const isDisablePerception = (typeof char !== 'undefined' && char.houseRules && char.houseRules.disablePerceptionRange) || 
+                                (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_disable_perception_range") === "true");
+
     // RANGE
     if (baseRange === "Personal") {
-        extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: true, maxRanks: 2, category: "extra" });
-    } else if (baseRange === "Close") {
-        extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: true, maxRanks: 2, category: "extra" });
+        extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: true, maxRanks: isDisablePerception ? 1 : 2, category: "extra" });
+    } else if (baseRange === "Close" || baseRange === "Touch") {
+        extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: true, maxRanks: isDisablePerception ? 1 : 2, category: "extra" });
         extras.push({ name: "Ranged", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
-        extras.push({ name: "Perception Range", cost: 2, costType: "per_rank", hasRanks: false, category: "extra" });
+        if (!isDisablePerception) {
+            extras.push({ name: "Perception Range", cost: 2, costType: "per_rank", hasRanks: false, category: "extra" });
+        }
     } else if (baseRange === "Ranged") {
         extras.push({ name: "Extended Range", cost: 1, costType: "flat", hasRanks: true, maxRanks: 10, category: "extra" });
-        extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
-        extras.push({ name: "Perception Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
+        if (!isDisablePerception) {
+            extras.push({ name: "Increased Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
+            extras.push({ name: "Perception Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
+        } else {
+            extras.push({ name: "No Attack Roll", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
+        }
         flaws.push({ name: "Reduced Range", cost: 1, costType: "per_rank", hasRanks: false, category: "flaw" });
         flaws.push({ name: "Close", cost: 1, costType: "per_rank", hasRanks: false, category: "flaw" });
         flaws.push({ name: "Diminished Range", cost: 1, costType: "flat", hasRanks: true, maxRanks: 3, category: "flaw" });
     } else if (baseRange === "Perception") {
         flaws.push({ name: "Reduced Range", cost: 1, costType: "per_rank", hasRanks: true, maxRanks: 2, category: "flaw" });
         flaws.push({ name: "Close", cost: 2, costType: "per_rank", hasRanks: false, category: "flaw" });
+    }
+
+    if (typeof calculateEffectiveRange === 'function') {
+        const curEffRange = calculateEffectiveRange(effect, baseRange);
+        if (curEffRange === "Ranged") {
+            if (!isDisablePerception) {
+                if (!extras.some(e => e.name === "Perception Range")) {
+                    extras.push({ name: "Perception Range", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
+                }
+            } else {
+                if (!extras.some(e => e.name === "No Attack Roll")) {
+                    extras.push({ name: "No Attack Roll", cost: 1, costType: "per_rank", hasRanks: false, category: "extra" });
+                }
+            }
+        }
     }
 
     // DURATION
@@ -170,19 +368,37 @@ window.generateSmartModifiers = function(effect) {
     return { extras, flaws };
 };
 
+const LEGACY_CORE_MODIFIERS = [
+  "Continuous",
+  "Sustained",
+  "Duration (Continuous)",
+  "Duration (Sustained)",
+  "Increased Duration (Continuous)",
+  "Decreased Duration (Sustained)"
+];
+
 // --- GET FILTERED MODIFIERS FOR EFFECT ---
 function getFilteredModifiersForEffect(effectType, effectOrSub) {
+  const isLegacyOn = (typeof char !== 'undefined' && char.houseRules && char.houseRules.enableLegacyCoreModifiers) || 
+                     (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_enable_legacy_modifiers") === "true");
+  const isDisablePerception = (typeof char !== 'undefined' && char.houseRules && char.houseRules.disablePerceptionRange) || 
+                              (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_disable_perception_range") === "true");
+
   const allowedNames = MODIFIER_CATEGORY_MAP[effectType] || MODIFIER_CATEGORY_MAP["General"];
   let available = [];
 
   if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
     available = POWER_MODIFIERS_LIST.filter(m => {
       if (m.name.includes("Alternate Effect")) return false;
+      if (!isLegacyOn && LEGACY_CORE_MODIFIERS.includes(m.name)) return false;
+      if (isDisablePerception && (m.name === "Perception Range" || m.name === "Range (Perception)")) return false;
+      if (!isDisablePerception && m.name === "No Attack Roll") return false;
       // Universal Extras and Feats always allowed
       if (m.name.startsWith("Progression")) return true;
       if (m.category === "feat" && (m.name === "Subtle" || m.name === "Innate" || m.name === "Precise" || m.name === "Reversible" || m.name === "Slow Fade" || m.name === "Variable Descriptor" || m.name === "Triggered" || m.name === "Transmutation")) {
         return true;
       }
+      if (isDisablePerception && m.name === "No Attack Roll") return true;
       return allowedNames.includes(m.name);
     });
   }
@@ -192,12 +408,12 @@ function getFilteredModifiersForEffect(effectType, effectOrSub) {
   const isAttack = effectOrSub ? (
     effectType === "Attack" ||
     (effectData && (effectData.type === "Attack" || effectData.check === "Attack" || effectData.check === "Melee Attack" || effectData.check === "Ranged Attack")) ||
-    ["Strike", "Blast", "Damage", "Snare", "Stun", "Nauseate", "Suffocate", "Trip", "Paralyze", "Corrosion", "Disintegrate", "Drain"].includes(effName) ||
+    ["Strike", "Blast", "Damage", "Snare", "Stun", "Nauseate", "Suffocate", "Trip", "Paralyze", "Corrosion", "Disintegrate", "Drain", "Dazzle", "Nullify"].includes(effName) ||
     (effectOrSub.modifiers && effectOrSub.modifiers.some(m => m.name === "Attack"))
   ) : (effectType === "Attack");
 
   if (!isAttack) {
-    available = available.filter(m => m.name !== "Accurate");
+    available = available.filter(m => m.name !== "Accurate" && m.name !== "No Attack Roll");
   }
 
   if (effectOrSub && (effectOrSub.effectName === "Super-Senses" || (effectOrSub.name && effectOrSub.name.includes("Senses")))) {
@@ -217,7 +433,7 @@ char.calculateEffectCost = function(effect) {
       pBaseCost = profile.baseCost;
     }
   }
-  const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Immunity", "Super-Senses", "Super-Movement", "Senses", "Movement"].includes(effect.effectName);
+  const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Features", "Immunity", "Super-Senses", "Super-Movement", "Senses", "Movement"].includes(effect.effectName);
 
   if (isComposite) {
     let totalRank = 0;
@@ -226,7 +442,6 @@ char.calculateEffectCost = function(effect) {
     if (effect.subPowers && effect.subPowers.length > 0) {
       effect.subPowers.forEach(sub => {
         let sRank = parseInt(sub.rank) || 1;
-        totalRank += sRank;
 
         let sBaseCost = sub.baseCost !== undefined ? sub.baseCost : pBaseCost;
         let cType = sub.costType || "per_rank";
@@ -271,21 +486,30 @@ char.calculateEffectCost = function(effect) {
             sCost -= discount;
         }
 
-        if (sCost < 1 && effect.effectName !== "Enhanced Trait") sCost = 1;
+        if (sCost < 1 && effect.effectName !== "Enhanced Trait" && !sub.isSenseType && sub.baseCost !== 0) sCost = 1;
         
         if (sub.isReduced) {
             sCost = -sCost;
         }
         
         totalSubCost += sCost;
+        if (effect.effectName === "Super-Senses" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses") {
+          totalRank += sCost;
+        } else {
+          totalRank += sRank;
+        }
       });
       if (effect.effectName === "Enhanced Trait") {
         totalSubCost = Math.ceil(totalSubCost);
       }
       let subTotalRank = totalRank;
-      totalRank = Math.max(subTotalRank, parseInt(effect.rank) || 1);
-      if (totalRank > subTotalRank) {
-        totalSubCost += (totalRank - subTotalRank) * pBaseCost;
+      if (["Super-Senses", "Senses", "Enhanced Senses", "Features", "Feature", "Super-Movement", "Comprehend", "Immunity"].includes(effect.effectName)) {
+        totalRank = subTotalRank;
+      } else {
+        totalRank = Math.max(subTotalRank, parseInt(effect.rank) || 1);
+        if (totalRank > subTotalRank) {
+          totalSubCost += (totalRank - subTotalRank) * pBaseCost;
+        }
       }
     } else {
       totalRank = parseInt(effect.rank) || 1; 
@@ -370,13 +594,34 @@ window.getMaxPowerRank = function(effect, subPower) {
 
      if (subPower.costType === "flat" && !type.includes("Sense Type") && effect.effectName !== "Immunity") return 1;
 
-     if (type.includes("Dimensional Travel") || type.includes("Space Travel")) return 20; 
-     if (type.includes("Permeate")) return 6;
-     if (type.includes("Wall-Crawling")) return 4;
-     if (type.includes("Water-Walking") || type.includes("Swinging")) return 2;
-     
-     if (type.includes("Microscopic Vision")) return 4;
-     if (type.includes("Dimensional")) return 3;
+     if (effect && (effect.effectName === "Super-Movement" || effect.effectName === "Movement" || effect.effectName === "Enhanced Movement")) {
+         if (type.includes("Air Walking") || type.includes("Wall-Crawling") || type.includes("Water Walking") || type.includes("Water-Walking")) return 2;
+         if (type.includes("Dimensional Movement") || type.includes("Dimensional Travel") || type.includes("Space Travel") || type.includes("Temporal Movement") || type.includes("Trackless") || type.includes("Permeate")) return 3;
+         if (type.includes("Sure-Footed")) return 4;
+         if (type.includes("Slithering") || type.includes("Slow Fall") || type.includes("Swinging")) return 1;
+         if (type.includes("Environmental Adaptation")) return 10;
+         return 20;
+     }
+
+     if (effect && (effect.effectName === "Comprehend")) {
+         if (type.includes("Languages")) return 4;
+         if (type.includes("Animals") || type.includes("Plants") || type.includes("Machines") || type.includes("Computers") || type.includes("Spirits")) return 2;
+         if (type.includes("Objects")) return 1;
+         return 20;
+     }
+
+     if (effect && (effect.effectName === "Features" || effect.effectName === "Feature")) {
+         if (type.includes("Custom")) return 20;
+         return 1;
+     }
+
+     if (effect && (effect.effectName === "Super-Senses" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses")) {
+         if (type.includes("Microscopic Vision")) return 4;
+         if (type.includes("Sense Type")) return 1;
+         if (type.includes("Custom Sense")) return 20;
+         if (subPower.costType === "flat") return 1;
+         return 20;
+     }
      
      if (effect.effectName === "Immunity") {
          if (type.includes("Custom Immunity")) return 80;
@@ -385,12 +630,7 @@ window.getMaxPowerRank = function(effect, subPower) {
          return 80;
      }
 
-     if (type.includes("Custom Sense")) return 20;
-
-     if (type.includes("Communication")) return 5;
-     if (type.includes("Languages")) return 4;
-     if (type.includes("Animals") || type.includes("Computers") || type.includes("Objects") || type.includes("Plants") || type.includes("Spirits")) return 2;
-     return 20; 
+     return 20;
   }
 
   if (!effect) return 20;
@@ -466,6 +706,523 @@ window.stepVal = function(elemId, delta, minVal, maxVal) {
   if (maxVal !== undefined && val > maxVal) val = maxVal;
   input.value = val;
   input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+window.showDiceRollModal = function(config) {
+  const modal = document.getElementById("diceRollModal");
+  const titleEl = document.getElementById("diceRollModalTitle");
+  const bodyEl = document.getElementById("diceRollModalBody");
+  if (!modal || !titleEl || !bodyEl) return;
+
+  titleEl.textContent = config.title || "🎲 Check Result";
+
+  let resultColor = "var(--accent-primary)";
+  let badgeHtml = "";
+  if (config.isNat20) {
+    resultColor = "#10b981";
+    badgeHtml = `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-weight: bold; padding: 4px 10px; font-size: var(--font-size-secondary);">🎉 Natural 20! Critical Success!</span>`;
+  } else if (config.isNat1) {
+    resultColor = "#ef4444";
+    badgeHtml = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-weight: bold; padding: 4px 10px; font-size: var(--font-size-secondary);">⚠️ Natural 1! Automatic Failure!</span>`;
+  }
+
+  bodyEl.innerHTML = `
+    <div style="text-align: center; padding: 8px 0;">
+      <div style="font-size: calc(var(--font-size-labels) * 2.2); font-weight: bold; color: ${resultColor}; line-height: 1.2;">
+        ${config.total}
+      </div>
+      <div style="font-size: var(--font-size-secondary); color: var(--text-muted); margin-top: 4px;">
+        1d20 (${config.d20}) ${config.mod >= 0 ? '+ ' + config.mod : '- ' + Math.abs(config.mod)} = <strong>${config.total}</strong>
+      </div>
+      ${badgeHtml ? `<div style="margin-top: 8px;">${badgeHtml}</div>` : ''}
+    </div>
+
+    ${config.detailsHtml ? `
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px; font-size: var(--font-size-secondary);">
+        ${config.detailsHtml}
+      </div>
+    ` : ''}
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+      ${config.rerollCode ? `
+        <button type="button" class="btn btn-primary" onclick="${config.rerollCode}" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls); display: inline-flex; align-items: center; gap: 6px;">
+          🎲 Re-roll
+        </button>
+      ` : '<div></div>'}
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('diceRollModal').classList.remove('active')" style="padding: 6px 16px; font-size: var(--font-size-controls);">
+        Close
+      </button>
+    </div>
+  `;
+
+  modal.classList.add("active");
+
+  // Broadcast roll event to Session Log & Multiplayer network
+  if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
+    const rollEntry = {
+      characterName: char?.name || "Hero",
+      rollType: config.title ? config.title.replace(/^🎲\s*/, '') : "Roll",
+      total: config.total,
+      breakdown: `1d20 (${config.d20}) ${config.mod >= 0 ? '+' + config.mod : config.mod} = ${config.total}`,
+      isNat20: !!config.isNat20,
+      isNat1: !!config.isNat1,
+      result: config.resultOutcome || ""
+    };
+    SessionNetwork.sendRoll(rollEntry);
+    if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+      CampaignManager.addLogEntry(rollEntry);
+    }
+  }
+};
+
+window.rollAbilityCheck = function(abilId) {
+  const abilNames = {
+    STR: "Strength",
+    CON: "Constitution",
+    DEX: "Dexterity",
+    INT: "Intelligence",
+    WIS: "Wisdom",
+    CHA: "Charisma"
+  };
+  const name = abilNames[abilId] || abilId;
+  const val = char.getAbilityRank(abilId);
+  if (val === null) {
+    showToast(`${name} is absent / disabled. Check cannot be made.`, "error");
+    return;
+  }
+  const mod = val;
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const total = d20 + mod;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  window.showDiceRollModal({
+    title: `🎲 ${name} Check`,
+    d20,
+    mod,
+    total,
+    isNat20,
+    isNat1,
+    detailsHtml: `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Ability:</span>
+        <strong>${name} (${abilId})</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: var(--text-muted); font-weight: 600;">Effective Modifier:</span>
+        <span class="badge" style="font-size: var(--font-size-tags);">${mod >= 0 ? '+' : ''}${mod}</span>
+      </div>
+    `,
+    rerollCode: `window.rollAbilityCheck('${abilId}')`
+  });
+};
+
+window.rollEffectCheck = function(pIdx, eIdx) {
+  const container = char.activePowers?.[pIdx];
+  const effect = container?.effects?.[eIdx];
+  if (!effect) return;
+
+  const effName = (effect.name && effect.name !== "New Effect") ? effect.name : (effect.effectName || "Effect");
+  const rank = parseInt(effect.rank !== undefined ? effect.rank : (effect.ranks || 1)) || 1;
+  const effectiveTraits = window.getEffectiveEffectTraits ? window.getEffectiveEffectTraits(effect) : { range: "Close" };
+  const range = (effectiveTraits && effectiveTraits.range) || "Close";
+
+  // Calculate Boost bonus if applicable
+  const boostSubsidiesData = (typeof char.getBoostSubsidies === 'function') ? char.getBoostSubsidies() : { subsidies: {}, rankBonuses: {} };
+  const isAlteringRanks = !!((char && char.houseRules && char.houseRules.boostAltersRanks) || (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true"));
+  const effectCustomName = (effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName) ? effect.name : '';
+  const possibleTargets = [effect.id, effect.name, effect.effectName, effectCustomName, container?.name].filter(Boolean);
+  let boostRankBonus = 0;
+  let boostPPBonus = 0;
+  if (isAlteringRanks) {
+    const rb = boostSubsidiesData.rankBonuses || {};
+    for (const tgt of possibleTargets) {
+      if (rb[tgt]) { boostRankBonus = rb[tgt]; break; }
+    }
+  } else {
+    const sb = boostSubsidiesData.subsidies || {};
+    for (const tgt of possibleTargets) {
+      if (sb[tgt]) { boostPPBonus = sb[tgt]; break; }
+    }
+  }
+  const rawCost = char.calculateEffectCost ? char.calculateEffectCost(effect) : rank;
+  const perRankCost = (rawCost > 0 && rank > 0) ? Math.max(1, Math.round(rawCost / rank)) : 1;
+  const effRank = isAlteringRanks ? (rank + boostRankBonus) : (rank + Math.floor(boostPPBonus / perRankCost));
+  const boostDelta = effRank - rank;
+
+  const saveDcDisplay = window.getEffectSaveDc ? window.getEffectSaveDc(effect, effRank > rank ? effRank : null) : "None";
+  const hasNoAttack = Array.isArray(effect.modifiers) && effect.modifiers.some(m => m.name === "No Attack Roll" || m.name?.startsWith("Area") || m.name?.startsWith("Perception"));
+
+  let checkType = "Attack Roll";
+  let atkBonus = 0;
+  let bonusDesc = "";
+
+  if (hasNoAttack || range === "Perception" || range === "Personal") {
+    checkType = "Power Check";
+    atkBonus = effRank;
+    bonusDesc = boostDelta > 0 ? `Power Rank + Boost (+${effRank})` : `Power Rank (+${rank})`;
+  } else if (range === "Ranged") {
+    checkType = "Ranged Attack Roll";
+    atkBonus = char.derivedStats?.rangedAttack || 0;
+    bonusDesc = `Ranged Attack (+${atkBonus})`;
+  } else {
+    checkType = "Melee Attack Roll";
+    atkBonus = char.derivedStats?.meleeAttack || 0;
+    bonusDesc = `Melee Attack (+${atkBonus})`;
+  }
+
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const total = d20 + atkBonus;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  let details = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Power / Effect:</span>
+      <strong>${effName} (${boostDelta > 0 ? `Rank ${rank} + ${boostDelta} Boost = Eff Rank ${effRank}` : `Rank ${rank}`})</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Check Type:</span>
+      <span>${checkType} (${bonusDesc})</span>
+    </div>
+  `;
+
+  if (saveDcDisplay && saveDcDisplay !== "None" && saveDcDisplay !== "—") {
+    details += `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+        <span style="color: var(--text-muted); font-weight: 600;">Target Saving Throw:</span>
+        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: bold; font-size: var(--font-size-tags);">🎯 ${saveDcDisplay}</span>
+      </div>
+    `;
+  }
+
+  if (isNat20 && checkType.includes("Attack")) {
+    details += `
+      <div style="margin-top: 6px; color: #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">
+        ✦ Critical Hit: +5 to the save DC or adds an additional degree of effect!
+      </div>
+    `;
+  }
+
+  window.showDiceRollModal({
+    title: `🎲 ${effName} ${checkType}`,
+    d20,
+    mod: atkBonus,
+    total,
+    isNat20,
+    isNat1,
+    detailsHtml: details,
+    rerollCode: `window.rollEffectCheck(${pIdx}, ${eIdx})`
+  });
+};
+
+window.rollSaveCheck = function(saveKey) {
+  const key = saveKey.toLowerCase();
+  let saveVal = (char.derivedStats && typeof char.derivedStats[key] === 'number') ? char.derivedStats[key] : null;
+
+  if (char.isMecha && key === "fortitude") {
+    showToast("Construct / Mecha is Immune to Fortitude effects.", "info");
+    return;
+  }
+  if (char.isMecha && !char.hasAI && key === "will") {
+    showToast("Mecha without AI is Immune to Will effects.", "info");
+    return;
+  }
+  if (saveVal === null || saveVal === undefined) {
+    showToast(`${saveKey} saving throw is absent or unavailable.`, "error");
+    return;
+  }
+
+  const mod = saveVal;
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const total = d20 + mod;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  let baseAbil = "";
+  if (key === "reflex") baseAbil = "DEX";
+  else if (key === "fortitude") baseAbil = "CON";
+  else if (key === "will") baseAbil = "WIS";
+  else if (key === "toughness") baseAbil = "CON";
+
+  const abilRank = char.getAbilityRank ? char.getAbilityRank(baseAbil) : (char.abilities?.[baseAbil] || 0);
+  const bought = (char.purchasedResistances && char.purchasedResistances[saveKey]) || 0;
+  const enhSave = (char.enhancedTraits?.saves?.[saveKey]) || 0;
+
+  let details = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Saving Throw:</span>
+      <strong>${saveKey} Save</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Base Ability (${baseAbil}):</span>
+      <span>${abilRank !== null ? (abilRank >= 0 ? '+' : '') + abilRank : 'None'}</span>
+    </div>
+    ${bought > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Bought Ranks:</span>
+        <span>+${bought}</span>
+      </div>
+    ` : ''}
+    ${enhSave > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Enhanced Trait:</span>
+        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">+${enhSave}</span>
+      </div>
+    ` : ''}
+    <div style="display: flex; justify-content: space-between;">
+      <span style="color: var(--text-muted); font-weight: 600;">Total Save Bonus:</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${mod >= 0 ? '+' : ''}${mod}</span>
+    </div>
+  `;
+
+  window.showDiceRollModal({
+    title: `🎲 ${saveKey} Save`,
+    d20,
+    mod,
+    total,
+    isNat20,
+    isNat1,
+    detailsHtml: details,
+    rerollCode: `window.rollSaveCheck('${saveKey}')`
+  });
+};
+
+window.rollInitiativeCheck = function() {
+  const dexMod = (typeof char.getAbilityRank === 'function') 
+    ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5) 
+    : (char.abilities?.DEX || 0);
+  const effFeats = char.effectiveFeats || char.feats || {};
+  const initFeat = effFeats["Improved Initiative"] || 0;
+  const totalMod = (char.derivedStats && typeof char.derivedStats.initiative === 'number')
+    ? char.derivedStats.initiative
+    : (dexMod + initFeat * 4);
+
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const total = d20 + totalMod;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  if (char.trackerState) {
+    char.trackerState.initiativeRoll = total;
+    const numInitResult = document.getElementById("numInitiativeResult");
+    if (numInitResult) numInitResult.value = total;
+    const lblInitBreakdown = document.getElementById("lblInitiativeRollBreakdown");
+    if (lblInitBreakdown) {
+      const featStr = initFeat > 0 ? ` + Imp. Init (${initFeat * 4})` : "";
+      lblInitBreakdown.textContent = `Rolled 1d20 (${d20}) + DEX (${dexMod >= 0 ? "+" : ""}${dexMod})${featStr} = ${total}`;
+    }
+  }
+
+  const details = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Initiative Check:</span>
+      <strong>1d20 + ${totalMod}</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">DEX Modifier:</span>
+      <span>${dexMod >= 0 ? '+' : ''}${dexMod}</span>
+    </div>
+    ${initFeat > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Improved Initiative (${initFeat}):</span>
+        <span>+${initFeat * 4}</span>
+      </div>
+    ` : ''}
+    <div style="display: flex; justify-content: space-between;">
+      <span style="color: var(--text-muted); font-weight: 600;">Total Modifier:</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${totalMod >= 0 ? '+' : ''}${totalMod}</span>
+    </div>
+  `;
+
+  window.showDiceRollModal({
+    title: `🎲 Initiative Check`,
+    d20,
+    mod: totalMod,
+    total,
+    isNat20,
+    isNat1,
+    detailsHtml: details,
+    rerollCode: `window.rollInitiativeCheck()`
+  });
+};
+
+window.rollAttackCheck = function(attackMode) {
+  const isRanged = attackMode === "Ranged Attack";
+  const isUnarmed = attackMode === "Unarmed";
+  const atkBonus = isRanged 
+    ? ((char.derivedStats && typeof char.derivedStats.rangedAttack === 'number') ? char.derivedStats.rangedAttack : (char.combat?.baseAttack || 0))
+    : ((char.derivedStats && typeof char.derivedStats.meleeAttack === 'number') ? char.derivedStats.meleeAttack : (char.combat?.baseAttack || 0));
+
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const total = d20 + atkBonus;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  let details = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Attack Mode:</span>
+      <strong>${attackMode}</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Attack Bonus:</span>
+      <span>${atkBonus >= 0 ? '+' : ''}${atkBonus}</span>
+    </div>
+  `;
+
+  if (isUnarmed) {
+    const strRank = char.getAbilityRank ? char.getAbilityRank("STR") : (char.abilities?.STR || 0);
+    const unarmedDmg = strRank === null ? 0 : strRank;
+    const unarmedDC = 15 + unarmedDmg;
+    details += `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+        <span style="color: var(--text-muted); font-weight: 600;">Target Save DC:</span>
+        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: bold; font-size: var(--font-size-tags);">🎯 Toughness DC ${unarmedDC} (Dmg Rank ${unarmedDmg})</span>
+      </div>
+    `;
+  }
+
+  if (isNat20) {
+    details += `
+      <div style="margin-top: 6px; color: #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">
+        ✦ Critical Hit: +5 to the save DC or adds an additional degree of effect!
+      </div>
+    `;
+  }
+
+  window.showDiceRollModal({
+    title: `🎲 ${attackMode} Roll`,
+    d20,
+    mod: atkBonus,
+    total,
+    isNat20,
+    isNat1,
+    detailsHtml: details,
+    rerollCode: `window.rollAttackCheck('${attackMode}')`
+  });
+};
+
+window.rollSkillCheck = function(skillName) {
+  const meta = (typeof getSkillMetadata === 'function') 
+    ? getSkillMetadata(skillName) 
+    : { ability: "None", untrained: true };
+  const val = (char.getAbilityRank && meta.ability !== "None") ? char.getAbilityRank(meta.ability) : 0;
+  let base = 0;
+  if (meta.ability === "None") {
+    base = 0;
+  } else {
+    base = val === null ? -5 : val;
+  }
+  const bought = (char.skills && char.skills[skillName]) || 0;
+  const enhancedSkill = (char.enhancedTraits?.skills?.[skillName]) || 0;
+  const total = base + bought + enhancedSkill;
+  const isTrainedOnly = !meta.untrained && (bought + enhancedSkill) === 0;
+
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const rollTotal = d20 + total;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  let details = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Skill:</span>
+      <strong>${skillName} (${meta.ability})</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Base Ability (${meta.ability}):</span>
+      <span>${base >= 0 ? '+' : ''}${base}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Bought Ranks:</span>
+      <span>${bought >= 0 ? '+' : ''}${bought}</span>
+    </div>
+    ${enhancedSkill > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Enhanced Trait:</span>
+        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">+${enhancedSkill}</span>
+      </div>
+    ` : ''}
+    <div style="display: flex; justify-content: space-between;">
+      <span style="color: var(--text-muted); font-weight: 600;">Total Skill Bonus:</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${total >= 0 ? '+' : ''}${total}</span>
+    </div>
+  `;
+
+  if (isTrainedOnly) {
+    details += `
+      <div style="margin-top: 6px; padding: 4px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.12); color: #f59e0b; font-size: var(--font-size-fine-print); font-weight: 600;">
+        ⚠️ Trained Only: Character has 0 ranks in this skill. Check requires GM permission.
+      </div>
+    `;
+  }
+
+  window.showDiceRollModal({
+    title: `🎲 ${skillName} Check`,
+    d20,
+    mod: total,
+    total: rollTotal,
+    isNat20,
+    isNat1,
+    detailsHtml: details,
+    rerollCode: `window.rollSkillCheck('${skillName.replace(/'/g, "\\'")}')`
+  });
+};
+
+window.rollFeatCheck = function(featName) {
+  const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
+  const baseName = featName.includes(" (") ? featName.split(" (")[0].trim() : featName.trim();
+  const baseFeat = listRef.find(a => a.name.toLowerCase() === baseName.toLowerCase() || a.name.toLowerCase() === featName.toLowerCase()) || {
+    name: featName,
+    category: "General",
+    ranked: true,
+    description: "",
+    fullText: ""
+  };
+
+  const val = (char.feats && char.feats[featName]) || 0;
+  const enhFeat = (char.enhancedTraits?.feats?.[featName]) || 0;
+  const effVal = val + enhFeat;
+
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const total = d20 + effVal;
+  const isNat20 = d20 === 20;
+  const isNat1 = d20 === 1;
+
+  let desc = baseFeat.description || "";
+  if (!desc && baseFeat.fullText) {
+    desc = baseFeat.fullText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (desc.length > 220) desc = desc.slice(0, 217) + "...";
+  }
+
+  let details = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Feat:</span>
+      <strong>${featName} [${baseFeat.category || (baseFeat.types ? baseFeat.types.join(", ") : "General")}]</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span style="color: var(--text-muted); font-weight: 600;">Effective Rank / Bonus:</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${effVal >= 0 ? '+' : ''}${effVal}</span>
+    </div>
+  `;
+
+  if (desc) {
+    details += `
+      <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); font-size: var(--font-size-fine-print); color: var(--text-main); line-height: 1.4;">
+        ${desc}
+      </div>
+    `;
+  }
+
+  window.showDiceRollModal({
+    title: `🎲 ${featName} Check / Roll`,
+    d20,
+    mod: effVal,
+    total,
+    isNat20,
+    isNat1,
+    detailsHtml: details,
+    rerollCode: `window.rollFeatCheck('${featName.replace(/'/g, "\\'")}')`
+  });
 };
 
 window.showAdvantageInfo = function(advName) {
@@ -632,10 +1389,10 @@ window.checkScreenResolution = function() {
             banner.style.textAlign = "center";
             banner.style.padding = "8px 16px";
             banner.style.zIndex = "9999";
-            banner.style.fontSize = "14px";
+            banner.style.fontSize = "var(--font-size-secondary)";
             banner.style.fontWeight = "bold";
             banner.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
-            banner.innerHTML = `⚠️ Your screen width is less than 1080px. For the best builder experience, please use a wider screen or switch your device to landscape mode. <button id="dismissResWarning" style="margin-left:12px; background:rgba(0,0,0,0.2); border:1px solid #fff; color:white; padding:4px 8px; cursor:pointer; border-radius:4px; font-size:12px;">Dismiss</button>`;
+            banner.innerHTML = `⚠️ Your screen width is less than 1080px. For the best builder experience, please use a wider screen or switch your device to landscape mode. <button id="dismissResWarning" style="margin-left:12px; background:rgba(0,0,0,0.2); border:1px solid #fff; color:white; padding:4px 8px; cursor:pointer; border-radius:4px; font-size:var(--font-size-minor-controls);">Dismiss</button>`;
             document.body.prepend(banner);
             
             document.getElementById("dismissResWarning").addEventListener("click", () => {
@@ -701,6 +1458,8 @@ document.addEventListener("DOMContentLoaded", () => {
   setupBackgroundHandlers();
   setupFileHandlers();
   setupCompanionModalHandlers();
+  setupStatusTracker();
+  setupSessionAndGMHub();
   setupSortingHeaders();
   setupDefenseSteppers();
   setupPowerHandlers();
@@ -710,8 +1469,9 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshUI();
 });
 
+let previousActiveTab = "tab-basics";
+
 function setupTabs() {
-  let previousActiveTab = "tab-basics";
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -721,11 +1481,54 @@ function setupTabs() {
       const targetContent = document.getElementById(btn.dataset.tab);
       if (targetContent) targetContent.classList.add("active");
 
-      // Hide back button when any normal tab is clicked
+      // Preserve previous tab if leaving a special tab
+      const trackerContent = document.getElementById("tab-tracker");
+      const tablesContent = document.getElementById("tab-tables");
+      const gmContent = document.getElementById("tab-gm");
+
+      if (trackerContent && trackerContent.classList.contains("active")) {
+        previousActiveTab = "tab-tracker";
+      } else if (tablesContent && tablesContent.classList.contains("active")) {
+        previousActiveTab = "tab-tables";
+      } else if (gmContent && gmContent.classList.contains("active")) {
+        previousActiveTab = "tab-gm";
+      }
+
       const btnBack = document.getElementById("btnBackFromTables");
-      if (btnBack) btnBack.style.display = "none";
+      const btnTables = document.getElementById("btnOpenTables");
+      const btnTracker = document.getElementById("btnOpenTracker");
+      const btnGM = document.getElementById("btnOpenGM");
+
+      if (btnTables) {
+        btnTables.classList.remove("btn-primary");
+        btnTables.classList.add("btn-secondary");
+      }
+      if (btnTracker) {
+        btnTracker.classList.remove("btn-primary");
+        btnTracker.classList.add("btn-secondary");
+      }
+      if (btnGM) {
+        btnGM.classList.remove("btn-primary");
+        btnGM.classList.add("btn-secondary");
+      }
+      if (trackerContent) trackerContent.classList.remove("active");
+      const trackerModal = document.getElementById("statusTrackerModal");
+      if (trackerModal) trackerModal.classList.remove("active");
+      if (tablesContent) tablesContent.classList.remove("active");
+      if (gmContent) gmContent.classList.remove("active");
+
+      // If user came from a special tab (tracker, tables, or gm), keep the back button visible so they can return!
+      if (previousActiveTab === "tab-tracker" || previousActiveTab === "tab-tables" || previousActiveTab === "tab-gm") {
+        if (btnBack) {
+          btnBack.style.display = "inline-flex";
+          const label = previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-tables" ? "Tables" : "GM Hub");
+          btnBack.title = `Return to ${label}`;
+        }
+      } else {
+        if (btnBack) btnBack.style.display = "none";
+      }
       
-      // Update power context for shared UI logic
+      // Update power context or session UI
       if (btn.dataset.tab === "tab-blueprints") {
           window.activePowerContext = 'blueprints';
           buildPowersUI();
@@ -733,7 +1536,13 @@ function setupTabs() {
           window.activePowerContext = 'powers';
           buildPowersUI();
       } else if (btn.dataset.tab === "tab-companions") {
+          window.activePowerContext = 'powers';
           buildCompanionsUI();
+      } else if (btn.dataset.tab === "tab-session") {
+          window.activePowerContext = 'powers';
+          if (typeof window.syncSessionUI === 'function') window.syncSessionUI();
+      } else {
+          window.activePowerContext = 'powers';
       }
     });
   });
@@ -762,10 +1571,32 @@ function setupTabs() {
       document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
       if (tablesContent) tablesContent.classList.add("active");
 
+      // Reset tracker & GM state
+      const trackerContent = document.getElementById("tab-tracker");
+      if (trackerContent) trackerContent.classList.remove("active");
+      const trackerModal = document.getElementById("statusTrackerModal");
+      if (trackerModal) trackerModal.classList.remove("active");
+      const gmContent = document.getElementById("tab-gm");
+      if (gmContent) gmContent.classList.remove("active");
+
+      // Style buttons
+      btnOpenTables.classList.add("btn-primary");
+      btnOpenTables.classList.remove("btn-secondary");
+      const btnTracker = document.getElementById("btnOpenTracker");
+      if (btnTracker) {
+        btnTracker.classList.remove("btn-primary");
+        btnTracker.classList.add("btn-secondary");
+      }
+      const btnGM = document.getElementById("btnOpenGM");
+      if (btnGM) {
+        btnGM.classList.remove("btn-primary");
+        btnGM.classList.add("btn-secondary");
+      }
+
       if (btnBackFromTables) {
         btnBackFromTables.style.display = "inline-flex";
         const prevBtn = document.querySelector(`.tab-btn[data-tab="${previousActiveTab}"]`);
-        const prevName = prevBtn ? prevBtn.textContent.trim() : "Previous View";
+        const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-gm" ? "GM Hub" : "Previous View"));
         btnBackFromTables.title = `Return to ${prevName}`;
       }
     });
@@ -774,6 +1605,19 @@ function setupTabs() {
   if (btnBackFromTables) {
     btnBackFromTables.addEventListener("click", () => {
       const targetTab = previousActiveTab || "tab-basics";
+      if (targetTab === "tab-tracker" && typeof window.openTrackerTab === 'function') {
+        window.openTrackerTab();
+        return;
+      }
+      if (targetTab === "tab-gm" && typeof window.openGMTab === 'function') {
+        window.openGMTab();
+        return;
+      }
+      if (targetTab === "tab-tables") {
+        if (btnOpenTables) btnOpenTables.click();
+        return;
+      }
+
       const targetBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
       if (targetBtn) {
         targetBtn.click();
@@ -784,6 +1628,27 @@ function setupTabs() {
         if (targetContent) targetContent.classList.add("active");
         btnBackFromTables.style.display = "none";
       }
+
+      if (btnOpenTables) {
+        btnOpenTables.classList.remove("btn-primary");
+        btnOpenTables.classList.add("btn-secondary");
+      }
+      const btnTracker = document.getElementById("btnOpenTracker");
+      if (btnTracker) {
+        btnTracker.classList.remove("btn-primary");
+        btnTracker.classList.add("btn-secondary");
+      }
+      const btnGM = document.getElementById("btnOpenGM");
+      if (btnGM) {
+        btnGM.classList.remove("btn-primary");
+        btnGM.classList.add("btn-secondary");
+      }
+      const trackerContent = document.getElementById("tab-tracker");
+      if (trackerContent) trackerContent.classList.remove("active");
+      const trackerModal = document.getElementById("statusTrackerModal");
+      if (trackerModal) trackerModal.classList.remove("active");
+      const gmContent = document.getElementById("tab-gm");
+      if (gmContent) gmContent.classList.remove("active");
     });
   }
 
@@ -797,17 +1662,37 @@ function setupTabs() {
   const selChar = document.getElementById("selActiveCharacterContext");
   if (selChar) {
     selChar.addEventListener("change", (e) => {
-      if (e.target.value === "__add_new__") {
-        openCreateCompanionModal();
-        e.target.value = window.activeCompanionId || "main";
-      } else if (e.target.value === "main") {
+      const val = e.target.value;
+      const resetDropdown = () => {
+        setTimeout(() => {
+          if (selChar) selChar.value = window.activeCompanionId || "main";
+        }, 50);
+      };
+
+      if (val === "__new_hero__") {
+        resetDropdown();
+        if (window.FileManager && typeof window.FileManager.newHero === 'function') {
+          window.FileManager.newHero();
+        }
+      } else if (val && val.startsWith("__add_")) {
+        resetDropdown();
+        let type = "sidekick";
+        if (val === "__add_alt_form__") type = "metamorph";
+        else if (val === "__add_mecha__") type = "mecha";
+        else if (val === "__add_minion__") type = "minion";
+        else if (val === "__add_summon__") type = "summon";
+        else if (val === "__add_duplicate__") type = "duplicate";
+        else if (val === "__add_sidekick__" || val === "__add_companion__" || val === "__add_new__") type = "sidekick";
+        createAndSwitchToCompanion(type);
+      } else if (val === "main") {
         returnToPrimaryHero();
-      } else {
-        switchToCompanion(e.target.value);
+      } else if (val) {
+        switchToCompanion(val);
       }
     });
   }
 }
+window.setupTabs = setupTabs;
 
 function setupCollapsibles() {
   document.querySelectorAll(".panel-header").forEach(header => {
@@ -843,6 +1728,116 @@ function setupOptionsModal() {
       localStorage.setItem("mm2e_disable_res_warning", e.target.checked);
       if (typeof window.checkScreenResolution === "function") {
         window.checkScreenResolution();
+      }
+    });
+  }
+
+  // House Rules
+  const chkEnhTraitBoost = document.getElementById("toggleEnhancedTraitBoost");
+  const chkAltFormPL = document.getElementById("toggleAltFormVariablePL");
+  const chkBoostRanks = document.getElementById("toggleBoostAltersRanks");
+
+  if (chkEnhTraitBoost) {
+    chkEnhTraitBoost.checked = (char.houseRules && char.houseRules.enhancedTraitBoostsEffects) || (localStorage.getItem("mm2e_houserule_enhanced_trait_boost") === "true");
+    chkEnhTraitBoost.addEventListener("change", (e) => {
+      if (!char.houseRules) char.houseRules = {};
+      char.houseRules.enhancedTraitBoostsEffects = e.target.checked;
+      localStorage.setItem("mm2e_houserule_enhanced_trait_boost", e.target.checked);
+      refreshUI();
+    });
+  }
+
+  if (chkAltFormPL) {
+    chkAltFormPL.checked = (char.houseRules && char.houseRules.allowAltFormVariablePL) || (localStorage.getItem("mm2e_houserule_alt_form_variable_pl") === "true");
+    chkAltFormPL.addEventListener("change", (e) => {
+      if (!char.houseRules) char.houseRules = {};
+      char.houseRules.allowAltFormVariablePL = e.target.checked;
+      localStorage.setItem("mm2e_houserule_alt_form_variable_pl", e.target.checked);
+      if (typeof updateCompanionModalDefaults === 'function') {
+        updateCompanionModalDefaults();
+      }
+    });
+  }
+
+  if (chkBoostRanks) {
+    const isBoostAlters = (char.houseRules && char.houseRules.boostAltersRanks) || (localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true");
+    chkBoostRanks.checked = isBoostAlters;
+    if (!char.houseRules) char.houseRules = {};
+    if (isBoostAlters) char.houseRules.boostAltersRanks = true;
+    chkBoostRanks.addEventListener("change", (e) => {
+      if (!char.houseRules) char.houseRules = {};
+      char.houseRules.boostAltersRanks = e.target.checked;
+      localStorage.setItem("mm2e_houserule_boost_alters_ranks", e.target.checked);
+      refreshUI();
+    });
+  }
+
+  const chkLegacyMods = document.getElementById("toggleEnableLegacyCoreModifiers");
+  if (chkLegacyMods) {
+    const isLegacyModsOn = (char.houseRules && char.houseRules.enableLegacyCoreModifiers) || (localStorage.getItem("mm2e_houserule_enable_legacy_modifiers") === "true");
+    chkLegacyMods.checked = isLegacyModsOn;
+    chkLegacyMods.addEventListener("change", (e) => {
+      if (!char.houseRules) char.houseRules = {};
+      char.houseRules.enableLegacyCoreModifiers = e.target.checked;
+      localStorage.setItem("mm2e_houserule_enable_legacy_modifiers", e.target.checked);
+      refreshUI();
+    });
+  }
+
+  const chkDisablePerception = document.getElementById("toggleDisablePerceptionRange");
+  if (chkDisablePerception) {
+    const isDisablePerceptionOn = (char.houseRules && char.houseRules.disablePerceptionRange) || (localStorage.getItem("mm2e_houserule_disable_perception_range") === "true");
+    chkDisablePerception.checked = isDisablePerceptionOn;
+    chkDisablePerception.addEventListener("change", (e) => {
+      if (!char.houseRules) char.houseRules = {};
+      if (e.target.checked) {
+        char.houseRules.disablePerceptionRange = true;
+        localStorage.setItem("mm2e_houserule_disable_perception_range", "true");
+        refreshUI();
+      } else {
+        // Scan for effects currently using "No Attack Roll"
+        const matches = [];
+        const scanContainer = (containerList, typeLabel) => {
+          (containerList || []).forEach((c, cIdx) => {
+            const cName = c.name || `${typeLabel} ${cIdx + 1}`;
+            (c.effects || []).forEach((eff, eIdx) => {
+              const effName = eff.name || eff.effectName || `Effect ${eIdx + 1}`;
+              if (Array.isArray(eff.modifiers) && eff.modifiers.some(m => m.name === "No Attack Roll")) {
+                matches.push({ effect: eff, label: `${cName} > ${effName}` });
+              }
+              if (Array.isArray(eff.containedPowers)) {
+                eff.containedPowers.forEach((cp, cpIdx) => {
+                  const cpName = cp.name || cp.effectName || `Power ${cpIdx + 1}`;
+                  if (Array.isArray(cp.modifiers) && cp.modifiers.some(m => m.name === "No Attack Roll")) {
+                    matches.push({ effect: cp, label: `${cName} > ${effName} [Contained] > ${cpName}` });
+                  }
+                });
+              }
+            });
+          });
+        };
+
+        scanContainer(char.powers, "Power");
+        scanContainer(char.blueprints, "Blueprint");
+
+        if (matches.length > 0) {
+          const promptMsg = "Disabling this house rule will remove the \"No Attack Roll\" extra from the following effect(s) and refund the spent Power Points:\n\n" +
+            matches.map(m => `• ${m.label}`).join("\n") +
+            "\n\nDo you want to continue?";
+          if (!confirm(promptMsg)) {
+            e.target.checked = true;
+            return;
+          }
+          matches.forEach(item => {
+            if (Array.isArray(item.effect.modifiers)) {
+              item.effect.modifiers = item.effect.modifiers.filter(m => m.name !== "No Attack Roll");
+            }
+          });
+        }
+
+        char.houseRules.disablePerceptionRange = false;
+        localStorage.setItem("mm2e_houserule_disable_perception_range", "false");
+        refreshUI();
       }
     });
   }
@@ -957,18 +1952,1718 @@ function setupInfoModalHandlers() {
       if (skillModal && skillModal.classList.contains("active")) {
         window.closeAddSkillModal();
       }
+      const trackerContent = document.getElementById("tab-tracker");
+      if (trackerContent && trackerContent.classList.contains("active")) {
+        const btnBack = document.getElementById("btnBackFromTables");
+        if (btnBack) btnBack.click();
+      }
+      const trackerModal = document.getElementById("statusTrackerModal");
+      if (trackerModal && trackerModal.classList.contains("active")) {
+        trackerModal.classList.remove("active");
+      }
+      const ruleModal = document.getElementById("ruleInfoModal");
+      if (ruleModal && ruleModal.classList.contains("active")) {
+        ruleModal.classList.remove("active");
+      }
+      const compModal = document.getElementById("companionCreateModal");
+      if (compModal && compModal.classList.contains("active")) {
+        compModal.classList.remove("active");
+      }
+      const adjModal = document.getElementById("traitAdjustmentsModal");
+      if (adjModal && adjModal.classList.contains("active")) {
+        adjModal.classList.remove("active");
+      }
     }
   });
 }
+
+// ================= STATUS & COMBAT TRACKER CONTROLLER =================
+function setupStatusTracker() {
+    const modal = document.getElementById("statusTrackerModal");
+    const btnOpen = document.getElementById("btnOpenTracker");
+    const btnClose = document.getElementById("modalStatusTrackerClose");
+    const btnClearAllConds = document.getElementById("btnClearAllConditions");
+
+    // Initiative elements
+    const lblInitMod = document.getElementById("lblTrackerInitMod");
+    const btnRollInit = document.getElementById("btnRollInitiative");
+    const btnStepInitDown = document.getElementById("btnStepInitDown");
+    const btnStepInitUp = document.getElementById("btnStepInitUp");
+    const numInitResult = document.getElementById("numInitiativeResult");
+    const btnClearInit = document.getElementById("btnClearInit");
+    const lblInitBreakdown = document.getElementById("lblInitiativeRollBreakdown");
+
+    // General d20 elements
+    const btnRollD20 = document.getElementById("btnRollD20");
+    const btnStepD20AdjDown = document.getElementById("btnStepD20AdjDown");
+    const btnStepD20AdjUp = document.getElementById("btnStepD20AdjUp");
+    const numD20Adj = document.getElementById("numD20Adj");
+    const btnClearD20Adj = document.getElementById("btnClearD20Adj");
+    const lblD20Result = document.getElementById("lblD20RollResult");
+    const lblD20Breakdown = document.getElementById("lblD20RollBreakdown");
+
+    // Custom Trackers elements
+    const btnAddCustom = document.getElementById("btnAddCustomTracker");
+    const listCustom = document.getElementById("listCustomTrackers");
+
+    // Fades elements
+    const listFades = document.getElementById("listFadesTrackers");
+    const btnAdvanceAll = document.getElementById("btnAdvanceAllFades");
+
+    if (!modal || !btnOpen) return;
+
+    function ensureTrackerState() {
+      if (!char.trackerState) {
+        char.trackerState = {
+          initiativeRoll: null,
+          initiativeAdjustment: 0,
+          generalD20Roll: null,
+          generalD20Adj: 0,
+          conditions: {},
+          customPoints: [],
+          fadeStates: {}
+        };
+      }
+      if (!char.trackerState.conditions) char.trackerState.conditions = {};
+      if (!Array.isArray(char.trackerState.customPoints)) {
+        char.trackerState.customPoints = [];
+      } else {
+        char.trackerState.customPoints.forEach(t => {
+          if (t.max === 5 && !t.explicitMax) {
+            t.max = null;
+          }
+        });
+      }
+      if (!char.trackerState.fadeStates) char.trackerState.fadeStates = {};
+    }
+
+    function getInitiativeModifier() {
+      const dexMod = (typeof char.getAbilityRank === 'function') 
+        ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5) 
+        : (char.abilities?.DEX || 0);
+      const effFeats = char.effectiveFeats || char.feats || {};
+      const initFeat = effFeats["Improved Initiative"] || 0;
+      const totalMod = (char.derivedStats && typeof char.derivedStats.initiative === 'number')
+        ? char.derivedStats.initiative
+        : (dexMod + (initFeat * 4));
+      return { dexMod, initFeat, totalMod };
+    }
+
+    function syncInitiativeUI() {
+      ensureTrackerState();
+      const { dexMod, initFeat, totalMod } = getInitiativeModifier();
+      if (lblInitMod) {
+        lblInitMod.textContent = `Mod: ${totalMod >= 0 ? '+' + totalMod : totalMod} (DEX ${dexMod >= 0 ? '+' + dexMod : dexMod}${initFeat > 0 ? ', Imp Init ' + initFeat : ''})`;
+      }
+      if (numInitResult) {
+        numInitResult.value = (char.trackerState.initiativeRoll !== null && char.trackerState.initiativeRoll !== undefined) ? char.trackerState.initiativeRoll : "";
+      }
+    }
+
+    function syncGeneralD20UI() {
+      ensureTrackerState();
+      if (numD20Adj) {
+        numD20Adj.value = char.trackerState.generalD20Adj || 0;
+      }
+      if (char.trackerState.generalD20Roll && lblD20Result && lblD20Breakdown) {
+        const roll = char.trackerState.generalD20Roll;
+        lblD20Result.textContent = `Result: ${roll.total}`;
+        lblD20Breakdown.textContent = `1d20 roll: ${roll.d20}${roll.adj !== 0 ? (roll.adj > 0 ? ' + ' + roll.adj : ' - ' + Math.abs(roll.adj)) : ''} = ${roll.total}`;
+      }
+    }
+
+    function updateTrackerConditionsSummary() {
+      ensureTrackerState();
+      const boxChips = document.getElementById("boxActiveConditionsChips");
+      if (!boxChips) return;
+
+      const conds = char.trackerState.conditions;
+      const chips = [];
+
+      const bruised = conds["Bruised"] || 0;
+      const injured = conds["Injured"] || 0;
+      if (bruised > 0) {
+        chips.push(`<span class="badge" style="background: rgba(245, 158, 11, 0.18); color: #d97706; border: 1px solid #d97706; font-weight: bold;">💥 Bruised ×${bruised} (-${bruised} save)</span>`);
+      }
+      if (injured > 0) {
+        chips.push(`<span class="badge" style="background: rgba(239, 68, 68, 0.18); color: #dc2626; border: 1px solid #dc2626; font-weight: bold;">🩸 Injured ×${injured} (-${injured} save)</span>`);
+      }
+
+      const valBruisedEl = document.getElementById("valBruisedCount");
+      if (valBruisedEl) valBruisedEl.textContent = bruised;
+      const valInjuredEl = document.getElementById("valInjuredCount");
+      if (valInjuredEl) valInjuredEl.textContent = injured;
+
+      for (const [cName, cVal] of Object.entries(conds)) {
+        if (cName === "Bruised" || cName === "Injured") continue;
+        if (cVal) {
+          chips.push(`<span class="badge" style="background: rgba(239, 68, 68, 0.12); color: var(--text-main); border: 1px solid var(--accent-primary); font-weight: 600;">⚠️ ${cName}</span>`);
+        }
+      }
+
+      // Sync checkboxes
+      document.querySelectorAll("#statusTrackerModal input[type='checkbox'][data-cond]").forEach(cb => {
+        const c = cb.dataset.cond;
+        cb.checked = !!conds[c];
+      });
+
+      if (chips.length === 0) {
+        boxChips.innerHTML = `
+          <span style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Active Conditions:</span>
+          <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600;">Normal / Unhindered</span>
+        `;
+      } else {
+        boxChips.innerHTML = `
+          <span style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Active Conditions:</span>
+          ${chips.join(' ')}
+        `;
+      }
+    }
+
+    function renderCustomTrackers() {
+      ensureTrackerState();
+      if (!listCustom) return;
+      const trackers = char.trackerState.customPoints;
+      if (trackers.length === 0) {
+        listCustom.innerHTML = `<span class="secondary-text" style="font-size: var(--font-size-fine-print); font-style: italic;">No custom counters configured. Click + Add Counter above.</span>`;
+        return;
+      }
+
+      listCustom.innerHTML = trackers.map((t) => `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px;">
+          <input type="text" value="${t.name || ''}" placeholder="Counter Name..." style="flex: 1; font-size: var(--font-size-secondary); font-weight: 600; border: 1px solid var(--border-color); background: var(--bg-panel); color: var(--text-main); padding: 4px 8px; border-radius: 3px; min-height: 28px;" oninput="window.updateCustomTrackerName('${t.id}', this.value)" onchange="window.updateCustomTrackerName('${t.id}', this.value)">
+          <div style="display: flex; align-items: center; gap: 4px;" class="tracker-stepper">
+            <button type="button" class="modifier-stepper-btn" onclick="window.stepCustomPoint('${t.id}', -1)" style="width: 28px; height: 28px;">−</button>
+            <input type="number" min="0" value="${t.current || 0}" style="width: 44px; height: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-secondary); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-main);" onchange="window.updateCustomTrackerCurrent('${t.id}', this.value)">
+            <button type="button" class="modifier-stepper-btn" onclick="window.stepCustomPoint('${t.id}', 1)" style="width: 28px; height: 28px;">+</button>
+            <span style="font-size: var(--font-size-secondary); color: var(--text-muted); margin: 0 2px;">/</span>
+            <input type="number" min="1" value="${t.max !== undefined && t.max !== null ? t.max : ''}" placeholder="Max" title="Maximum Capacity (Optional)" style="width: 44px; height: 28px; text-align: center; font-size: var(--font-size-minor-controls); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-muted);" onchange="window.updateCustomTrackerMax('${t.id}', this.value)">
+          </div>
+          <button type="button" class="btn-delete-power" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); height: 28px;" onclick="window.deleteCustomTracker('${t.id}')" title="Delete Counter">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function renderFadesTrackers() {
+      ensureTrackerState();
+      if (!listFades) return;
+
+      const detectedFades = [];
+      const allPowers = char.activePowers || char.powers || [];
+      allPowers.forEach((power, pIdx) => {
+        (power.effects || []).forEach((eff, eIdx) => {
+          const isBoost = eff.effectName === "Boost";
+          const fadesMod = (eff.modifiers || []).find(m => m.name && (m.name === "Fades" || m.name.startsWith("Fades")));
+          if (isBoost || fadesMod) {
+            const effId = eff.id || `fade_${pIdx}_${eIdx}`;
+            const effName = (eff.name && eff.name !== "New Effect") ? eff.name : (eff.effectName || "Unnamed Power");
+            const containerName = power.name || "Power Container";
+
+            const slowMod = (eff.modifiers || []).find(m => m.name && m.name.startsWith("Slow Fade"));
+            const totalFadeMod = (eff.modifiers || []).find(m => m.name && m.name.startsWith("Total Fade"));
+            const slowRanks = slowMod ? (parseInt(slowMod.ranks) || 1) : 0;
+
+            let intervalDesc = "1 round (fades each round)";
+            if (slowRanks === 1) intervalDesc = "1 minute / 10 rounds";
+            else if (slowRanks === 2) intervalDesc = "5 minutes / 50 rounds";
+            else if (slowRanks === 3) intervalDesc = "20 minutes / 200 rounds";
+            else if (slowRanks >= 4) intervalDesc = `${slowRanks - 3} hour(s)`;
+
+            const isRankAltered = isBoost && ((char.houseRules && char.houseRules.boostAltersRanks) || (localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true"));
+            const maxVal = parseInt(eff.rank) || 1;
+            const unit = isBoost ? (isRankAltered ? "Ranks" : "PP") : (fadesMod?.costType === "flat" ? "PP" : "Ranks");
+
+            if (char.trackerState.fadeStates[effId] === undefined) {
+              char.trackerState.fadeStates[effId] = maxVal;
+            }
+            const currentVal = char.trackerState.fadeStates[effId];
+
+            detectedFades.push({
+              effId,
+              effName,
+              containerName,
+              isBoost,
+              isRankAltered,
+              unit,
+              maxVal,
+              currentVal,
+              intervalDesc,
+              hasTotalFade: !!totalFadeMod,
+              pIdx,
+              eIdx
+            });
+          }
+        });
+      });
+
+      if (detectedFades.length === 0) {
+        listFades.innerHTML = `<span class="secondary-text" style="font-size: var(--font-size-fine-print); font-style: italic;">No active powers with Fades or Boost detected.</span>`;
+        return;
+      }
+
+      listFades.innerHTML = detectedFades.map(f => `
+        <div style="display: flex; flex-direction: column; gap: 4px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+            <div>
+              <strong style="font-size: var(--font-size-secondary); color: var(--accent-primary);">${f.effName}</strong>
+              <span class="secondary-text" style="font-size: var(--font-size-fine-print);"> (${f.containerName})</span>
+            </div>
+            <span class="badge" style="font-size: var(--font-size-tags); background: ${f.currentVal > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${f.currentVal > 0 ? '#10b981' : '#ef4444'};">
+              ${f.currentVal} / ${f.maxVal} ${f.unit}
+            </span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="font-size: var(--font-size-fine-print); color: var(--text-muted);">
+              Rate: 1 ${f.unit} per ${f.intervalDesc}${f.hasTotalFade ? ' | <strong>Total Fade</strong>' : ''}
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
+                <button type="button" class="modifier-stepper-btn" onclick="window.stepFadeValue('${f.effId}', -1, ${f.maxVal}, ${f.pIdx}, ${f.eIdx})" style="width: 28px; height: 28px;">−</button>
+                <span style="min-width: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-secondary);">${f.currentVal}</span>
+                <button type="button" class="modifier-stepper-btn" onclick="window.stepFadeValue('${f.effId}', 1, ${f.maxVal}, ${f.pIdx}, ${f.eIdx})" style="width: 28px; height: 28px;">+</button>
+              </div>
+              <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-minor-controls); padding: 2px 8px; height: 28px;" onclick="window.resetFadeValue('${f.effId}', ${f.maxVal}, ${f.pIdx}, ${f.eIdx})" title="Reset to Full">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Window helper bindings for tracker
+    window.stepConditionCount = function(condName, delta) {
+      ensureTrackerState();
+      const current = char.trackerState.conditions[condName] || 0;
+      const nextVal = Math.max(0, current + delta);
+      char.trackerState.conditions[condName] = nextVal;
+      updateTrackerConditionsSummary();
+    };
+
+    window.toggleConditionDirect = function(condName, isChecked) {
+      ensureTrackerState();
+      char.trackerState.conditions[condName] = isChecked;
+      updateTrackerConditionsSummary();
+    };
+
+    window.stepFadeValue = function(effId, delta, maxVal, pIdx, eIdx) {
+      ensureTrackerState();
+      const cur = char.trackerState.fadeStates[effId] !== undefined ? char.trackerState.fadeStates[effId] : maxVal;
+      const nextVal = Math.max(0, Math.min(maxVal, cur + delta));
+      char.trackerState.fadeStates[effId] = nextVal;
+
+      if (pIdx !== undefined && eIdx !== undefined) {
+        const eff = char.activePowers[pIdx]?.effects[eIdx];
+        if (eff && eff.effectName === "Boost") {
+          if (!eff.options) eff.options = {};
+          if (nextVal === 0 && eff.options.boostActive !== false) {
+            eff.options.boostActive = false;
+            eff.boostActive = false;
+            refreshUI();
+          } else if (nextVal > 0 && eff.options.boostActive === false) {
+            eff.options.boostActive = true;
+            eff.boostActive = true;
+            refreshUI();
+          }
+        }
+      }
+
+      renderFadesTrackers();
+    };
+
+    window.resetFadeValue = function(effId, maxVal, pIdx, eIdx) {
+      ensureTrackerState();
+      char.trackerState.fadeStates[effId] = maxVal;
+      if (pIdx !== undefined && eIdx !== undefined) {
+        const eff = char.activePowers[pIdx]?.effects[eIdx];
+        if (eff && eff.effectName === "Boost") {
+          if (!eff.options) eff.options = {};
+          eff.options.boostActive = true;
+          eff.boostActive = true;
+          refreshUI();
+        }
+      }
+      renderFadesTrackers();
+    };
+
+    window.stepCustomPoint = function(trackerId, delta) {
+      ensureTrackerState();
+      const t = char.trackerState.customPoints.find(x => x.id === trackerId);
+      if (!t) return;
+      const cur = Number(t.current) || 0;
+      const maxVal = (t.max !== undefined && t.max !== null && t.max !== '' && !isNaN(Number(t.max))) ? Number(t.max) : Infinity;
+      t.current = Math.max(0, Math.min(maxVal, cur + delta));
+      renderCustomTrackers();
+    };
+
+    window.updateCustomTrackerName = function(trackerId, newName) {
+      ensureTrackerState();
+      const t = char.trackerState.customPoints.find(x => x.id === trackerId);
+      if (t) t.name = newName;
+    };
+
+    window.updateCustomTrackerCurrent = function(trackerId, newVal) {
+      ensureTrackerState();
+      const t = char.trackerState.customPoints.find(x => x.id === trackerId);
+      if (t) {
+        const val = Number(newVal) || 0;
+        const maxVal = (t.max !== undefined && t.max !== null && t.max !== '' && !isNaN(Number(t.max))) ? Number(t.max) : Infinity;
+        t.current = Math.max(0, Math.min(maxVal, val));
+        renderCustomTrackers();
+      }
+    };
+
+    window.updateCustomTrackerMax = function(trackerId, newMax) {
+      ensureTrackerState();
+      const t = char.trackerState.customPoints.find(x => x.id === trackerId);
+      if (t) {
+        const trimmed = (newMax !== null && newMax !== undefined) ? String(newMax).trim() : '';
+        if (trimmed !== '' && !isNaN(Number(trimmed))) {
+          t.max = Math.max(1, Number(trimmed));
+          t.explicitMax = true;
+        } else {
+          t.max = null;
+          t.explicitMax = false;
+        }
+        if (t.max !== null && t.current > t.max) {
+          t.current = t.max;
+        }
+        renderCustomTrackers();
+      }
+    };
+
+    window.deleteCustomTracker = function(trackerId) {
+      ensureTrackerState();
+      char.trackerState.customPoints = char.trackerState.customPoints.filter(x => x.id !== trackerId);
+      renderCustomTrackers();
+    };
+
+    // Open & Close Handlers (Special Tab Controller)
+    function syncStatusTrackerUI() {
+      ensureTrackerState();
+      const lblHero = document.getElementById("lblTrackerHeroName");
+      if (lblHero) lblHero.textContent = char.name || "Hero";
+
+      syncInitiativeUI();
+      syncGeneralD20UI();
+      updateTrackerConditionsSummary();
+      renderCustomTrackers();
+      renderFadesTrackers();
+    }
+    window.syncStatusTrackerUI = syncStatusTrackerUI;
+
+    function openTrackerTab() {
+      const trackerContent = document.getElementById("tab-tracker");
+      const btnBack = document.getElementById("btnBackFromTables");
+      const btnTables = document.getElementById("btnOpenTables");
+
+      // If tracker tab is already active, toggle back to previous view
+      if (trackerContent && trackerContent.classList.contains("active")) {
+        if (btnBack) {
+          btnBack.click();
+        }
+        return;
+      }
+
+      // Record which tab was active before opening tracker (if not currently on tables)
+      const currentActiveBtn = (typeof document.querySelector === 'function') ? document.querySelector(".tab-btn.active") : null;
+      if (currentActiveBtn && currentActiveBtn.dataset.tab) {
+        previousActiveTab = currentActiveBtn.dataset.tab;
+      }
+
+      if (typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+      }
+      if (trackerContent) trackerContent.classList.add("active");
+      if (modal) modal.classList.add("active");
+
+      // Deactivate tables if open
+      const tablesContent = document.getElementById("tab-tables");
+      if (tablesContent) tablesContent.classList.remove("active");
+
+      // Style buttons for active tab feedback
+      if (btnOpen) {
+        btnOpen.classList.add("btn-primary");
+        btnOpen.classList.remove("btn-secondary");
+      }
+      if (btnTables) {
+        btnTables.classList.remove("btn-primary");
+        btnTables.classList.add("btn-secondary");
+      }
+
+      // Populate tracker UI
+      syncStatusTrackerUI();
+
+      if (btnBack) {
+        btnBack.style.display = "inline-flex";
+        const targetTab = (typeof previousActiveTab !== 'undefined') ? previousActiveTab : "tab-basics";
+        const prevBtn = (typeof document.querySelector === 'function') ? document.querySelector(`.tab-btn[data-tab="${targetTab}"]`) : null;
+        const prevName = prevBtn ? prevBtn.textContent.trim() : "Previous View";
+        btnBack.title = `Return to ${prevName}`;
+      }
+    }
+    window.openTrackerTab = openTrackerTab;
+
+    btnOpen.addEventListener("click", openTrackerTab);
+
+    const btnTrackerReturn = document.getElementById("btnTrackerReturnToSheet");
+    if (btnTrackerReturn) {
+      btnTrackerReturn.addEventListener("click", () => {
+        const btnBack = document.getElementById("btnBackFromTables");
+        if (btnBack) btnBack.click();
+      });
+    }
+
+    if (btnClose) {
+      btnClose.addEventListener("click", () => {
+        const btnBack = document.getElementById("btnBackFromTables");
+        if (btnBack) btnBack.click();
+        else if (modal) modal.classList.remove("active");
+      });
+    }
+
+    if (btnClearAllConds) {
+      btnClearAllConds.addEventListener("click", () => {
+        ensureTrackerState();
+        char.trackerState.conditions = {};
+        updateTrackerConditionsSummary();
+      });
+    }
+
+    // Initiative Actions
+    if (btnRollInit) {
+      btnRollInit.addEventListener("click", () => {
+        ensureTrackerState();
+        const { totalMod } = getInitiativeModifier();
+        const d20 = Math.floor(Math.random() * 20) + 1;
+        const total = d20 + totalMod;
+        char.trackerState.initiativeRoll = total;
+        if (numInitResult) numInitResult.value = total;
+        if (lblInitBreakdown) {
+          lblInitBreakdown.textContent = `Rolled: 1d20 (${d20}) + ${totalMod} = ${total}`;
+        }
+      });
+    }
+
+    if (btnStepInitDown) {
+      btnStepInitDown.addEventListener("click", () => {
+        ensureTrackerState();
+        const cur = parseInt(numInitResult?.value) || 0;
+        const next = cur - 1;
+        char.trackerState.initiativeRoll = next;
+        if (numInitResult) numInitResult.value = next;
+        if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
+      });
+    }
+
+    if (btnStepInitUp) {
+      btnStepInitUp.addEventListener("click", () => {
+        ensureTrackerState();
+        const cur = parseInt(numInitResult?.value) || 0;
+        const next = cur + 1;
+        char.trackerState.initiativeRoll = next;
+        if (numInitResult) numInitResult.value = next;
+        if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
+      });
+    }
+
+    if (numInitResult) {
+      numInitResult.addEventListener("change", (e) => {
+        ensureTrackerState();
+        const val = parseInt(e.target.value);
+        char.trackerState.initiativeRoll = isNaN(val) ? null : val;
+      });
+    }
+
+    if (btnClearInit) {
+      btnClearInit.addEventListener("click", () => {
+        ensureTrackerState();
+        char.trackerState.initiativeRoll = null;
+        if (numInitResult) numInitResult.value = "";
+        if (lblInitBreakdown) lblInitBreakdown.textContent = "";
+      });
+    }
+
+    // General d20 & Custom Notation Actions
+    const txtTrackerDice = document.getElementById("txtTrackerDiceNotation");
+    if (btnRollD20) {
+      btnRollD20.addEventListener("click", () => {
+        ensureTrackerState();
+        const customNotation = txtTrackerDice?.value?.trim();
+        let total, breakdown, isNat20, isNat1, rollType;
+
+        if (customNotation && typeof DiceNotation !== 'undefined') {
+          const res = DiceNotation.roll(customNotation);
+          total = res.total;
+          breakdown = res.breakdown;
+          isNat20 = res.isNat20;
+          isNat1 = res.isNat1;
+          rollType = `Dice (${res.expression})`;
+        } else {
+          const adj = parseInt(numD20Adj?.value) || 0;
+          const d20 = Math.floor(Math.random() * 20) + 1;
+          total = d20 + adj;
+          isNat20 = d20 === 20;
+          isNat1 = d20 === 1;
+          rollType = "General d20";
+          breakdown = `1d20 (${d20})${adj !== 0 ? (adj > 0 ? ' + ' + adj : ' - ' + Math.abs(adj)) : ''} = ${total}`;
+          char.trackerState.generalD20Roll = { d20, adj, total };
+        }
+
+        if (lblD20Result) {
+          let color = "var(--accent-primary)";
+          if (isNat20) color = "#10b981";
+          else if (isNat1) color = "#ef4444";
+          lblD20Result.innerHTML = `<span style="color: ${color};">Result: ${total}</span> ${isNat20 ? '🎉 (Nat 20!)' : (isNat1 ? '⚠️ (Nat 1)' : '')}`;
+        }
+        if (lblD20Breakdown) {
+          lblD20Breakdown.textContent = breakdown;
+        }
+
+        // Broadcast to session log & network
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
+          const entry = {
+            characterName: char?.name || "Hero",
+            rollType: rollType,
+            total: total,
+            breakdown: breakdown,
+            isNat20: !!isNat20,
+            isNat1: !!isNat1
+          };
+          SessionNetwork.sendRoll(entry);
+          if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+            CampaignManager.addLogEntry(entry);
+          }
+        }
+      });
+    }
+
+    if (txtTrackerDice) {
+      txtTrackerDice.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && btnRollD20) {
+          btnRollD20.click();
+        }
+      });
+    }
+
+    if (btnStepD20AdjDown) {
+      btnStepD20AdjDown.addEventListener("click", () => {
+        ensureTrackerState();
+        const cur = parseInt(numD20Adj?.value) || 0;
+        const next = cur - 1;
+        char.trackerState.generalD20Adj = next;
+        if (numD20Adj) numD20Adj.value = next;
+      });
+    }
+
+    if (btnStepD20AdjUp) {
+      btnStepD20AdjUp.addEventListener("click", () => {
+        ensureTrackerState();
+        const cur = parseInt(numD20Adj?.value) || 0;
+        const next = cur + 1;
+        char.trackerState.generalD20Adj = next;
+        if (numD20Adj) numD20Adj.value = next;
+      });
+    }
+
+    if (btnClearD20Adj) {
+      btnClearD20Adj.addEventListener("click", () => {
+        ensureTrackerState();
+        char.trackerState.generalD20Adj = 0;
+        if (numD20Adj) numD20Adj.value = 0;
+      });
+    }
+
+    // Custom Points Add Action
+    if (btnAddCustom) {
+      btnAddCustom.addEventListener("click", () => {
+        ensureTrackerState();
+        char.trackerState.customPoints.push({
+          id: "pool_" + Math.random().toString(36).substr(2, 7),
+          name: "",
+          current: 0,
+          max: null,
+          explicitMax: false
+        });
+        renderCustomTrackers();
+      });
+    }
+
+    // Advance All Fades
+    if (btnAdvanceAll) {
+      btnAdvanceAll.addEventListener("click", () => {
+        ensureTrackerState();
+        const allPowers = char.activePowers || char.powers || [];
+        allPowers.forEach((power, pIdx) => {
+          (power.effects || []).forEach((eff, eIdx) => {
+            const isBoost = eff.effectName === "Boost";
+            const fadesMod = (eff.modifiers || []).find(m => m.name && (m.name === "Fades" || m.name.startsWith("Fades")));
+            if (isBoost || fadesMod) {
+              const effId = eff.id || `fade_${pIdx}_${eIdx}`;
+              const maxVal = parseInt(eff.rank) || 1;
+              window.stepFadeValue(effId, -1, maxVal, pIdx, eIdx);
+            }
+          });
+        });
+      });
+    }
+
+    // Draggable Resizing & Reset Size Handlers
+    const trackerBox = (typeof modal.querySelector === 'function')
+      ? modal.querySelector(".status-tracker-box")
+      : (typeof document.querySelector === 'function' ? document.querySelector(".status-tracker-box") : modal);
+    const handleTop = document.getElementById("trackerResizeTop");
+    const handleBottom = document.getElementById("trackerResizeBottom");
+    const btnResetSize = document.getElementById("btnResetTrackerSize");
+
+    const defaultTrackerHeight = "82vh";
+    const savedHeight = (typeof localStorage !== 'undefined') ? localStorage.getItem("mm2e_tracker_height") : null;
+    if (savedHeight && trackerBox) {
+      trackerBox.style.height = savedHeight;
+    }
+
+    if (btnResetSize && trackerBox) {
+      btnResetSize.addEventListener("click", () => {
+        trackerBox.style.height = defaultTrackerHeight;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem("mm2e_tracker_height");
+        }
+        if (typeof showToast === 'function') {
+          showToast("Tracker window size reset to default.", "info");
+        }
+      });
+    }
+
+    function initResizeHandle(handleEl, isTop) {
+      if (!handleEl || !trackerBox) return;
+
+      const onStart = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const clientY = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+        const startY = clientY;
+        const startHeight = trackerBox.getBoundingClientRect ? trackerBox.getBoundingClientRect().height : (trackerBox.offsetHeight || 500);
+        handleEl.classList.add("active-drag");
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.style.cursor = "ns-resize";
+          document.body.style.userSelect = "none";
+        }
+
+        const onMove = (moveEvt) => {
+          const curY = (moveEvt.clientY !== undefined) ? moveEvt.clientY : (moveEvt.touches && moveEvt.touches[0] ? moveEvt.touches[0].clientY : 0);
+          const dy = curY - startY;
+          const delta = isTop ? -dy : dy;
+          const minH = 380;
+          const maxH = (typeof window !== 'undefined' && window.innerHeight) ? Math.round(window.innerHeight * 0.95) : 800;
+          const newH = Math.min(maxH, Math.max(minH, Math.round(startHeight + delta)));
+          trackerBox.style.height = `${newH}px`;
+        };
+
+        const onEnd = () => {
+          handleEl.classList.remove("active-drag");
+          if (typeof document !== 'undefined' && document.body) {
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+          }
+          if (typeof window !== 'undefined') {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onEnd);
+            window.removeEventListener("touchmove", onMove);
+            window.removeEventListener("touchend", onEnd);
+          }
+          if (trackerBox.style.height && typeof localStorage !== 'undefined') {
+            localStorage.setItem("mm2e_tracker_height", trackerBox.style.height);
+          }
+        };
+
+        if (typeof window !== 'undefined') {
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onEnd);
+          window.addEventListener("touchmove", onMove, { passive: false });
+          window.addEventListener("touchend", onEnd);
+        }
+      };
+
+      handleEl.addEventListener("mousedown", onStart);
+      handleEl.addEventListener("touchstart", onStart, { passive: false });
+    }
+
+    initResizeHandle(handleTop, true);
+    initResizeHandle(handleBottom, false);
+}
+window.setupStatusTracker = setupStatusTracker;
+
+function setupSessionAndGMHub() {
+  // Ensure default campaign exists if none
+  if (typeof CampaignManager !== 'undefined') {
+    const allCamps = CampaignManager.getCampaigns();
+    if (allCamps.length === 0) {
+      CampaignManager.createCampaign("Default Campaign", "campaign-1");
+    }
+  }
+
+  // DOM Elements - Session Tab
+  const btnConnect = document.getElementById("btnSessionConnect");
+  const txtPlayerName = document.getElementById("txtSessionPlayerName");
+  const txtCampCode = document.getElementById("txtSessionCampaignCode");
+  const lblStatus = document.getElementById("lblSessionStatusBadge");
+  const lblMsg = document.getElementById("lblSessionConnectMsg");
+  const btnSilentToggle = document.getElementById("btnToggleSilentMode");
+  const btnSilentDisable = document.getElementById("btnDisableSilentMode");
+  const boxSilentBanner = document.getElementById("boxSilentBanner");
+  const btnPopout = document.getElementById("btnPopoutSessionLog");
+  const btnRedock = document.getElementById("btnRedockSessionLog");
+  const boxPoppedOut = document.getElementById("boxPoppedOutNotice");
+  const logFeed = document.getElementById("sessionLogFeedContainer");
+  const partyHud = document.getElementById("sessionPartyBadgesContainer");
+  const txtSearch = document.getElementById("txtSessionSearch");
+  const btnClearSearch = document.getElementById("btnSessionClearSearch");
+  const filterChips = document.querySelectorAll("#sessionFilterChips .filter-chip");
+  const txtQuickDice = document.getElementById("txtSessionQuickDice");
+  const btnQuickRoll = document.getElementById("btnSessionQuickRoll");
+  const btnClearFeed = document.getElementById("btnSessionClearLog");
+
+  // DOM Elements - GM Tab
+  const btnOpenGM = document.getElementById("btnOpenGM");
+  const btnGMReturn = document.getElementById("btnGMReturnToSheet");
+  const selGMCamps = document.getElementById("selGMCampaigns");
+  const btnGMNewCamp = document.getElementById("btnGMNewCampaign");
+  const btnGMCopyLink = document.getElementById("btnGMCopyPlayerLink");
+  const lblActiveCampCode = document.getElementById("lblGMActiveCampCode");
+  const btnGMExport = document.getElementById("btnGMExportCampaign");
+  const btnGMImport = document.getElementById("btnGMImportCampaign");
+  const fileGMImport = document.getElementById("fileGMImportCampaign");
+  const btnGMDelete = document.getElementById("btnGMDeleteCampaign");
+  const btnGMAttachNPC = document.getElementById("btnGMAttachNPC");
+  const tableGMRoster = document.getElementById("tbodyGMMasterRoster");
+  const boxJoinReqs = document.getElementById("gmJoinRequestsBox");
+  const listJoinReqs = document.getElementById("gmJoinRequestsList");
+
+  // Local state for Session tab filtering
+  let sessionSearchQuery = "";
+  let sessionCurrentFilter = "all";
+  const sessionLocalLog = [];
+
+  // 1. Initialize Network Listeners
+  if (typeof SessionNetwork !== 'undefined') {
+    SessionNetwork.initBroadcastChannel();
+
+    SessionNetwork.addEventListener("onRoll", (roll) => {
+      sessionLocalLog.unshift(roll);
+      renderSessionFeed();
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.addLogEntry(roll);
+      }
+    });
+
+    SessionNetwork.addEventListener("onConditionUpdate", (update) => {
+      syncPartyHudUI();
+      if (typeof syncGMRosterUI === 'function') syncGMRosterUI();
+    });
+
+    SessionNetwork.addEventListener("onPopoutDocked", () => {
+      if (boxPoppedOut) boxPoppedOut.style.display = "none";
+    });
+
+    SessionNetwork.addEventListener("onGMStatusOverride", (packet) => {
+      if (typeof char !== 'undefined' && char) {
+        if (!char.trackerState) char.trackerState = { conditions: {}, customPoints: [], fadesTrackers: [] };
+        if (!char.trackerState.conditions) char.trackerState.conditions = {};
+
+        if (packet.bruises !== undefined) char.trackerState.conditions.Bruised = packet.bruises;
+        if (packet.injured !== undefined) char.trackerState.conditions.Injured = packet.injured;
+        if (packet.conditions) {
+          Object.assign(char.trackerState.conditions, packet.conditions);
+        }
+        if (packet.heroPoints !== undefined) {
+          char.heroPoints = packet.heroPoints;
+        }
+
+        if (typeof updateTrackerConditionsSummary === 'function') updateTrackerConditionsSummary();
+        syncPartyHudUI();
+        if (typeof syncGMRosterUI === 'function') syncGMRosterUI();
+        if (typeof showToast === 'function') showToast("GM updated your status/conditions.", "info");
+      }
+    });
+
+    SessionNetwork.addEventListener("onJoinRequest", (req) => {
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.addPlayerRequest(req);
+        renderGMJoinRequests();
+        if (typeof showToast === 'function') {
+          showToast(`Incoming join request from ${req.playerName} (${req.characterName})`, "info");
+        }
+      }
+    });
+
+    SessionNetwork.addEventListener("onStatusChange", (info) => {
+      updateSessionConnectionUI(info);
+    });
+
+    SessionNetwork.addEventListener("onForcedMode", (info) => {
+      updateSilentModeUI();
+    });
+  }
+
+  // 2. Session UI Helpers
+  function updateSilentModeUI() {
+    const isSilent = typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : false;
+    if (btnSilentToggle) {
+      btnSilentToggle.textContent = isSilent ? "🔇 Silent: ON" : "📡 Broadcast: ON";
+      btnSilentToggle.style.color = isSilent ? "#f59e0b" : "";
+    }
+    if (boxSilentBanner) {
+      boxSilentBanner.style.display = isSilent ? "flex" : "none";
+    }
+  }
+
+  function updateSessionConnectionUI(info) {
+    const status = info?.status || (typeof SessionNetwork !== 'undefined' ? SessionNetwork.getStatus().status : "disconnected");
+    if (!lblStatus) return;
+
+    if (status === "connected") {
+      lblStatus.textContent = "🟢 Connected";
+      lblStatus.style.borderColor = "#10b981";
+      lblStatus.style.color = "#10b981";
+      lblStatus.style.background = "rgba(16, 185, 129, 0.15)";
+      if (btnConnect) {
+        btnConnect.textContent = "Disconnect";
+        btnConnect.classList.remove("btn-primary");
+        btnConnect.classList.add("btn-secondary");
+      }
+      if (lblMsg) lblMsg.textContent = info?.detail || "Joined campaign.";
+    } else if (status === "waiting_approval") {
+      lblStatus.textContent = "🟡 Waiting Approval";
+      lblStatus.style.borderColor = "#f59e0b";
+      lblStatus.style.color = "#f59e0b";
+      lblStatus.style.background = "rgba(245, 158, 11, 0.15)";
+      if (btnConnect) btnConnect.textContent = "Cancel Request";
+      if (lblMsg) lblMsg.textContent = info?.detail || "Waiting for GM...";
+    } else if (status === "connecting") {
+      lblStatus.textContent = "🔵 Connecting...";
+      lblStatus.style.borderColor = "#0284c7";
+      lblStatus.style.color = "#0284c7";
+      lblStatus.style.background = "rgba(2, 132, 199, 0.15)";
+      if (lblMsg) lblMsg.textContent = info?.detail || "Connecting...";
+    } else {
+      lblStatus.textContent = "⚪ Offline";
+      lblStatus.style.borderColor = "var(--border-color)";
+      lblStatus.style.color = "var(--text-muted)";
+      lblStatus.style.background = "var(--bg-panel)";
+      if (btnConnect) {
+        btnConnect.textContent = "Connect to Campaign";
+        btnConnect.classList.add("btn-primary");
+        btnConnect.classList.remove("btn-secondary");
+      }
+      if (lblMsg) lblMsg.textContent = info?.detail || "";
+    }
+  }
+
+  function renderSessionFeed() {
+    if (!logFeed) return;
+    const items = sessionLocalLog;
+    if (items.length === 0) {
+      logFeed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 32px; font-style: italic;">No rolls or events recorded yet in this session.</div>`;
+      return;
+    }
+
+    const q = sessionSearchQuery.toLowerCase().trim();
+    const filtered = items.filter(item => {
+      if (sessionCurrentFilter === "attack" && !item.rollType?.toLowerCase().includes("attack")) return false;
+      if (sessionCurrentFilter === "save" && !item.rollType?.toLowerCase().includes("save") && !item.rollType?.toLowerCase().includes("toughness")) return false;
+      if (sessionCurrentFilter === "check" && !item.rollType?.toLowerCase().includes("check")) return false;
+      if (sessionCurrentFilter === "nat20" && !item.isNat20) return false;
+      if (sessionCurrentFilter === "failed" && !item.result?.toLowerCase().includes("fail")) return false;
+      if (sessionCurrentFilter === "silent" && !item.isSilent) return false;
+
+      if (!q) return true;
+      const target = `${item.characterName || ''} ${item.playerName || ''} ${item.rollType || ''} ${item.expression || ''} ${item.result || ''} ${item.breakdown || ''}`.toLowerCase();
+      return target.includes(q);
+    });
+
+    if (filtered.length === 0) {
+      logFeed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 32px; font-style: italic;">No rolls match current search / filter.</div>`;
+      return;
+    }
+
+    logFeed.innerHTML = filtered.map(item => {
+      const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+      const natClass = item.isNat20 ? "nat20" : (item.isNat1 ? "nat1" : "");
+      const silentClass = item.isSilent ? "silent" : "";
+      const silentBadge = item.isSilent ? `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px;">🔇 Silent</span>` : "";
+      const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 10px;">★ Natural 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; font-size: 10px;">⚠️ Natural 1</span>` : "");
+
+      return `
+        <div class="roll-card ${natClass} ${silentClass}">
+          <div class="roll-header">
+            <div>
+              <strong>${item.characterName || 'Hero'}</strong>
+              <span style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">(${item.playerName || 'Player'})</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              ${silentBadge}
+              ${natBadge}
+              <span style="color: var(--text-muted); font-size: 11px;">${time}</span>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px;">
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">${item.rollType || 'Roll'}</span>
+            <span class="roll-math">${item.breakdown || item.total}</span>
+          </div>
+          ${item.result ? `<div class="roll-result" style="color: ${item.result.toLowerCase().includes('fail') ? '#ef4444' : '#10b981'};">${item.result}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function syncPartyHudUI() {
+    if (!partyHud) return;
+    const camp = typeof CampaignManager !== 'undefined' ? CampaignManager.getActiveCampaign() : null;
+    const heroes = [];
+
+    // Current local hero
+    if (char && char.name) {
+      heroes.push({
+        name: char.name,
+        bruises: char.trackerState?.conditions?.Bruised || 0,
+        heroPoints: char.heroPoints || 1
+      });
+    }
+
+    // Connected players in campaign
+    if (camp && Array.isArray(camp.acceptedPlayers)) {
+      camp.acceptedPlayers.forEach(p => {
+        if (!heroes.some(h => h.name === p.characterName)) {
+          heroes.push({
+            name: p.characterName,
+            bruises: 0,
+            heroPoints: 1
+          });
+        }
+      });
+    }
+
+    partyHud.innerHTML = heroes.map(h => `
+      <span class="badge" style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 6px;">
+        <strong>${h.name}</strong>
+        <span style="color: ${h.bruises > 0 ? '#ef4444' : 'var(--text-muted)'}; font-weight: bold;">(Bruised: ${h.bruises})</span>
+        <span style="color: #0284c7; font-weight: 600;">HP: ${h.heroPoints}</span>
+      </span>
+    `).join('');
+  }
+
+  function syncSessionUI() {
+    if (txtPlayerName && !txtPlayerName.value) {
+      txtPlayerName.value = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
+    }
+    if (txtCampCode && !txtCampCode.value) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlCamp = urlParams.get("campaign") || urlParams.get("room");
+      txtCampCode.value = urlCamp || localStorage.getItem("mm2e_last_campaign_code") || "";
+    }
+
+    updateSilentModeUI();
+    updateSessionConnectionUI();
+    syncPartyHudUI();
+    renderSessionFeed();
+  }
+  window.syncSessionUI = syncSessionUI;
+
+  // Session Event Listeners
+  if (btnConnect) {
+    btnConnect.addEventListener("click", () => {
+      const status = typeof SessionNetwork !== 'undefined' ? SessionNetwork.getStatus().status : "disconnected";
+      if (status === "connected" || status === "connecting" || status === "waiting_approval") {
+        SessionNetwork.disconnect();
+        return;
+      }
+
+      const pName = txtPlayerName?.value?.trim() || "Player";
+      const cCode = txtCampCode?.value?.trim() || "default";
+      localStorage.setItem("mm2e_player_name", pName);
+      localStorage.setItem("mm2e_last_campaign_code", cCode);
+
+      SessionNetwork.joinHost(cCode, {
+        playerName: pName,
+        characterName: char?.name || "Hero",
+        characterSummary: {
+          powerLevel: char?.powerLevel || 10,
+          defense: char?.combat?.DEF || 0
+        }
+      });
+    });
+  }
+
+  if (btnSilentToggle) {
+    btnSilentToggle.addEventListener("click", () => {
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.toggleSilentMode();
+        updateSilentModeUI();
+      }
+    });
+  }
+
+  if (btnSilentDisable) {
+    btnSilentDisable.addEventListener("click", () => {
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.toggleSilentMode(false);
+        updateSilentModeUI();
+      }
+    });
+  }
+
+  let poppedOutWindow = null;
+
+  function getSavedPopoutBounds() {
+    let bounds = { width: 480, height: 850, left: 100, top: 100 };
+    try {
+      const saved = localStorage.getItem("mm2e_session_log_bounds");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
+      }
+    } catch (e) {}
+    return bounds;
+  }
+
+  function savePopoutBoundsFromRef(win) {
+    if (!win) return;
+    try {
+      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
+      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const width = win.outerWidth || win.innerWidth;
+      const height = win.outerHeight || win.innerHeight;
+      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 200) {
+        localStorage.setItem("mm2e_session_log_bounds", JSON.stringify({ left, top, width, height }));
+      }
+    } catch (e) {}
+  }
+
+  if (btnPopout) {
+    btnPopout.addEventListener("click", () => {
+      const bounds = getSavedPopoutBounds();
+      const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
+      poppedOutWindow = window.open("log_window.html", "MM2CG_SessionLog", features);
+      if (boxPoppedOut) boxPoppedOut.style.display = "block";
+    });
+  }
+
+  if (btnRedock) {
+    btnRedock.addEventListener("click", () => {
+      if (poppedOutWindow && !poppedOutWindow.closed) {
+        savePopoutBoundsFromRef(poppedOutWindow);
+        try { poppedOutWindow.close(); } catch (e) {}
+      }
+      if (boxPoppedOut) boxPoppedOut.style.display = "none";
+    });
+  }
+
+  if (txtSearch) {
+    txtSearch.addEventListener("input", (e) => {
+      sessionSearchQuery = e.target.value;
+      renderSessionFeed();
+    });
+  }
+
+  if (btnClearSearch) {
+    btnClearSearch.addEventListener("click", () => {
+      if (txtSearch) txtSearch.value = "";
+      sessionSearchQuery = "";
+      renderSessionFeed();
+    });
+  }
+
+  filterChips.forEach(btn => {
+    btn.addEventListener("click", () => {
+      filterChips.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      sessionCurrentFilter = btn.dataset.filter || "all";
+      renderSessionFeed();
+    });
+  });
+
+  if (btnQuickRoll) {
+    btnQuickRoll.addEventListener("click", () => {
+      const expr = txtQuickDice?.value?.trim() || "1d20";
+      const res = typeof DiceNotation !== 'undefined' ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: "1d20" };
+      const rollEntry = {
+        characterName: char?.name || "Hero",
+        rollType: `Dice (${res.expression || expr})`,
+        total: res.total,
+        breakdown: res.breakdown,
+        isNat20: res.isNat20,
+        isNat1: res.isNat1
+      };
+      if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
+      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+      sessionLocalLog.unshift(rollEntry);
+      renderSessionFeed();
+    });
+  }
+
+  if (txtQuickDice) {
+    txtQuickDice.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && btnQuickRoll) {
+        btnQuickRoll.click();
+      }
+    });
+  }
+
+  if (btnClearFeed) {
+    btnClearFeed.addEventListener("click", () => {
+      sessionLocalLog.length = 0;
+      renderSessionFeed();
+    });
+  }
+
+  // 3. GM Hub UI & Master Character Tracker
+  function openGMTab() {
+    const gmContent = document.getElementById("tab-gm");
+    const btnBack = document.getElementById("btnBackFromTables");
+    const btnTables = document.getElementById("btnOpenTables");
+    const btnTracker = document.getElementById("btnOpenTracker");
+
+    if (gmContent && gmContent.classList.contains("active")) {
+      if (btnBack) btnBack.click();
+      return;
+    }
+
+    const currentActiveBtn = document.querySelector(".tab-btn.active");
+    if (currentActiveBtn && currentActiveBtn.dataset.tab) {
+      previousActiveTab = currentActiveBtn.dataset.tab;
+    }
+
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+    if (gmContent) gmContent.classList.add("active");
+
+    const trackerContent = document.getElementById("tab-tracker");
+    if (trackerContent) trackerContent.classList.remove("active");
+    const tablesContent = document.getElementById("tab-tables");
+    if (tablesContent) tablesContent.classList.remove("active");
+
+    if (btnOpenGM) {
+      btnOpenGM.classList.add("btn-primary");
+      btnOpenGM.classList.remove("btn-secondary");
+    }
+    if (btnTables) {
+      btnTables.classList.remove("btn-primary");
+      btnTables.classList.add("btn-secondary");
+    }
+    if (btnTracker) {
+      btnTracker.classList.remove("btn-primary");
+      btnTracker.classList.add("btn-secondary");
+    }
+
+    if (btnBack) {
+      btnBack.style.display = "inline-flex";
+      const targetTab = previousActiveTab || "tab-basics";
+      const prevBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+      const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-tables" ? "Tables" : "Previous View"));
+      btnBack.title = `Return to ${prevName}`;
+    }
+
+    syncGMUI();
+  }
+  window.openGMTab = openGMTab;
+
+  if (btnOpenGM) {
+    btnOpenGM.addEventListener("click", openGMTab);
+  }
+
+  if (btnGMReturn) {
+    btnGMReturn.addEventListener("click", () => {
+      const btnBack = document.getElementById("btnBackFromTables");
+      if (btnBack) btnBack.click();
+    });
+  }
+
+  function syncGMUI() {
+    if (typeof CampaignManager === 'undefined') return;
+    const camps = CampaignManager.getCampaigns();
+    const activeCamp = CampaignManager.getActiveCampaign();
+
+    if (selGMCamps) {
+      selGMCamps.innerHTML = camps.map(c => `
+        <option value="${c.id}" ${activeCamp && activeCamp.id === c.id ? 'selected' : ''}>${c.name} (${c.code})</option>
+      `).join('');
+    }
+
+    if (!activeCamp) return;
+
+    if (typeof SessionNetwork !== 'undefined') {
+      const netStatus = SessionNetwork.getStatus();
+      if (netStatus.role !== 'HOST' || netStatus.code !== activeCamp.code) {
+        SessionNetwork.startHost(activeCamp.code);
+      }
+    }
+
+    if (lblActiveCampCode) {
+      lblActiveCampCode.textContent = activeCamp.code || "campaign-1";
+    }
+
+    renderGMJoinRequests();
+    syncGMRosterUI();
+  }
+  window.syncGMUI = syncGMUI;
+
+  function renderGMJoinRequests() {
+    if (!boxJoinReqs || !listJoinReqs || typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const reqs = camp?.pendingRequests || [];
+
+    if (reqs.length === 0) {
+      boxJoinReqs.style.display = "none";
+      listJoinReqs.innerHTML = "";
+      return;
+    }
+
+    boxJoinReqs.style.display = "block";
+    listJoinReqs.innerHTML = reqs.map(r => `
+      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
+        <div>
+          <strong>${r.playerName}</strong> playing <span class="badge" style="color: var(--accent-primary);">${r.characterName}</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-primary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>
+          <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.gmApprovePlayer = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    CampaignManager.approvePlayer(playerId);
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.acceptJoin(playerId, camp);
+    }
+    renderGMJoinRequests();
+    syncGMRosterUI();
+    if (typeof showToast === 'function') showToast("Player accepted into campaign!", "success");
+  };
+
+  window.gmRejectPlayer = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.rejectPlayer(playerId);
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.rejectJoin(playerId);
+    }
+    renderGMJoinRequests();
+    if (typeof showToast === 'function') showToast("Join request declined.", "info");
+  };
+
+  function syncGMRosterUI() {
+    if (!tableGMRoster || typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    const roster = [];
+
+    // Current local hero
+    if (char && char.name) {
+      roster.push({
+        id: "local_hero",
+        isLocal: true,
+        isNPC: false,
+        playerName: "You (Local Sheet)",
+        characterName: char.name,
+        powerLevel: char.powerLevel || 10,
+        defense: char.combat?.DEF || 0,
+        toughness: (char.purchasedResistances?.Toughness || 0) + (char.abilities?.CON || 0),
+        bruises: char.trackerState?.conditions?.Bruised || 0,
+        injured: char.trackerState?.conditions?.Injured || 0,
+        conditions: char.trackerState?.conditions || {},
+        heroPoints: char.heroPoints || 1,
+        isSilent: CampaignManager.isCharacterSilent(char.name)
+      });
+    }
+
+    // Connected/Approved Players
+    (camp.acceptedPlayers || []).forEach(p => {
+      if (p.characterName !== char?.name) {
+        roster.push({
+          id: p.id,
+          isLocal: false,
+          isNPC: false,
+          playerName: p.playerName,
+          characterName: p.characterName,
+          powerLevel: p.characterSummary?.powerLevel || 10,
+          defense: p.characterSummary?.defense || 10,
+          toughness: p.characterSummary?.toughness || 10,
+          bruises: p.currentBruises || 0,
+          injured: p.currentInjured || 0,
+          conditions: p.conditions || {},
+          heroPoints: p.heroPoints !== undefined ? p.heroPoints : 1,
+          isSilent: CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName)
+        });
+      }
+    });
+
+    // Attached NPCs
+    (camp.npcs || []).forEach(n => {
+      roster.push({
+        id: n.id,
+        isLocal: false,
+        isNPC: true,
+        playerName: "GM (NPC)",
+        characterName: n.name,
+        powerLevel: n.powerLevel || 10,
+        defense: n.characterData?.combat?.DEF || 10,
+        toughness: (n.characterData?.purchasedResistances?.Toughness || 0) + (n.characterData?.abilities?.CON || 0),
+        bruises: n.currentBruises || 0,
+        injured: n.currentInjured || 0,
+        conditions: n.conditions || {},
+        heroPoints: n.heroPoints || 0,
+        isSilent: CampaignManager.isCharacterSilent(n.id)
+      });
+    });
+
+    const standardConditions = [
+      "Dazed", "Stunned", "Staggered", "Unconscious",
+      "Fatigued", "Exhausted", "Disabled", "Paralyzed",
+      "Blind", "Deaf", "Prone", "Bound"
+    ];
+
+    tableGMRoster.innerHTML = roster.map(item => {
+      const condPills = standardConditions.map(c => {
+        const isActive = !!item.conditions[c];
+        return `<span class="gm-cond-pill ${isActive ? 'active' : ''}" onclick="window.gmToggleCondition('${item.id}', ${item.isNPC}, '${c}')">${c}</span>`;
+      }).join('');
+
+      return `
+        <tr style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(220, 38, 38, 0.05)' : 'transparent'};">
+          <td style="padding: 8px;">
+            <div style="font-weight: bold; font-size: var(--font-size-labels);">${item.characterName}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">
+              ${item.isNPC ? '<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #ef4444;">NPC</span>' : '<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7;">PC</span>'}
+              ${item.playerName}
+            </div>
+          </td>
+          <td style="text-align: center; font-size: 12px;">
+            PL ${item.powerLevel}<br>
+            <span style="color: var(--text-muted);">Def ${item.defense} / Tgh ${item.toughness}</span>
+          </td>
+          <td style="text-align: center; padding: 6px;">
+            <div style="display: inline-flex; flex-direction: column; gap: 3px; align-items: center;">
+              <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Bruised (Non-Lethal, -1 to saves)">
+                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Bruised:</span>
+                <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', -1)">−</button>
+                <span style="min-width: 20px; text-align: center; font-weight: bold; font-size: 12px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
+                <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', 1)">+</button>
+              </div>
+              <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Injured (Lethal, -1 to saves)">
+                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Injured:</span>
+                <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', -1)">−</button>
+                <span style="min-width: 20px; text-align: center; font-weight: bold; font-size: 12px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
+                <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', 1)">+</button>
+              </div>
+            </div>
+          </td>
+          <td style="padding: 6px;">
+            ${condPills}
+          </td>
+          <td style="text-align: center; font-weight: bold; color: #0284c7;">
+            ${item.isNPC ? '—' : item.heroPoints}
+          </td>
+          <td style="text-align: center; padding: 6px;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
+              <label style="font-size: 11px; display: inline-flex; align-items: center; gap: 3px; cursor: pointer; color: #f59e0b;" title="Force Silent Mode on this character">
+                <input type="checkbox" ${item.isSilent ? 'checked' : ''} onchange="window.gmTogglePlayerSilent('${item.id}', this.checked)">
+                🔇 Silent
+              </label>
+              ${item.isNPC ? `
+                <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 11px;" onclick="window.gmQuickRollNPC('${item.id}')" title="Quick Roll 1d20 for this NPC">🎲</button>
+                <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 11px;" onclick="window.gmRemoveNPC('${item.id}')" title="Remove NPC">✕</button>
+              ` : (item.isLocal ? '' : `
+                <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 11px;" onclick="window.gmRemovePlayer('${item.id}')" title="Remove Player">✕</button>
+              `)}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Master Roster Actions
+  window.gmStepBruises = function(charId, isNpc, type, delta) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (isNpc) {
+      const camp = CampaignManager.getActiveCampaign();
+      const npc = (camp?.npcs || []).find(n => n.id === charId);
+      if (npc) {
+        if (type === 'Injured') {
+          const next = Math.max(0, (npc.currentInjured || 0) + delta);
+          CampaignManager.updateNPCConditions(charId, npc.currentBruises, npc.conditions, next);
+        } else {
+          const next = Math.max(0, (npc.currentBruises || 0) + delta);
+          CampaignManager.updateNPCConditions(charId, next, npc.conditions, npc.currentInjured);
+        }
+        syncGMRosterUI();
+      }
+    } else if (charId === "local_hero") {
+      stepConditionCount(type, delta);
+      syncGMRosterUI();
+    } else {
+      // Remote player
+      const camp = CampaignManager.getActiveCampaign();
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+      if (player) {
+        let b = player.currentBruises || 0;
+        let inj = player.currentInjured || 0;
+        if (type === 'Injured') inj = Math.max(0, inj + delta);
+        else b = Math.max(0, b + delta);
+        CampaignManager.updatePlayerConditions(charId, b, player.conditions, player.heroPoints, inj);
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendGMStatusOverride(charId, {
+            characterName: player.characterName,
+            bruises: b,
+            injured: inj,
+            conditions: player.conditions,
+            heroPoints: player.heroPoints
+          });
+        }
+        syncGMRosterUI();
+      }
+    }
+  };
+
+  window.gmToggleCondition = function(charId, isNpc, condName) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (isNpc) {
+      const camp = CampaignManager.getActiveCampaign();
+      const npc = (camp?.npcs || []).find(n => n.id === charId);
+      if (npc) {
+        const conds = { ...(npc.conditions || {}) };
+        conds[condName] = !conds[condName];
+        CampaignManager.updateNPCConditions(charId, npc.currentBruises, conds, npc.currentInjured);
+        syncGMRosterUI();
+      }
+    } else if (charId === "local_hero") {
+      toggleTrackerCondition(condName);
+      syncGMRosterUI();
+    } else {
+      // Remote player
+      const camp = CampaignManager.getActiveCampaign();
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+      if (player) {
+        const conds = { ...(player.conditions || {}) };
+        conds[condName] = !conds[condName];
+        CampaignManager.updatePlayerConditions(charId, player.currentBruises, conds, player.heroPoints, player.currentInjured);
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendGMStatusOverride(charId, {
+            characterName: player.characterName,
+            bruises: player.currentBruises,
+            injured: player.currentInjured,
+            conditions: conds,
+            heroPoints: player.heroPoints
+          });
+        }
+        syncGMRosterUI();
+      }
+    }
+  };
+
+  window.gmTogglePlayerSilent = function(charId, checked) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.setPlayerForcedMode(charId, "silent", checked);
+    if (charId === "local_hero") {
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.toggleSilentMode(checked);
+        updateSilentModeUI();
+      }
+    } else {
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendGMForceMode("silent", charId, checked);
+      }
+    }
+    syncGMRosterUI();
+  };
+
+  window.gmQuickRollNPC = function(npcId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const npc = (camp?.npcs || []).find(n => n.id === npcId);
+    if (!npc) return;
+
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const atkBonus = npc.characterData?.combat?.ATK || Math.floor(npc.powerLevel / 2);
+    const total = d20 + atkBonus;
+    const isNat20 = d20 === 20;
+    const isNat1 = d20 === 1;
+    const entry = {
+      characterName: npc.name,
+      isNPC: true,
+      rollType: "Attack Check",
+      total,
+      breakdown: `1d20 (${d20}) + ${atkBonus} = ${total}`,
+      isNat20,
+      isNat1
+    };
+
+    if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(entry);
+    CampaignManager.addLogEntry(entry);
+    sessionLocalLog.unshift(entry);
+    renderSessionFeed();
+    if (typeof showToast === 'function') showToast(`Rolled attack for ${npc.name}: ${total}`, "info");
+  };
+
+  window.gmRemoveNPC = function(npcId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.removeNPC(npcId);
+    syncGMRosterUI();
+    if (typeof showToast === 'function') showToast("Removed NPC from campaign.", "info");
+  };
+
+  window.gmRemovePlayer = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.removePlayer(playerId);
+    syncGMRosterUI();
+    if (typeof showToast === 'function') showToast("Removed player from campaign.", "info");
+  };
+
+  // GM Campaign Controls
+  if (selGMCamps) {
+    selGMCamps.addEventListener("change", (e) => {
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.setActiveCampaign(e.target.value);
+        syncGMUI();
+      }
+    });
+  }
+
+  if (btnGMNewCamp) {
+    btnGMNewCamp.addEventListener("click", () => {
+      const name = prompt("Enter new campaign name:", "New Campaign");
+      if (name && typeof CampaignManager !== 'undefined') {
+        const c = CampaignManager.createCampaign(name);
+        syncGMUI();
+        if (typeof showToast === 'function') showToast(`Created campaign ${c.name}!`, "success");
+      }
+    });
+  }
+
+  if (btnGMCopyLink) {
+    btnGMCopyLink.addEventListener("click", () => {
+      const camp = typeof CampaignManager !== 'undefined' ? CampaignManager.getActiveCampaign() : null;
+      if (!camp) return;
+
+      const campCode = camp.code || "campaign-1";
+      const isWeb = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+
+      if (isWeb) {
+        const baseUrl = window.location.href.split('?')[0].split('#')[0];
+        const fullUrl = `${baseUrl}?campaign=${encodeURIComponent(campCode)}`;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(fullUrl).then(() => {
+            if (typeof showToast === 'function') showToast(`Copied player invite link!`, "success");
+          }).catch(() => prompt("Shareable Player Link:", fullUrl));
+        } else {
+          prompt("Shareable Player Link:", fullUrl);
+        }
+      } else {
+        // Local file:// protocol
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(campCode).then(() => {
+            if (typeof showToast === 'function') {
+              showToast(`Copied Campaign Code: "${campCode}"! Share this with players to enter in their Session tab.`, "success");
+            }
+          }).catch(() => prompt("Campaign Code for Players to Join:", campCode));
+        } else {
+          prompt("Campaign Code for Players to Join:", campCode);
+        }
+      }
+    });
+  }
+
+  if (btnGMExport) {
+    btnGMExport.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const json = CampaignManager.exportCampaign();
+      if (!json) return;
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${CampaignManager.getActiveCampaign()?.code || "campaign"}_backup.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (typeof showToast === 'function') showToast("Campaign backup downloaded!", "success");
+    });
+  }
+
+  if (btnGMImport && fileGMImport) {
+    btnGMImport.addEventListener("click", () => fileGMImport.click());
+    fileGMImport.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const res = CampaignManager.importCampaign(evt.target.result);
+        if (res.success) {
+          syncGMUI();
+          if (typeof showToast === 'function') showToast(`Imported campaign ${res.campaign.name}!`, "success");
+        } else {
+          alert(`Error importing campaign: ${res.error}`);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    });
+  }
+
+  if (btnGMDelete) {
+    btnGMDelete.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const camp = CampaignManager.getActiveCampaign();
+      if (!camp) return;
+      if (confirm(`Are you sure you want to delete campaign "${camp.name}"?`)) {
+        CampaignManager.deleteCampaign(camp.id);
+        syncGMUI();
+        if (typeof showToast === 'function') showToast("Campaign deleted.", "info");
+      }
+    });
+  }
+
+
+  if (btnGMAttachNPC) {
+    btnGMAttachNPC.addEventListener("click", () => {
+      if (!char || !char.name) {
+        alert("Please name the current character first before attaching as NPC.");
+        return;
+      }
+      if (typeof CampaignManager === 'undefined') return;
+      CampaignManager.attachNPC(char.serialize().character, char.name, char.powerLevel);
+      syncGMRosterUI();
+      if (typeof showToast === 'function') showToast(`Attached ${char.name} as NPC to campaign!`, "success");
+    });
+  }
+
+  // Auto-connect check from URL query parameter
+  if (typeof window !== 'undefined' && window.location) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const qCamp = urlParams.get("campaign") || urlParams.get("room");
+    if (qCamp) {
+      const pName = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
+      if (txtPlayerName) txtPlayerName.value = pName;
+      if (txtCampCode) txtCampCode.value = qCamp;
+    }
+  }
+}
+window.setupSessionAndGMHub = setupSessionAndGMHub;
+
+
 
 function setupThemeAndFontControls() {
   const root = document.documentElement;
   const btnTheme = document.getElementById("btnThemeToggle");
   const sliderLabel = document.getElementById("sliderLabelFont");
   const sliderControl = document.getElementById("sliderControlFont");
-  const sliderLink = document.getElementById("sliderLinkFont");
+  const sliderTag = document.getElementById("sliderTagFont") || document.getElementById("sliderLinkFont");
   const sliderSecondary = document.getElementById("sliderSecondaryFont");
   const sliderMinorControl = document.getElementById("sliderMinorControlFont");
+  const sliderFinePrint = document.getElementById("sliderFinePrintFont");
 
   const themes = ["light", "dark", "kitty", "parchment"];
   const themeNames = { light: "Light", dark: "Dark", kitty: "Kitty", parchment: "Parchment" };
@@ -976,9 +3671,10 @@ function setupThemeAndFontControls() {
   const savedTheme = localStorage.getItem("mm2e_theme") || "light";
   const savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
   const savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
-  const savedLinkFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "14", 10));
+  const savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
   const savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
-  const savedMinorControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "14", 10));
+  const savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
+  const savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
   
   root.setAttribute("data-theme", savedTheme);
 
@@ -998,26 +3694,37 @@ function setupThemeAndFontControls() {
   updateThemeBtnUI(savedTheme);
 
   root.style.setProperty("--font-size-labels", savedLabelFont + "px");
-  sliderLabel.value = savedLabelFont;
-  document.getElementById("valLabelFont").textContent = savedLabelFont + "px";
+  if (sliderLabel) sliderLabel.value = savedLabelFont;
+  const valLabel = document.getElementById("valLabelFont");
+  if (valLabel) valLabel.textContent = savedLabelFont + "px";
 
   root.style.setProperty("--font-size-controls", savedControlFont + "px");
-  sliderControl.value = savedControlFont;
-  document.getElementById("valControlFont").textContent = savedControlFont + "px";
+  if (sliderControl) sliderControl.value = savedControlFont;
+  const valControl = document.getElementById("valControlFont");
+  if (valControl) valControl.textContent = savedControlFont + "px";
 
-  root.style.setProperty("--font-size-links", savedLinkFont + "px");
-  sliderLink.value = savedLinkFont;
-  document.getElementById("valLinkFont").textContent = savedLinkFont + "px";
+  root.style.setProperty("--font-size-tags", savedTagFont + "px");
+  root.style.setProperty("--font-size-links", savedTagFont + "px");
+  if (sliderTag) sliderTag.value = savedTagFont;
+  const valTag = document.getElementById("valTagFont") || document.getElementById("valLinkFont");
+  if (valTag) valTag.textContent = savedTagFont + "px";
 
   root.style.setProperty("--font-size-secondary", savedSecondaryFont + "px");
-  sliderSecondary.value = savedSecondaryFont;
-  document.getElementById("valSecondaryFont").textContent = savedSecondaryFont + "px";
+  if (sliderSecondary) sliderSecondary.value = savedSecondaryFont;
+  const valSecondary = document.getElementById("valSecondaryFont");
+  if (valSecondary) valSecondary.textContent = savedSecondaryFont + "px";
 
   root.style.setProperty("--font-size-minor-controls", savedMinorControlFont + "px");
-  sliderMinorControl.value = savedMinorControlFont;
-  document.getElementById("valMinorControlFont").textContent = savedMinorControlFont + "px";
+  if (sliderMinorControl) sliderMinorControl.value = savedMinorControlFont;
+  const valMinorControl = document.getElementById("valMinorControlFont");
+  if (valMinorControl) valMinorControl.textContent = savedMinorControlFont + "px";
 
-
+  if (sliderFinePrint) {
+    root.style.setProperty("--font-size-fine-print", savedFinePrintFont + "px");
+    sliderFinePrint.value = savedFinePrintFont;
+    const valFinePrint = document.getElementById("valFinePrintFont");
+    if (valFinePrint) valFinePrint.textContent = savedFinePrintFont + "px";
+  }
 
   btnTheme.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1029,31 +3736,81 @@ function setupThemeAndFontControls() {
     localStorage.setItem("mm2e_theme", nextTheme);
   });
 
-  sliderLabel.addEventListener("input", (e) => {
-    root.style.setProperty("--font-size-labels", e.target.value + "px");
-    document.getElementById("valLabelFont").textContent = e.target.value + "px";
-    localStorage.setItem("mm2e_font_labels", e.target.value);
-  });
-  sliderControl.addEventListener("input", (e) => {
-    root.style.setProperty("--font-size-controls", e.target.value + "px");
-    document.getElementById("valControlFont").textContent = e.target.value + "px";
-    localStorage.setItem("mm2e_font_controls", e.target.value);
-  });
-  sliderLink.addEventListener("input", (e) => {
-    root.style.setProperty("--font-size-links", e.target.value + "px");
-    document.getElementById("valLinkFont").textContent = e.target.value + "px";
-    localStorage.setItem("mm2e_font_links", e.target.value);
-  });
-  sliderSecondary.addEventListener("input", (e) => {
-    root.style.setProperty("--font-size-secondary", e.target.value + "px");
-    document.getElementById("valSecondaryFont").textContent = e.target.value + "px";
-    localStorage.setItem("mm2e_font_secondary", e.target.value);
-  });
-  sliderMinorControl.addEventListener("input", (e) => {
-    root.style.setProperty("--font-size-minor-controls", e.target.value + "px");
-    document.getElementById("valMinorControlFont").textContent = e.target.value + "px";
-    localStorage.setItem("mm2e_font_minor_controls", e.target.value);
-  });
+  if (sliderLabel) {
+    sliderLabel.addEventListener("input", (e) => {
+      root.style.setProperty("--font-size-labels", e.target.value + "px");
+      const valEl = document.getElementById("valLabelFont");
+      if (valEl) valEl.textContent = e.target.value + "px";
+      localStorage.setItem("mm2e_font_labels", e.target.value);
+    });
+  }
+  if (sliderControl) {
+    sliderControl.addEventListener("input", (e) => {
+      root.style.setProperty("--font-size-controls", e.target.value + "px");
+      const valEl = document.getElementById("valControlFont");
+      if (valEl) valEl.textContent = e.target.value + "px";
+      localStorage.setItem("mm2e_font_controls", e.target.value);
+    });
+  }
+  if (sliderTag) {
+    sliderTag.addEventListener("input", (e) => {
+      root.style.setProperty("--font-size-tags", e.target.value + "px");
+      root.style.setProperty("--font-size-links", e.target.value + "px");
+      const valEl = document.getElementById("valTagFont") || document.getElementById("valLinkFont");
+      if (valEl) valEl.textContent = e.target.value + "px";
+      localStorage.setItem("mm2e_font_tags", e.target.value);
+      localStorage.setItem("mm2e_font_links", e.target.value);
+    });
+  }
+  if (sliderSecondary) {
+    sliderSecondary.addEventListener("input", (e) => {
+      root.style.setProperty("--font-size-secondary", e.target.value + "px");
+      const valEl = document.getElementById("valSecondaryFont");
+      if (valEl) valEl.textContent = e.target.value + "px";
+      localStorage.setItem("mm2e_font_secondary", e.target.value);
+    });
+  }
+  if (sliderMinorControl) {
+    sliderMinorControl.addEventListener("input", (e) => {
+      root.style.setProperty("--font-size-minor-controls", e.target.value + "px");
+      const valEl = document.getElementById("valMinorControlFont");
+      if (valEl) valEl.textContent = e.target.value + "px";
+      localStorage.setItem("mm2e_font_minor_controls", e.target.value);
+    });
+  }
+  if (sliderFinePrint) {
+    sliderFinePrint.addEventListener("input", (e) => {
+      root.style.setProperty("--font-size-fine-print", e.target.value + "px");
+      const valFinePrint = document.getElementById("valFinePrintFont");
+      if (valFinePrint) valFinePrint.textContent = e.target.value + "px";
+      localStorage.setItem("mm2e_font_fine_print", e.target.value);
+    });
+  }
+
+  // --- FREEZE OPTIONS DIALOG SIZE TOGGLE ---
+  const chkFixedOptions = document.getElementById("toggleFixedOptionsDialog");
+  const optionsModalEl = document.getElementById("optionsModal");
+
+  function setFixedOptionsDialogState(enabled) {
+    if (chkFixedOptions) chkFixedOptions.checked = enabled;
+    if (optionsModalEl) {
+      if (enabled) {
+        optionsModalEl.classList.add("prevent-resize");
+      } else {
+        optionsModalEl.classList.remove("prevent-resize");
+      }
+    }
+  }
+
+  if (chkFixedOptions) {
+    const isFixed = localStorage.getItem("mm2e_fixed_options_dialog") !== "false";
+    setFixedOptionsDialogState(isFixed);
+    chkFixedOptions.addEventListener("change", (e) => {
+      const enabled = e.target.checked;
+      localStorage.setItem("mm2e_fixed_options_dialog", enabled ? "true" : "false");
+      setFixedOptionsDialogState(enabled);
+    });
+  }
 
   // --- PERSISTENT TOP BAR (HEADER, SUMMARY BAR, TABS) TOGGLE & SCROLL BEHAVIOR ---
   const chkPersistent = document.getElementById("togglePersistentHeader");
@@ -1096,20 +3853,30 @@ function setupThemeAndFontControls() {
 }
 window.resetFont = function(type, defaultSize) {
   const root = document.documentElement;
-  let cssVar = "";
-  let lsKey = "";
-  if (type === 'Label') { cssVar = "--font-size-labels"; lsKey = "mm2e_font_labels"; }
-  else if (type === 'Control') { cssVar = "--font-size-controls"; lsKey = "mm2e_font_controls"; }
-  else if (type === 'Link') { cssVar = "--font-size-links"; lsKey = "mm2e_font_links"; }
-  else if (type === 'Secondary') { cssVar = "--font-size-secondary"; lsKey = "mm2e_font_secondary"; }
-  else if (type === 'MinorControl') { cssVar = "--font-size-minor-controls"; lsKey = "mm2e_font_minor_controls"; }
+  let cssVars = [];
+  let lsKeys = [];
+  let sliderId = "slider" + type + "Font";
+  let valId = "val" + type + "Font";
 
-  if (cssVar) {
-    root.style.setProperty(cssVar, defaultSize + "px");
-    document.getElementById("slider" + type + "Font").value = defaultSize;
-    document.getElementById("val" + type + "Font").textContent = defaultSize + "px";
-    localStorage.setItem(lsKey, defaultSize);
+  if (type === 'Label') { cssVars = ["--font-size-labels"]; lsKeys = ["mm2e_font_labels"]; }
+  else if (type === 'Control') { cssVars = ["--font-size-controls"]; lsKeys = ["mm2e_font_controls"]; }
+  else if (type === 'Tags' || type === 'Tag' || type === 'Link') {
+    cssVars = ["--font-size-tags", "--font-size-links"];
+    lsKeys = ["mm2e_font_tags", "mm2e_font_links"];
+    sliderId = document.getElementById("sliderTagFont") ? "sliderTagFont" : "sliderLinkFont";
+    valId = document.getElementById("valTagFont") ? "valTagFont" : "valLinkFont";
   }
+  else if (type === 'Secondary') { cssVars = ["--font-size-secondary"]; lsKeys = ["mm2e_font_secondary"]; }
+  else if (type === 'MinorControl') { cssVars = ["--font-size-minor-controls"]; lsKeys = ["mm2e_font_minor_controls"]; }
+  else if (type === 'FinePrint') { cssVars = ["--font-size-fine-print"]; lsKeys = ["mm2e_font_fine_print"]; }
+
+  cssVars.forEach(v => root.style.setProperty(v, defaultSize + "px"));
+  lsKeys.forEach(k => localStorage.setItem(k, defaultSize));
+
+  const sEl = document.getElementById(sliderId);
+  if (sEl) sEl.value = defaultSize;
+  const vEl = document.getElementById(valId);
+  if (vEl) vEl.textContent = defaultSize + "px";
 };
 
 function setupSortingHeaders() {
@@ -1202,7 +3969,10 @@ function buildAbilitiesUI() {
   container.innerHTML = list.map(abil => `
     <div class="list-row">
       <input type="checkbox" class="row-enable-toggle" id="enable_${abil.id}" checked title="Enable / Disable Trait">
-      <span class="row-title">${abil.name} (${abil.id})</span>
+      <button type="button" class="row-title-btn" id="btnRollAbil_${abil.id}" onclick="window.rollAbilityCheck('${abil.id}')" title="Roll ${abil.name} Check (1d20 + ${abil.id} modifier)">
+        <span style="font-size: var(--font-size-labels);">🎲</span>
+        <span class="row-title">${abil.name} (${abil.id})</span>
+      </button>
       
       <div class="stepper-group">
         <button type="button" class="stepper-btn stepper-dec" id="dec_${abil.id}" onclick="stepVal('input_${abil.id}', -1, -5, 20)">−</button>
@@ -1230,6 +4000,8 @@ function buildAbilitiesUI() {
       document.getElementById(`input_${abil.id}`).disabled = isAbsent;
       document.getElementById(`dec_${abil.id}`).disabled = isAbsent;
       document.getElementById(`inc_${abil.id}`).disabled = isAbsent;
+      const btnRoll = document.getElementById(`btnRollAbil_${abil.id}`);
+      if (btnRoll) btnRoll.disabled = isAbsent;
       refreshUI();
     });
   });
@@ -1246,6 +4018,7 @@ function buildAbilitiesUI() {
 
   document.getElementById("heroNameInput").addEventListener("input", (e) => {
     char.name = e.target.value;
+    syncActiveCompanionIfActive();
     refreshUI();
   });
   document.getElementById("playerNameInput").addEventListener("input", (e) => {
@@ -1259,6 +4032,40 @@ function buildAbilitiesUI() {
     buildAdvantagesUI();
     refreshUI();
   });
+
+  window.updateHeroPointsLockUI = function() {
+    const isLocked = !!char.heroPointsLocked;
+    const hpInput = document.getElementById("heroPointsInput");
+    const btnDec = document.getElementById("btnDecHeroPoints");
+    const btnInc = document.getElementById("btnIncHeroPoints");
+    const icoLock = document.getElementById("icoLockHeroPoints");
+    const btnLock = document.getElementById("btnLockHeroPoints");
+    if (hpInput) hpInput.disabled = isLocked;
+    if (btnDec) btnDec.disabled = isLocked;
+    if (btnInc) btnInc.disabled = isLocked;
+    if (icoLock) icoLock.textContent = isLocked ? "🔒" : "🔓";
+    if (btnLock) {
+      btnLock.title = isLocked ? "Unlock Hero Points Stepper" : "Lock Hero Points Stepper";
+      btnLock.style.background = isLocked ? "rgba(239, 68, 68, 0.15)" : "";
+      btnLock.style.borderColor = isLocked ? "#ef4444" : "";
+    }
+  };
+
+  const hpInput = document.getElementById("heroPointsInput");
+  if (hpInput) {
+    hpInput.addEventListener("input", (e) => {
+      char.heroPoints = Math.max(0, parseInt(e.target.value) || 0);
+      refreshUI();
+    });
+  }
+
+  const btnLockHP = document.getElementById("btnLockHeroPoints");
+  if (btnLockHP) {
+    btnLockHP.addEventListener("click", () => {
+      char.heroPointsLocked = !char.heroPointsLocked;
+      window.updateHeroPointsLockUI();
+    });
+  }
   document.getElementById("heroSizeInput").addEventListener("change", (e) => {
     char.sizeCategory = e.target.value;
     refreshUI();
@@ -1414,7 +4221,15 @@ function buildSkillsUI() {
 
     return `
       <tr>
-        <td><strong style="${skillNameStyle}">${item.name}</strong></td>
+        <td>
+          <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <button type="button" class="row-title-btn" onclick="window.rollSkillCheck('${item.name.replace(/'/g, "\\'")}')" style="${skillNameStyle}; font-weight: bold; cursor: pointer; padding: 2px 6px;" title="Roll 1d20 + Skill Bonus">
+              <span>🎲</span>
+              <span>${item.name}</span>
+            </button>
+            <button type="button" class="btn-info-circle" onclick="window.showSkillInfo('${item.name.replace(/'/g, "\\'")}')" title="View Skill Rules">?</button>
+          </div>
+        </td>
         <td>${item.ability}</td>
         <td>${item.untrained ? `<span style="color:#10b981; font-weight:600;">Yes</span>` : `<span style="color:#f59e0b; font-weight:600;">Trained Only</span>`}</td>
         <td id="skill_base_${idSafe}">0</td>
@@ -1428,7 +4243,6 @@ function buildSkillsUI() {
         <td id="skill_total_${idSafe}"><strong>+0</strong></td>
         <td>${advTagsHtml}</td>
         <td style="text-align: center; white-space: nowrap;">
-          <button type="button" class="btn-info-circle" onclick="window.showSkillInfo('${item.name.replace(/'/g, "\\'")}')" title="View Skill Rules">?</button>
           ${removeBtnHtml}
         </td>
       </tr>
@@ -1464,7 +4278,68 @@ window.removeSkill = function(skillName) {
   }
 };
 
-const MECHA_SUBOPTIONS_MAP = {
+const FEAT_SUBOPTIONS_MAP = {
+  // === GENERAL, COMBAT & SKILL FEAT SUB-OPTIONS ===
+  "Uncanny Dodge": [
+    { value: "Auditory (Hearing)" },
+    { value: "Visual (Sight)" },
+    { value: "Olfactory (Scent / Smell)" },
+    { value: "Tactile (Touch / Vibration)" },
+    { value: "Mental (Psionic / Mind Sense)" },
+    { value: "Radio (Radar / Radio Waves)" },
+    { value: "Spatial / Temporal Sense" }
+  ],
+  "Second Chance": [
+    { value: "Falling Damage (Toughness save)" },
+    { value: "Tripped / Knockdown checks" },
+    { value: "Triggering Traps / Reflex save" },
+    { value: "Mind Control & Mental Attacks (Will save)" },
+    { value: "Fire & Heat Damage (Toughness save)" },
+    { value: "Poison & Toxin Hazards (Fortitude save)" },
+    { value: "Suffocation & Drowning Hazards" },
+    { value: "Disarm Combat Maneuvers" },
+    { value: "Feints & Bluff Tricks (Sense Motive check)" },
+    { value: "Massive Damage Save Checks" }
+  ],
+  "Challenge": [
+    { value: "Improved Demoralize (Intimidate as Move action)" },
+    { value: "Improved Distract (Distract as Move action)" },
+    { value: "Improved Feint (Feint as Move action)" },
+    { value: "Improved Taunt (Taunt as Move action)" },
+    { value: "Mass Intimidation (-2 check per target beyond 1st)" },
+    { value: "Accelerated Stealth (Full-speed Stealth at -5)" },
+    { value: "Combat Clarity (Oppose Feint as Free action)" },
+    { value: "Perfect Balance (Balance as Free action)" }
+  ],
+  "Favored Conditions": [
+    { value: "When Outnumbered (2+ opponents)" },
+    { value: "When Cornered / Back to Wall" },
+    { value: "In Darkness / Poor Visibility" },
+    { value: "Underwater / Aquatic Combat" },
+    { value: "When at Staggered or Disabled Injury" },
+    { value: "In Tight Spaces / Close Quarters" },
+    { value: "While Defending Allies / Innocents" }
+  ],
+  "Interface": [
+    { value: "Computers (Hacking & Systems)" },
+    { value: "Drive (Ground Vehicles)" },
+    { value: "Pilot (Air & Spacecraft)" },
+    { value: "Disable Device (Mechanisms & Locks)" },
+    { value: "Craft: Electronic" },
+    { value: "Craft: Mechanical" }
+  ],
+  "Fascinate": [
+    { value: "Bluff (Captivate with deception / stories)" },
+    { value: "Diplomacy (Captivate with charm / rhetoric)" },
+    { value: "Intimidate (Captivate with awe / terror)" },
+    { value: "Perform (Captivate with musical / stage performance)" }
+  ],
+  "Distract": [
+    { value: "Bluff (Trick / feint distraction)" },
+    { value: "Intimidate (Frighten / freeze distraction)" }
+  ],
+
+  // === MECHA & ROBOTIC SUB-OPTIONS ===
   "Electromagnetic Seal": [
     { value: "Base Seal (Radiation & Cosmic Rays)" },
     { value: "Insubstantial: Rank 1 (Gaseous / Vaporous)" },
@@ -1660,7 +4535,322 @@ const MECHA_SUBOPTIONS_MAP = {
   ]
 };
 
-window.MECHA_SUBOPTIONS_MAP = MECHA_SUBOPTIONS_MAP;
+window.FEAT_SUBOPTIONS_MAP = FEAT_SUBOPTIONS_MAP;
+const MECHA_SUBOPTIONS_MAP = FEAT_SUBOPTIONS_MAP;
+window.MECHA_SUBOPTIONS_MAP = FEAT_SUBOPTIONS_MAP;
+
+/* ==========================================================================
+   (ATTACK) FLURRY ENGINE & OPTIONS
+   ========================================================================== */
+
+window.FLURRY_BASE_MELEE_FORMS = [
+  "Unarmed Combat",
+  "Swords / Blades",
+  "Knives / Daggers",
+  "Staff / Polearm",
+  "Claws / Natural Weapons",
+  "Blunt / Clubs / Hammers"
+];
+
+// Discovers all configured melee damage powers (aka Strike) on a character
+window.getCharacterMeleeDamagePowers = function(character) {
+  const c = character || (typeof char !== 'undefined' ? char : null);
+  if (!c) return [];
+  const powers = c.activePowers || c.powers || [];
+  const strikePowers = [];
+
+  const checkAndAdd = (eff, parentPowerName) => {
+    if (!eff) return;
+    const effName = (eff.effectName || "").trim();
+    const profile = (eff.profileName || "").trim();
+    const effRawName = (eff.name || "").trim();
+    const range = (eff.range || "").toLowerCase();
+
+    // Is it a melee damage power (aka Strike)?
+    const isExplicitStrike = effName.toLowerCase() === "strike" || profile.toLowerCase() === "strike";
+    const isMeleeDamage = (effName.toLowerCase() === "damage" || eff.isAttack) && (range === "touch" || range === "melee" || range === "personal" || (!range && range !== "ranged" && range !== "perception"));
+    const isNamedStrike = effRawName.toLowerCase().startsWith("strike") && range !== "ranged" && range !== "perception";
+
+    if (isExplicitStrike || isMeleeDamage || isNamedStrike) {
+      let displayName = effRawName;
+      if (!displayName || displayName === "New Effect" || displayName === "Damage") {
+        displayName = parentPowerName || effName || profile || "Strike";
+      }
+      const label = displayName.toLowerCase().startsWith("strike") ? displayName : `Strike: ${displayName}`;
+      if (!strikePowers.includes(label)) {
+        strikePowers.push(label);
+      }
+    }
+
+    if (eff.containedPowers && Array.isArray(eff.containedPowers)) {
+      eff.containedPowers.forEach(cp => {
+        checkAndAdd(cp, effRawName || parentPowerName);
+      });
+    }
+  };
+
+  powers.forEach(p => {
+    const parentName = (p.name && p.name !== "New Power Container") ? p.name : "";
+    if (Array.isArray(p.effects)) {
+      p.effects.forEach(eff => checkAndAdd(eff, parentName));
+    } else {
+      checkAndAdd(p, parentName);
+    }
+  });
+
+  return strikePowers;
+};
+
+// Discovers all configured ranged damage powers (aka Blast) on a character
+window.getCharacterRangedDamagePowers = function(character) {
+  const c = character || (typeof char !== 'undefined' ? char : null);
+  if (!c) return [];
+  const powers = c.activePowers || c.powers || [];
+  const blastPowers = [];
+
+  const checkAndAdd = (eff, parentPowerName) => {
+    if (!eff) return;
+    const effName = (eff.effectName || "").trim();
+    const profile = (eff.profileName || "").trim();
+    const effRawName = (eff.name || "").trim();
+    const range = (eff.range || "").toLowerCase();
+
+    const isExplicitBlast = effName.toLowerCase() === "blast" || profile.toLowerCase() === "blast";
+    const isRangedDamage = (effName.toLowerCase() === "damage" || eff.isAttack) && range === "ranged";
+    const isNamedBlast = effRawName.toLowerCase().startsWith("blast");
+
+    if (isExplicitBlast || isRangedDamage || isNamedBlast) {
+      let displayName = effRawName;
+      if (!displayName || displayName === "New Effect" || displayName === "Damage") {
+        displayName = parentPowerName || effName || profile || "Blast";
+      }
+      const label = displayName.toLowerCase().startsWith("blast") ? displayName : `Blast: ${displayName}`;
+      if (!blastPowers.includes(label)) {
+        blastPowers.push(label);
+      }
+    }
+
+    if (eff.containedPowers && Array.isArray(eff.containedPowers)) {
+      eff.containedPowers.forEach(cp => {
+        checkAndAdd(cp, effRawName || parentPowerName);
+      });
+    }
+  };
+
+  powers.forEach(p => {
+    const parentName = (p.name && p.name !== "New Power Container") ? p.name : "";
+    if (Array.isArray(p.effects)) {
+      p.effects.forEach(eff => checkAndAdd(eff, parentName));
+    } else {
+      checkAndAdd(p, parentName);
+    }
+  });
+
+  return blastPowers;
+};
+
+// Returns available Flurry forms filtered by character powers and assigned slots across all Flurry instances
+window.getAvailableFlurryForms = function(character, currentFeatKey, currentSlotIdx, currentSlotValue) {
+  const c = character || (typeof char !== 'undefined' ? char : null);
+  const baseForms = [...window.FLURRY_BASE_MELEE_FORMS];
+  const strikePowers = c ? window.getCharacterMeleeDamagePowers(c) : [];
+  const allCandidateForms = [...baseForms, ...strikePowers];
+
+  const assignedForms = new Set();
+  if (c && c.feats) {
+    Object.keys(c.feats).forEach(fKey => {
+      const baseKey = fKey.includes(" (") ? fKey.split(" (")[0].trim() : fKey.trim();
+      if (baseKey === "(Attack) Flurry") {
+        const raw = c.featDetails ? c.featDetails[fKey] : null;
+        const rank = c.feats[fKey] || 1;
+        const stats = window.calculateFlurryStats(rank, raw);
+        const slots = [stats.primaryForm, ...stats.upgrades];
+        slots.forEach((sVal, sIdx) => {
+          if (fKey === currentFeatKey && sIdx === currentSlotIdx) return;
+          if (!sVal) return;
+          let formName = sVal.trim();
+          if (formName.startsWith("Additional Form:") || formName.startsWith("Melee Form:")) {
+            formName = formName.replace(/^(Additional Form:|Melee Form:)\s*/, "").trim();
+          }
+          if (!formName.startsWith("Reduce Interval") && !formName.startsWith("Increase Max Bonus") && !formName.startsWith("Custom Melee")) {
+            assignedForms.add(formName.toLowerCase());
+          }
+        });
+      }
+    });
+  }
+
+  const curLower = currentSlotValue ? currentSlotValue.toLowerCase().replace(/^(additional form:|melee form:)\s*/, "").trim() : "";
+  const result = allCandidateForms.filter(f => {
+    const fLower = f.toLowerCase();
+    if (curLower && fLower === curLower) return true;
+    return !assignedForms.has(fLower);
+  });
+
+  // Preserve legacy or custom value if already configured on this slot
+  if (currentSlotValue && !result.includes(currentSlotValue)) {
+    const cleanCur = currentSlotValue.replace(/^(Additional Form:|Melee Form:)\s*/, "").trim();
+    if (!cleanCur.startsWith("Reduce Interval") && !cleanCur.startsWith("Increase Max Bonus") && !cleanCur.startsWith("Custom Melee")) {
+      result.push(cleanCur);
+    }
+  }
+
+  return result;
+};
+
+window.calculateFlurryStats = function(rank, rawDetails, character, featKey) {
+  const r = Math.max(1, parseInt(rank) || 1);
+  let primaryForm = "Unarmed Combat";
+  let rawUpgrades = [];
+
+  if (Array.isArray(rawDetails)) {
+    primaryForm = rawDetails[0] || "Unarmed Combat";
+    rawUpgrades = rawDetails.slice(1);
+  } else if (typeof rawDetails === 'string' && rawDetails.trim()) {
+    if (rawDetails.startsWith("[") && rawDetails.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(rawDetails);
+        if (Array.isArray(parsed)) {
+          primaryForm = parsed[0] || "Unarmed Combat";
+          rawUpgrades = parsed.slice(1);
+        }
+      } catch (e) {
+        primaryForm = rawDetails.trim();
+      }
+    } else if (rawDetails.includes("; ")) {
+      const parts = rawDetails.split("; ").map(s => s.trim());
+      primaryForm = parts[0] || "Unarmed Combat";
+      rawUpgrades = parts.slice(1);
+    } else {
+      primaryForm = rawDetails.trim();
+    }
+  }
+
+  let interval = 5;
+  let maxBonus = 5;
+  const forms = [primaryForm];
+  let intervalReductions = 0;
+  let capIncreases = 0;
+
+  const neededUpgrades = Math.max(0, r - 1);
+  const upgrades = [];
+
+  for (let i = 0; i < neededUpgrades; i++) {
+    let up = rawUpgrades[i];
+    if (!up) {
+      if (interval > 2) {
+        up = `Reduce Interval by 1 (Interval ${interval - 1})`;
+      } else if (maxBonus < 10) {
+        up = "Increase Max Bonus to +10";
+      } else {
+        const availForms = (typeof window.getAvailableFlurryForms === 'function')
+          ? window.getAvailableFlurryForms(character, featKey || "(Attack) Flurry", i + 1)
+          : window.FLURRY_BASE_MELEE_FORMS;
+        const unusedForm = availForms.find(f => !forms.some(assigned => assigned.toLowerCase() === f.toLowerCase()) && f !== primaryForm);
+        up = unusedForm ? `Additional Form: ${unusedForm}` : "Reduce Interval by 1 (Interval 2)";
+      }
+    }
+
+    if (up.startsWith("Reduce Interval") || up.includes("Interval")) {
+      if (interval > 2) {
+        interval = Math.max(2, interval - 1);
+        intervalReductions++;
+      }
+    } else if (up.startsWith("Increase Max Bonus") || up.includes("+10")) {
+      maxBonus = 10;
+      capIncreases++;
+    } else if (up.startsWith("Additional Form:") || up.startsWith("Melee Form:")) {
+      const fName = up.replace(/^(Additional Form:|Melee Form:)\s*/, "").trim();
+      if (fName && !forms.includes(fName)) {
+        forms.push(fName);
+      }
+    } else if (up.trim()) {
+      if (!forms.includes(up.trim())) {
+        forms.push(up.trim());
+      }
+    }
+    upgrades.push(up);
+  }
+
+  return {
+    rank: r,
+    primaryForm,
+    upgrades,
+    interval,
+    maxBonus,
+    forms,
+    intervalReductions,
+    capIncreases
+  };
+};
+
+window.getFlurryUpgradeChoicesForSlot = function(stats, slotIdx, character, featKey) {
+  let simInterval = 5;
+  let simMaxBonus = 5;
+
+  for (let i = 0; i < slotIdx; i++) {
+    const prevUp = stats.upgrades[i] || "";
+    if (prevUp.startsWith("Reduce Interval") || prevUp.includes("Interval")) {
+      simInterval = Math.max(2, simInterval - 1);
+    } else if (prevUp.startsWith("Increase Max Bonus") || prevUp.includes("+10")) {
+      simMaxBonus = 10;
+    }
+  }
+
+  const choices = [];
+  if (simInterval > 2) {
+    choices.push(`Reduce Interval by 1 (Interval ${simInterval - 1})`);
+  }
+  if (simMaxBonus < 10) {
+    choices.push("Increase Max Bonus to +10");
+  }
+
+  const currentChoice = stats.upgrades[slotIdx] || "";
+  const availForms = (typeof window.getAvailableFlurryForms === 'function')
+    ? window.getAvailableFlurryForms(character, featKey || "(Attack) Flurry", slotIdx + 1, currentChoice)
+    : window.FLURRY_BASE_MELEE_FORMS;
+
+  availForms.forEach(f => {
+    choices.push(`Additional Form: ${f}`);
+  });
+  choices.push("Additional Form: Custom Melee Attack...");
+  return choices;
+};
+
+window.updateFlurrySlot = function(featKey, slotIdx, newChoice) {
+  if (!char || !char.feats) return;
+  const rank = char.feats[featKey] || 1;
+  const stats = window.calculateFlurryStats(rank, char.featDetails ? char.featDetails[featKey] : null);
+
+  let chosenVal = newChoice;
+  if (newChoice === "Additional Form: Custom Melee Attack..." || newChoice === "Custom Melee Form...") {
+    const custom = prompt("Enter melee attack name or power for Flurry:", "Claws / Strike");
+    if (custom && custom.trim()) {
+      chosenVal = slotIdx === 0 ? custom.trim() : `Additional Form: ${custom.trim()}`;
+    } else {
+      buildAdvantagesUI();
+      return;
+    }
+  }
+
+  const fullSlots = [stats.primaryForm, ...stats.upgrades];
+  while (fullSlots.length < rank) {
+    fullSlots.push("Reduce Interval by 1 (Interval 4)");
+  }
+  fullSlots[slotIdx] = chosenVal;
+
+  if (!char.featDetails) char.featDetails = {};
+  char.featDetails[featKey] = fullSlots;
+
+  buildAdvantagesUI();
+  buildSkillsUI();
+  refreshUI();
+  showToast(`Updated Flurry configuration`, "info");
+};
+
+/* ==========================================================================
+   FEAT SUB-OPTIONS LIST & SLOTS HELPERS
+   ========================================================================== */
 
 window.getFeatSubOptionsList = function(featKey, expectedRank) {
   if (!char) return [];
@@ -1696,11 +4886,11 @@ window.getFeatSubOptionsList = function(featKey, expectedRank) {
     neededSlots = Math.max(0, r - 1);
   } else if (baseKey === "Environmental Seal") {
     neededSlots = 1;
-  } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[baseKey]) {
+  } else if (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && FEAT_SUBOPTIONS_MAP[baseKey]) {
     neededSlots = Math.max(1, r);
   }
 
-  let mapOpts = (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[baseKey]) ? MECHA_SUBOPTIONS_MAP[baseKey] : [];
+  let mapOpts = (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && FEAT_SUBOPTIONS_MAP[baseKey]) ? FEAT_SUBOPTIONS_MAP[baseKey] : [];
   if (baseKey === "Electromagnetic Seal") {
     mapOpts = mapOpts.filter(o => !o.value.startsWith("Base Seal"));
   } else if (baseKey === "Ejector Seat") {
@@ -1724,7 +4914,7 @@ window.getFeatSubOptionsList = function(featKey, expectedRank) {
   return arr;
 };
 
-window.updateMechaSubOptionSlot = function(featKey, slotIdx, newSubOption) {
+window.updateFeatSubOptionSlot = function(featKey, slotIdx, newSubOption) {
   if (!char || !char.feats) return;
   const rank = char.feats[featKey] || 1;
   const baseName = featKey.includes(" (") ? featKey.split(" (")[0].trim() : featKey.trim();
@@ -1739,8 +4929,171 @@ window.updateMechaSubOptionSlot = function(featKey, slotIdx, newSubOption) {
   showToast(`Updated "${baseName}" (#${slotIdx + 1}): ${newSubOption}`, "info");
 };
 
+window.updateMechaSubOptionSlot = window.updateFeatSubOptionSlot;
+
 window.updateMechaSubOption = function(featKey, newSubOption) {
-  window.updateMechaSubOptionSlot(featKey, 0, newSubOption);
+  window.updateFeatSubOptionSlot(featKey, 0, newSubOption);
+};
+
+window.getFeatAdjustingEffects = function(featName) {
+  const list = [];
+  if (typeof char === 'undefined' || !char) return list;
+  const baseName = featName.includes(" (") ? featName.split(" (")[0].trim() : featName.trim();
+  const cleanTarget = (s) => (s || "").replace(/\s*\[.*?\]/g, '').trim().toLowerCase();
+  const targetMatches = (s) => {
+    const c = cleanTarget(s);
+    return c === featName.toLowerCase() || c === baseName.toLowerCase();
+  };
+
+  const powerContainers = char.powers || [];
+  powerContainers.forEach(container => {
+    if (container.active === false) return;
+    const containerName = container.name || "Power";
+    const effects = Array.isArray(container.effects) ? container.effects : [container];
+    effects.forEach(eff => {
+      const isEffActive = eff.active !== false;
+      // 1. Enhanced Trait subpowers
+      if ((eff.effectName === "Enhanced Trait" || eff.effectName === "Enhance Trait") && Array.isArray(eff.subPowers)) {
+        eff.subPowers.forEach(sub => {
+          const raw = (sub.type || sub.name || "").trim();
+          if (targetMatches(raw)) {
+            const r = (parseInt(sub.rank) || 0) * (sub.isReduced ? -1 : 1);
+            list.push({
+              source: containerName,
+              effect: eff.name && eff.name !== containerName ? `${eff.name} (${eff.effectName})` : eff.effectName,
+              type: "Enhanced Trait",
+              rankChange: r,
+              active: isEffActive
+            });
+          }
+        });
+      }
+
+      // 2. Active Container / Battle Form contained traits
+      if (typeof CharacterModel !== 'undefined' && CharacterModel.isContainerEffect && CharacterModel.isContainerEffect(eff) && Array.isArray(eff.containedPowers)) {
+        const isContActive = isEffActive && eff.formActive !== false;
+        eff.containedPowers.forEach(cp => {
+          if (cp.effectName === "Enhanced Trait" && Array.isArray(cp.subPowers)) {
+            cp.subPowers.forEach(sub => {
+              const raw = (sub.type || sub.name || "").trim();
+              if (targetMatches(raw)) {
+                const r = (parseInt(sub.rank) || 0) * (sub.isReduced ? -1 : 1);
+                list.push({
+                  source: containerName,
+                  effect: `Container: ${eff.name || eff.effectName}`,
+                  type: "Enhanced Trait",
+                  rankChange: r,
+                  active: isContActive
+                });
+              }
+            });
+          } else if (cp.type === "trait" || cp.isTrait || (!cp.effectName && cp.name)) {
+            if (targetMatches(cp.name)) {
+              const r = parseInt(cp.rank) || 1;
+              list.push({
+                source: containerName,
+                effect: `Container: ${eff.name || eff.effectName}`,
+                type: "Contained Feat",
+                rankChange: r,
+                active: isContActive
+              });
+            }
+          }
+        });
+      }
+
+      // 3. Boost Effect targeting this feat
+      if (eff.effectName === "Boost") {
+        const target = (eff.options && eff.options.boostTarget) || eff.boostTarget;
+        const isActive = (eff.options && eff.options.boostActive !== undefined) ? eff.options.boostActive : (eff.boostActive !== false);
+        if (target && targetMatches(target)) {
+          const r = parseInt(eff.rank) || 1;
+          list.push({
+            source: containerName,
+            effect: eff.name && eff.name !== containerName ? `${eff.name} (Boost)` : "Boost",
+            type: "Boost",
+            rankChange: r,
+            active: isActive
+          });
+        }
+      }
+    });
+  });
+
+  const enhFeats = (char.enhancedTraits && char.enhancedTraits.feats) || {};
+  const modelEnh = enhFeats[featName] || enhFeats[baseName] || 0;
+  if (modelEnh !== 0 && list.length === 0) {
+    list.push({
+      source: "Enhanced Trait",
+      effect: "Active Power Enhancement",
+      type: "Enhanced Trait",
+      rankChange: modelEnh,
+      active: true
+    });
+  }
+
+  return list;
+};
+
+window.showFeatAdjustments = function(featName) {
+  const modal = document.getElementById("traitAdjustmentsModal");
+  const title = document.getElementById("modalAdjustmentsTitle");
+  const body = document.getElementById("modalAdjustmentsBody");
+  if (!modal || !title || !body) return;
+
+  const baseName = featName.includes(" (") ? featName.split(" (")[0].trim() : featName.trim();
+  const boughtRank = (char && char.feats) ? (char.feats[featName] || 0) : 0;
+  const effects = window.getFeatAdjustingEffects(featName);
+  const enhFeats = (char && char.enhancedTraits && char.enhancedTraits.feats) || {};
+  const enhTotal = enhFeats[featName] || enhFeats[baseName] || 0;
+  const effRank = boughtRank + enhTotal;
+
+  title.innerHTML = `⚡ Adjusting Effects: <em>${featName}</em>`;
+
+  let effectsHtml = "";
+  if (effects.length === 0 && enhTotal === 0) {
+    effectsHtml = `<div style="color: var(--text-muted); padding: 8px 0;">No active adjusting effects found for this feat.</div>`;
+  } else {
+    effectsHtml = `
+      <div style="display: flex; flex-direction: column; gap: 8px; margin: 12px 0;">
+        ${effects.map(eff => {
+          const sign = eff.rankChange > 0 ? `+${eff.rankChange}` : `${eff.rankChange}`;
+          const badgeColor = eff.type === "Boost" ? "#f59e0b" : "#10b981";
+          const statusText = eff.active === false ? " <span style='font-size: var(--font-size-fine-print); color: var(--text-muted);'>(Inactive)</span>" : "";
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px;">
+              <div>
+                <div style="font-weight: 700; color: var(--text-main);">${eff.source}</div>
+                <div style="font-size: var(--font-size-secondary); color: var(--text-muted);">${eff.effect}${statusText}</div>
+              </div>
+              <span class="badge" style="background: ${badgeColor}; font-weight: 700; font-size: var(--font-size-tags); padding: 3px 8px; border-radius: 4px; color: #ffffff;">
+                ${sign} Rank${Math.abs(eff.rankChange) === 1 ? '' : 's'}
+              </span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  body.innerHTML = `
+    <div style="font-size: var(--font-size-secondary); color: var(--text-main);">
+      <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-color);">
+        <span class="secondary-text">Purchased / Base Rank:</span>
+        <strong>${boughtRank}</strong>
+      </div>
+      <div style="margin-top: 10px;">
+        <label style="font-weight: 700; color: #10b981; font-size: var(--font-size-labels);">Modifying Power Effects:</label>
+        ${effectsHtml}
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; margin-top: 8px; border-top: 2px solid var(--border-color); font-size: 1.05em;">
+        <strong>Effective Total Rank:</strong>
+        <strong style="color: ${effRank !== boughtRank ? '#10b981' : 'inherit'}; font-size: 1.1em;">${effRank}</strong>
+      </div>
+    </div>
+  `;
+
+  modal.classList.add("active");
 };
 
 function buildAdvantagesUI() {
@@ -1793,7 +5146,7 @@ function buildAdvantagesUI() {
     const noun = isMecha ? "mecha options" : "feats";
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">
+        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
           No ${noun} added yet. Click <button type="button" class="btn btn-sm" onclick="window.openAddFeatModal()" style="margin: 0 4px; padding: 2px 8px;">${addLabel}</button> to select and add ${noun}.
         </td>
       </tr>
@@ -1812,7 +5165,7 @@ function buildAdvantagesUI() {
     const baseKey = adv.baseName || (adv.name.includes(" (") ? adv.name.split(" (")[0].trim() : adv.name.trim());
 
     const advNameStyle = effVal > 0 ? 'color: #f59e0b;' : '';
-    const enhBadge = enhFeat > 0 ? ` <span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600; font-size: 0.85em; padding: 1px 5px;" title="Enhanced Trait">[+${enhFeat} Enhanced]</span>` : '';
+    const enhBadge = enhFeat > 0 ? ` <span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600; font-size: var(--font-size-tags); padding: 1px 5px;" title="Enhanced Trait">[+${enhFeat} Enhanced]</span>` : '';
 
     let detailCellHTML = `<span class="secondary-text">—</span>`;
     if (adv.name === "Skill Mastery" && effVal > 0) {
@@ -1821,8 +5174,8 @@ function buildAdvantagesUI() {
       const selectedCount = selectedArr.length;
       const displayStr = selectedCount > 0 ? selectedArr.join(", ") : "<em>No skills</em>";
       detailCellHTML = `
-        <div style="display:flex; flex-direction:column; gap:4px; max-width: 160px;">
-          <span class="secondary-text" style="font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCount > 0 ? selectedArr.join(", ") : ""}">
+        <div style="display:flex; flex-direction:column; gap:4px; width: 100%;">
+          <span class="secondary-text" style="font-size: var(--font-size-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCount > 0 ? selectedArr.join(", ") : ""}">
             ${displayStr}
           </span>
           <button type="button" class="btn btn-sm" onclick="window.configureSkillMastery()">Configure (${selectedCount} / ${effVal * 4})</button>
@@ -1833,8 +5186,8 @@ function buildAdvantagesUI() {
       const rootHero = window.primaryHero || char;
       const comps = (rootHero.companions || []).filter(c => c.type === "sidekick");
       detailCellHTML = `
-        <div style="display:flex; flex-direction:column; gap:4px; max-width: 190px;">
-          <span class="secondary-text" style="font-size: 0.85em;">Budget: <strong>${budget} PP</strong> (Max PL ${rootHero.powerLevel})</span>
+        <div style="display:flex; flex-direction:column; gap:4px; width: 100%;">
+          <span class="secondary-text" style="font-size: var(--font-size-secondary);">Budget: <strong>${budget} PP</strong> (Max PL ${rootHero.powerLevel})</span>
           ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit companion sheet">🤝 Edit "${c.name}"</button>`).join('')}
           <button type="button" class="btn btn-sm btn-secondary" onclick="buildOrEditCompanionForSource('sidekick')">+ Build Sidekick</button>
         </div>
@@ -1844,14 +5197,53 @@ function buildAdvantagesUI() {
       const rootHero = window.primaryHero || char;
       const comps = (rootHero.companions || []).filter(c => c.type === "minion");
       detailCellHTML = `
-        <div style="display:flex; flex-direction:column; gap:4px; max-width: 190px;">
-          <span class="secondary-text" style="font-size: 0.85em;">Budget: <strong>${budget} PP</strong></span>
+        <div style="display:flex; flex-direction:column; gap:4px; width: 100%;">
+          <span class="secondary-text" style="font-size: var(--font-size-secondary);">Budget: <strong>${budget} PP</strong></span>
           ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit minion sheet">👥 Edit "${c.name}"</button>`).join('')}
           <button type="button" class="btn btn-sm btn-secondary" onclick="buildOrEditCompanionForSource('minion')">+ Build Minion</button>
         </div>
       `;
-    } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
-      const opts = MECHA_SUBOPTIONS_MAP[baseKey] || [];
+    } else if (adv.name === "(Attack) Flurry" || baseKey === "(Attack) Flurry") {
+      const stats = window.calculateFlurryStats(effVal, char.featDetails ? char.featDetails[adv.name] : null, char, adv.name);
+      const primaryOptionsList = window.getAvailableFlurryForms(char, adv.name, 0, stats.primaryForm);
+
+      detailCellHTML = `
+        <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-size: var(--font-size-tags); padding: 1px 6px; border-radius: 4px; background: rgba(59, 130, 246, 0.12); color: var(--accent-primary); font-weight: 700;" title="For every ${stats.interval} beating Defense, +1 damage bonus">
+              ⚡ Interval: ${stats.interval} (+1 / ${stats.interval} &gt; Def)
+            </span>
+            <span style="font-size: var(--font-size-tags); padding: 1px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.12); color: #8b5cf6; font-weight: 700;">
+              💥 Max: +${stats.maxBonus}
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: var(--accent-primary); min-width: 54px;">Primary:</span>
+            <select class="adv-suboption-select" onchange="window.updateFlurrySlot('${adv.name.replace(/'/g, "\\'")}', 0, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid var(--accent-primary); background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+              ${primaryOptionsList.map(opt => `<option value="${opt.replace(/"/g, '&quot;')}" ${opt === stats.primaryForm ? 'selected' : ''}>${opt}</option>`).join('')}
+              <option value="Custom Melee Form...">Custom Melee Form...</option>
+            </select>
+          </div>
+          ${Array.from({ length: Math.max(0, effVal - 1) }).map((_, uIdx) => {
+            const slotIdx = uIdx + 1;
+            const currentChoice = stats.upgrades[uIdx] || "Reduce Interval by 1 (Interval 4)";
+            const availableChoices = window.getFlurryUpgradeChoicesForSlot(stats, uIdx, char, adv.name);
+            if (!availableChoices.includes(currentChoice)) {
+              availableChoices.unshift(currentChoice);
+            }
+            return `
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #8b5cf6; min-width: 54px;">Rank ${uIdx + 2}:</span>
+                <select class="adv-suboption-select" onchange="window.updateFlurrySlot('${adv.name.replace(/'/g, "\\'")}', ${slotIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #8b5cf6; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+                  ${availableChoices.map(c => `<option value="${c.replace(/"/g, '&quot;')}" ${c === currentChoice ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    } else if (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && (FEAT_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
+      const opts = FEAT_SUBOPTIONS_MAP[baseKey] || [];
       const slots = window.getFeatSubOptionsList(adv.name, effVal);
 
       const makeOptionsHTML = (currentVal, optionsList) => {
@@ -1863,43 +5255,49 @@ function buildAdvantagesUI() {
       if (baseKey === "Electromagnetic Seal") {
         const upgradeOpts = opts.filter(o => !o.value.startsWith("Base Seal"));
         detailCellHTML = `
-          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
-            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+            <div style="font-size: var(--font-size-tags); padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
               🛡️ Base Radiation &amp; Cosmic Ray Seal (Rank 1)
             </div>
-            ${slots.map((slotVal, sIdx) => `
+            ${slots.map((slotVal, sIdx) => {
+              const otherTaken = slots.filter((v, i) => i !== sIdx && v);
+              const availOpts = upgradeOpts.filter(o => !otherTaken.includes(o.value));
+              return `
               <div style="display: flex; align-items: center; gap: 4px;">
-                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 72px;">Upgrade #${sIdx + 1}:</span>
+                <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #0284c7; min-width: 72px;">Upgrade #${sIdx + 1}:</span>
                 <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
-                  ${makeOptionsHTML(slotVal, upgradeOpts)}
+                  ${makeOptionsHTML(slotVal, availOpts.length > 0 ? availOpts : upgradeOpts)}
                 </select>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         `;
       } else if (baseKey === "Ejector Seat") {
         const upgradeOpts = opts.filter(o => o.value !== "Leaping 5 Launch Distance");
         detailCellHTML = `
-          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
-            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+            <div style="font-size: var(--font-size-tags); padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
               🚀 Base Leaping 5 Escape Launch (Rank 1)
             </div>
-            ${slots.map((slotVal, sIdx) => `
+            ${slots.map((slotVal, sIdx) => {
+              const otherTaken = slots.filter((v, i) => i !== sIdx && v);
+              const availOpts = upgradeOpts.filter(o => !otherTaken.includes(o.value));
+              return `
               <div style="display: flex; align-items: center; gap: 4px;">
-                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 72px;">Upgrade #${sIdx + 1}:</span>
+                <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #0284c7; min-width: 72px;">Upgrade #${sIdx + 1}:</span>
                 <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
-                  ${makeOptionsHTML(slotVal, upgradeOpts)}
+                  ${makeOptionsHTML(slotVal, availOpts.length > 0 ? availOpts : upgradeOpts)}
                 </select>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         `;
       } else if (baseKey === "Environmental Seal") {
         const dur = window.getEnvSealDuration(effVal);
         const currentDetail = slots[0] || (opts[0] ? opts[0].value : "Vacuum & Deep Space");
         detailCellHTML = `
-          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 280px;">
-            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+            <div style="font-size: var(--font-size-tags); padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
               ⏱️ Sealed Life Support Duration: ${dur}
             </div>
             <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', 0, this.value)" style="font-size: var(--font-size-controls); padding: 3px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
@@ -1910,40 +5308,46 @@ function buildAdvantagesUI() {
       } else if (baseKey === "Equipment Mount") {
         const grade = window.getMountGradeText(effVal);
         detailCellHTML = `
-          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
-            <div style="font-size: 11px; padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+            <div style="font-size: var(--font-size-tags); padding: 2px 6px; background: rgba(2, 132, 199, 0.12); border-radius: 4px; color: #0284c7; font-weight: 600;">
               🔧 ${grade}
             </div>
-            ${slots.map((slotVal, sIdx) => `
+            ${slots.map((slotVal, sIdx) => {
+              const otherTaken = slots.filter((v, i) => i !== sIdx && v);
+              const availOpts = opts.filter(o => !otherTaken.includes(o.value));
+              return `
               <div style="display: flex; align-items: center; gap: 4px;">
-                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 65px;">Mount #${sIdx + 1}:</span>
+                <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #0284c7; min-width: 65px;">Mount #${sIdx + 1}:</span>
                 <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
-                  ${makeOptionsHTML(slotVal, opts)}
+                  ${makeOptionsHTML(slotVal, availOpts.length > 0 ? availOpts : opts)}
                 </select>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         `;
       } else if (slots.length <= 1) {
         const currentDetail = slots[0] || (opts[0] ? opts[0].value : "");
         detailCellHTML = `
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', 0, this.value)" style="font-size: var(--font-size-controls); padding: 3px 6px; width: 100%; max-width: 260px; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
+            <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', 0, this.value)" style="font-size: var(--font-size-controls); padding: 3px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
               ${makeOptionsHTML(currentDetail, opts)}
             </select>
           </div>
         `;
       } else {
         detailCellHTML = `
-          <div style="display: flex; flex-direction: column; gap: 4px; max-width: 320px;">
-            ${slots.map((slotVal, sIdx) => `
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+            ${slots.map((slotVal, sIdx) => {
+              const otherTaken = slots.filter((v, i) => i !== sIdx && v);
+              const availOpts = opts.filter(o => !otherTaken.includes(o.value));
+              return `
               <div style="display: flex; align-items: center; gap: 4px;">
-                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 32px;">#${sIdx + 1}:</span>
+                <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #0284c7; min-width: 32px;">#${sIdx + 1}:</span>
                 <select class="adv-suboption-select" onchange="window.updateMechaSubOptionSlot('${adv.name.replace(/'/g, "\\'")}', ${sIdx}, this.value)" style="font-size: var(--font-size-controls); padding: 2px 6px; width: 100%; border-radius: 4px; border: 1.5px solid #0284c7; background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
-                  ${makeOptionsHTML(slotVal, opts)}
+                  ${makeOptionsHTML(slotVal, availOpts.length > 0 ? availOpts : opts)}
                 </select>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         `;
       }
@@ -1956,12 +5360,19 @@ function buildAdvantagesUI() {
       detailCellHTML = `<input type="text" class="adv-detail-input" data-adv="${adv.name}" value="${detailVal}" placeholder="Specify detail..." style="width: 100%; min-width: 140px;">`;
     }
 
+    const adjustingEffects = window.getFeatAdjustingEffects ? window.getFeatAdjustingEffects(adv.name) : [];
+    const isAdjusted = enhFeat !== 0 || adjustingEffects.length > 0;
+    const totalColorStyle = isAdjusted ? 'color: #10b981; font-weight: 700;' : '';
+    const adjustBtnHtml = isAdjusted
+      ? `<button type="button" class="btn-adjust-info" onclick="window.showFeatAdjustments('${adv.name.replace(/'/g, "\\'")}')" title="View Adjusting Effects">!</button>`
+      : '';
+
     const removeBtnHtml = isEnhancedOnly 
       ? `<button type="button" class="btn btn-sm btn-secondary" style="padding: 2px 6px; opacity: 0.5; cursor: not-allowed;" title="Granted by active power or alternate form" disabled>✕</button>`
       : `<button type="button" class="btn btn-sm" style="padding: 2px 6px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="window.removeFeat('${adv.name.replace(/'/g, "\\'")}')" title="Remove this feat">✕</button>`;
 
     const stepperHtml = isEnhancedOnly
-      ? `<span class="secondary-text" style="font-size: 0.9em;">0 (Power)</span>`
+      ? `<span class="secondary-text" style="font-size: var(--font-size-secondary);">0 (Power)</span>`
       : `<div class="stepper-group">
           <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('adv_input_${idSafe}', -1, 0, ${maxRank})">−</button>
           <input type="number" id="adv_input_${idSafe}" class="stepper-input" min="0" max="${maxRank}" value="${val}" data-adv="${adv.name}">
@@ -1970,14 +5381,23 @@ function buildAdvantagesUI() {
 
     return `
       <tr>
-        <td><strong style="${advNameStyle}">${adv.name}</strong>${enhBadge}</td>
+        <td>
+          <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <strong style="${advNameStyle}">${adv.name}</strong>
+            <button type="button" class="btn-info-circle" onclick="window.showAdvantageInfo('${adv.baseName.replace(/'/g, "\\'")}')" title="View Full Description" style="margin-left: 2px;">?</button>
+            ${enhBadge}
+          </div>
+        </td>
         <td class="secondary-text">${adv.category}</td>
-        <td>${stepperHtml}</td>
-        <td><strong>${effVal}</strong></td>
-        <td>${detailCellHTML}</td>
-        <td class="secondary-text">${adv.description || adv.baseFeat.description || ""}</td>
-        <td style="text-align: center; white-space: nowrap;">
-          <button type="button" class="btn-info-circle" onclick="window.showAdvantageInfo('${adv.baseName.replace(/'/g, "\\'")}')" title="View Full Description">?</button>
+        <td class="rank-col">${stepperHtml}</td>
+        <td class="total-col">
+          <div style="display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+            <strong style="${totalColorStyle}">${effVal}</strong>
+            ${adjustBtnHtml}
+          </div>
+        </td>
+        <td class="spec-col">${detailCellHTML}</td>
+        <td class="actions-col" style="text-align: center; white-space: nowrap;">
           ${removeBtnHtml}
         </td>
       </tr>
@@ -1995,7 +5415,11 @@ function buildAdvantagesUI() {
       } else {
         char.feats[featName] = val;
         const baseKey = featName.includes(" (") ? featName.split(" (")[0].trim() : featName.trim();
-        if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
+        if (featName === "(Attack) Flurry" || baseKey === "(Attack) Flurry") {
+          const stats = window.calculateFlurryStats(val, char.featDetails ? char.featDetails[featName] : null);
+          if (!char.featDetails) char.featDetails = {};
+          char.featDetails[featName] = [stats.primaryForm, ...stats.upgrades];
+        } else if (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && (FEAT_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
           const updatedSlots = window.getFeatSubOptionsList(featName, val);
           if (!char.featDetails) char.featDetails = {};
           char.featDetails[featName] = updatedSlots;
@@ -2027,6 +5451,7 @@ function buildAdvantagesUI() {
     });
   });
 }
+window.buildAdvantagesUI = buildAdvantagesUI;
 
 window.removeFeat = function(featName) {
   if (confirm(`Remove "${featName}" from your character sheet?`)) {
@@ -2162,14 +5587,16 @@ window.openAddFeatModal = function(defaultCategory) {
   if (txtSearch) txtSearch.value = "";
 
   const numRank = document.getElementById("numFeatInitialRank");
+  if (numRank) numRank.value = 1;
+  window._currentModalFeat = null;
   if (numRank && !numRank._hasMechaRankListener) {
     numRank._hasMechaRankListener = true;
     numRank.addEventListener("input", () => {
       const selChoice = document.getElementById("selFeatChoice");
       if (!selChoice) return;
-      const isMechaFeat = typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && !!MECHA_SUBOPTIONS_MAP[selChoice.value];
-      const rankSensitive = ["Electromagnetic Seal", "Environmental Seal", "Ejector Seat", "Equipment Mount"];
-      if (rankSensitive.includes(selChoice.value) || isMechaFeat) {
+      const isOptionFeat = typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && !!FEAT_SUBOPTIONS_MAP[selChoice.value];
+      const rankSensitive = ["Electromagnetic Seal", "Environmental Seal", "Ejector Seat", "Equipment Mount", "(Attack) Flurry"];
+      if (rankSensitive.includes(selChoice.value) || isOptionFeat) {
         window.onFeatModalSelect();
       }
     });
@@ -2314,7 +5741,71 @@ window.onFeatModalSelect = function() {
   // Multi-Form / Specification Container
   if (!boxSpec) return;
 
-  if (adv.name === "Attack Focus") {
+  if (adv.name === "(Attack) Flurry") {
+    boxSpec.style.display = "block";
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const prevSelects = boxSpec.querySelectorAll(".modal-flurry-slot-select");
+    const prevValues = Array.from(prevSelects).map(s => s.value);
+    const primaryVal = prevValues[0] || (document.getElementById("selFlurryPrimaryForm") ? document.getElementById("selFlurryPrimaryForm").value : "Unarmed Combat");
+
+    const rawUpgrades = prevValues.slice(1);
+    const stats = window.calculateFlurryStats(r, [primaryVal, ...rawUpgrades], char, "(Attack) Flurry");
+    const primaryForms = window.getAvailableFlurryForms(char, "(Attack) Flurry", 0, stats.primaryForm);
+
+    boxSpec.innerHTML = `
+      <div style="display: flex; gap: 6px; flex-direction: column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+          <label style="font-weight: 700; font-size: var(--font-size-labels); color: var(--accent-primary); margin: 0;">
+            ⚡ Flurry Attack Configuration &amp; Rank Upgrades:
+          </label>
+          <span class="badge" id="lblFlurryBadge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank ${r}</span>
+        </div>
+        <div style="padding: 6px 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--font-size-secondary);">
+          <div style="font-weight: 600; color: var(--text-main); margin-bottom: 4px;">
+            Full action melee barrage at <strong>–2 attack penalty</strong>.
+          </div>
+          <div id="flurryLiveStats" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span style="font-weight: 700; color: var(--accent-primary);">⚡ Interval: ${stats.interval} (+1 dmg / ${stats.interval} over Def)</span>
+            <span style="font-weight: 700; color: #8b5cf6;">💥 Max Bonus: +${stats.maxBonus}</span>
+            <span style="font-weight: 700; color: #10b981;">⚔️ Forms: ${stats.forms.join(', ')}</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 4px;">
+          <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 2px;">Primary Melee Attack Form (Rank 1):</label>
+          <select id="selFlurryPrimaryForm" class="modal-flurry-slot-select" data-slot="0" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px;" onchange="window.onFeatSpecOptionChange()">
+            ${primaryForms.map(f => `<option value="${f.replace(/"/g, '&quot;')}" ${f === stats.primaryForm ? 'selected' : ''}>${f}</option>`).join('')}
+            <option value="__custom__" ${stats.primaryForm.startsWith("Custom") ? 'selected' : ''}>Custom Melee Form...</option>
+          </select>
+          <input type="text" id="txtFlurryCustomPrimary" placeholder="Enter melee attack or Strike power..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-top: 4px; display: ${primaryVal === '__custom__' ? 'block' : 'none'};" oninput="window.onFeatSpecOptionChange()">
+        </div>
+
+        ${r > 1 ? `
+          <div style="margin-top: 6px;">
+            <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">
+              Additional Rank Upgrades (${r - 1} Choice${r - 1 > 1 ? 's' : ''}):
+            </label>
+            <div id="boxFlurryUpgrades" style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; padding-right: 4px;">
+              ${Array.from({ length: r - 1 }).map((_, uIdx) => {
+                const slotIdx = uIdx + 1;
+                const slotVal = stats.upgrades[uIdx] || "Reduce Interval by 1";
+                const choices = window.getFlurryUpgradeChoicesForSlot(stats, uIdx, char, "(Attack) Flurry");
+                if (!choices.includes(slotVal)) choices.unshift(slotVal);
+                return `
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #8b5cf6; min-width: 65px;">Rank ${uIdx + 2}:</span>
+                    <select class="modal-flurry-slot-select" data-slot="${slotIdx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;" onchange="window.onFeatSpecOptionChange()">
+                      ${choices.map(c => `<option value="${c.replace(/"/g, '&quot;')}" ${c === slotVal ? 'selected' : ''}>${c}</option>`).join('')}
+                    </select>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  } else if (adv.name === "Attack Focus") {
     boxSpec.style.display = "block";
     boxSpec.innerHTML = `
       <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 6px;">Choose Attack Focus Type:</label>
@@ -2332,18 +5823,40 @@ window.onFeatModalSelect = function() {
     `;
   } else if (adv.name === "Attack Specialization") {
     boxSpec.style.display = "block";
+    const baseWeapons = [
+      { value: "Unarmed", label: "Unarmed Combat" },
+      { value: "Swords", label: "Swords / Blades" },
+      { value: "Bows", label: "Bows / Archery" },
+      { value: "Pistols", label: "Pistols / Sidearms" },
+      { value: "Rifles", label: "Rifles / Longarms" },
+      { value: "Throwing", label: "Throwing Weapons" },
+      { value: "Claws", label: "Claws / Natural Weapons" }
+    ];
+
+    const strikePowers = (typeof window.getCharacterMeleeDamagePowers === 'function')
+      ? window.getCharacterMeleeDamagePowers(char).map(p => ({ value: p, label: `${p} (Melee Damage Power)` }))
+      : [];
+    const blastPowers = (typeof window.getCharacterRangedDamagePowers === 'function')
+      ? window.getCharacterRangedDamagePowers(char).map(p => ({ value: p, label: `${p} (Ranged Damage Power)` }))
+      : [];
+    const allAttacks = [...baseWeapons, ...strikePowers, ...blastPowers];
+
+    const takenSpecializations = new Set();
+    if (char && char.feats) {
+      Object.keys(char.feats).forEach(fKey => {
+        if (fKey.startsWith("Attack Specialization (") && fKey.endsWith(")")) {
+          const spec = fKey.replace(/^Attack Specialization \(/, "").replace(/\)$/, "").trim().toLowerCase();
+          takenSpecializations.add(spec);
+        }
+      });
+    }
+
+    const availableAttacks = allAttacks.filter(atk => !takenSpecializations.has(atk.value.toLowerCase()));
+
     boxSpec.innerHTML = `
       <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Specific Attack or Weapon (+2 attack bonus / rank):</label>
       <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
-        <option value="Unarmed">Unarmed Combat</option>
-        <option value="Swords">Swords / Blades</option>
-        <option value="Bows">Bows / Archery</option>
-        <option value="Pistols">Pistols / Sidearms</option>
-        <option value="Rifles">Rifles / Longarms</option>
-        <option value="Blast Power">Blast Power</option>
-        <option value="Strike Power">Strike Power</option>
-        <option value="Throwing">Throwing Weapons</option>
-        <option value="Claws">Claws / Natural Weapons</option>
+        ${availableAttacks.map(atk => `<option value="${atk.value.replace(/"/g, '&quot;')}">${atk.label}</option>`).join('')}
         <option value="__custom__">Custom Weapon / Attack...</option>
       </select>
       <input type="text" id="txtFeatCustomSpec" placeholder="Enter weapon or attack power name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
@@ -2353,34 +5866,60 @@ window.onFeatModalSelect = function() {
     `;
   } else if (adv.name === "Favored Environment") {
     boxSpec.style.display = "block";
+    const envOptions = [
+      { value: "Airborne", label: "Airborne / In Flight" },
+      { value: "Aquatic", label: "Aquatic / Underwater" },
+      { value: "Space / Zero-G", label: "Space / Zero-G" },
+      { value: "Urban", label: "Urban / Rooftops" },
+      { value: "Forest / Jungle", label: "Forest / Jungle" },
+      { value: "Arctic", label: "Arctic / Extreme Cold" },
+      { value: "Underground", label: "Underground / Caves" }
+    ];
+    const takenEnv = new Set();
+    if (char && char.feats) {
+      Object.keys(char.feats).forEach(fKey => {
+        if (fKey.startsWith("Favored Environment (") && fKey.endsWith(")")) {
+          takenEnv.add(fKey.replace(/^Favored Environment \(/, "").replace(/\)$/, "").trim().toLowerCase());
+        }
+      });
+    }
+    const availEnv = envOptions.filter(e => !takenEnv.has(e.value.toLowerCase()));
+
     boxSpec.innerHTML = `
       <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Environment (+1 attack or dodge bonus in environment):</label>
       <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
-        <option value="Airborne">Airborne / In Flight</option>
-        <option value="Aquatic">Aquatic / Underwater</option>
-        <option value="Space / Zero-G">Space / Zero-G</option>
-        <option value="Urban">Urban / Rooftops</option>
-        <option value="Forest / Jungle">Forest / Jungle</option>
-        <option value="Arctic">Arctic / Extreme Cold</option>
-        <option value="Underground">Underground / Caves</option>
+        ${availEnv.map(e => `<option value="${e.value.replace(/"/g, '&quot;')}">${e.label}</option>`).join('')}
         <option value="__custom__">Custom Environment...</option>
       </select>
       <input type="text" id="txtFeatCustomSpec" placeholder="Enter environment name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
     `;
   } else if (adv.name === "Favored Opponent") {
     boxSpec.style.display = "block";
+    const oppOptions = [
+      { value: "Aliens", label: "Aliens / Extraterrestrials" },
+      { value: "Animals", label: "Animals / Beasts" },
+      { value: "Criminals", label: "Criminals / Underworld" },
+      { value: "Demons / Fiends", label: "Demons / Fiends" },
+      { value: "Mutants", label: "Mutants" },
+      { value: "Psionics", label: "Psionics / Mentalists" },
+      { value: "Robots / Machines", label: "Robots / Artificial Intelligences" },
+      { value: "Spellcasters", label: "Spellcasters / Sorcerers" },
+      { value: "Undead", label: "Undead / Vampires / Zombies" }
+    ];
+    const takenOpp = new Set();
+    if (char && char.feats) {
+      Object.keys(char.feats).forEach(fKey => {
+        if (fKey.startsWith("Favored Opponent (") && fKey.endsWith(")")) {
+          takenOpp.add(fKey.replace(/^Favored Opponent \(/, "").replace(/\)$/, "").trim().toLowerCase());
+        }
+      });
+    }
+    const availOpp = oppOptions.filter(o => !takenOpp.has(o.value.toLowerCase()));
+
     boxSpec.innerHTML = `
       <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Opponent Type (+1 damage &amp; interaction bonus):</label>
       <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
-        <option value="Aliens">Aliens / Extraterrestrials</option>
-        <option value="Animals">Animals / Beasts</option>
-        <option value="Criminals">Criminals / Underworld</option>
-        <option value="Demons / Fiends">Demons / Fiends</option>
-        <option value="Mutants">Mutants</option>
-        <option value="Psionics">Psionics / Mentalists</option>
-        <option value="Robots / Machines">Robots / Artificial Intelligences</option>
-        <option value="Spellcasters">Spellcasters / Sorcerers</option>
-        <option value="Undead">Undead / Vampires / Zombies</option>
+        ${availOpp.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}">${o.label}</option>`).join('')}
         <option value="__custom__">Custom Opponent Type...</option>
       </select>
       <input type="text" id="txtFeatCustomSpec" placeholder="Enter opponent category..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
@@ -2417,15 +5956,28 @@ window.onFeatModalSelect = function() {
     `;
   } else if (adv.name === "Environmental Adaptation") {
     boxSpec.style.display = "block";
+    const adaOptions = [
+      { value: "Underwater", label: "Underwater / Aquatic" },
+      { value: "Zero-G", label: "Zero-G / Weightlessness" },
+      { value: "Heavy Gravity", label: "Heavy Gravity" },
+      { value: "High Altitude", label: "High Altitude / Thin Atmosphere" },
+      { value: "Extreme Cold", label: "Extreme Cold" },
+      { value: "Extreme Heat", label: "Extreme Heat" }
+    ];
+    const takenAda = new Set();
+    if (char && char.feats) {
+      Object.keys(char.feats).forEach(fKey => {
+        if (fKey.startsWith("Environmental Adaptation (") && fKey.endsWith(")")) {
+          takenAda.add(fKey.replace(/^Environmental Adaptation \(/, "").replace(/\)$/, "").trim().toLowerCase());
+        }
+      });
+    }
+    const availAda = adaOptions.filter(a => !takenAda.has(a.value.toLowerCase()));
+
     boxSpec.innerHTML = `
       <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Environment (Ignore operating penalties):</label>
       <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
-        <option value="Underwater">Underwater / Aquatic</option>
-        <option value="Zero-G">Zero-G / Weightlessness</option>
-        <option value="Heavy Gravity">Heavy Gravity</option>
-        <option value="High Altitude">High Altitude / Thin Atmosphere</option>
-        <option value="Extreme Cold">Extreme Cold</option>
-        <option value="Extreme Heat">Extreme Heat</option>
+        ${availAda.map(a => `<option value="${a.value.replace(/"/g, '&quot;')}">${a.label}</option>`).join('')}
         <option value="__custom__">Custom Environment...</option>
       </select>
       <input type="text" id="txtFeatCustomSpec" placeholder="Enter environment name..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; display: none;">
@@ -2469,7 +6021,7 @@ window.onFeatModalSelect = function() {
         <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
           ⚙️ Electromagnetic Seal Protection Modes:
         </label>
-        <span class="badge" id="lblEMSealBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+        <span class="badge" id="lblEMSealBadge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank ${r}</span>
       </div>
       <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 6px;">
         <!-- Option 1: Base Seal -->
@@ -2542,7 +6094,7 @@ window.onFeatModalSelect = function() {
         <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
           ⚙️ Ejector Seat Sub-Options &amp; Upgrades:
         </label>
-        <span class="badge" id="lblEjectorBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+        <span class="badge" id="lblEjectorBadge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank ${r}</span>
       </div>
       <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 6px;">
         <!-- Option 1: Base Launch -->
@@ -2599,7 +6151,7 @@ window.onFeatModalSelect = function() {
         <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
           ⚙️ Environmental Seal Sub-Options:
         </label>
-        <span class="badge" id="lblEnvSealBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+        <span class="badge" id="lblEnvSealBadge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank ${r}</span>
       </div>
       <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Primary Operating Medium / Atmosphere:</label>
       <select id="selFeatSpecOption" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
@@ -2632,7 +6184,7 @@ window.onFeatModalSelect = function() {
             <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
               ⚙️ Equipment Mount Sub-Options:
             </label>
-            <span class="badge" id="lblMountBadge" style="background: var(--accent-primary); font-size: 11px;">Rank 1</span>
+            <span class="badge" id="lblMountBadge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank 1</span>
           </div>
           <div style="margin-bottom: 4px;">
             <span style="font-weight: 600; font-size: var(--font-size-labels);">Mount Capability:</span>
@@ -2653,7 +6205,7 @@ window.onFeatModalSelect = function() {
             <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
               ⚙️ Equipment Mount Sub-Options (${r} Ranks = ${r} Mounts):
             </label>
-            <span class="badge" id="lblMountBadge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+            <span class="badge" id="lblMountBadge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank ${r}</span>
           </div>
           <div style="margin-bottom: 4px;">
             <span style="font-weight: 600; font-size: var(--font-size-labels);">Mount Capability:</span>
@@ -2661,12 +6213,15 @@ window.onFeatModalSelect = function() {
           </div>
           <div style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; padding-right: 4px;">
             ${Array.from({ length: r }).map((_, idx) => {
-              const slotVal = prevValues[idx] || (opts[idx % opts.length] ? opts[idx % opts.length].value : opts[0].value);
+              const otherTaken = prevValues.filter((v, i) => i !== idx && v);
+              const availOpts = opts.filter(o => !otherTaken.includes(o.value));
+              const optsToRender = availOpts.length > 0 ? availOpts : opts;
+              const slotVal = prevValues[idx] || (optsToRender[0] ? optsToRender[0].value : opts[0].value);
               return `
               <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 65px;">Mount #${idx + 1}:</span>
-                <select class="modal-mecha-slot-select" data-slot="${idx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;">
-                  ${opts.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === slotVal ? 'selected' : ''}>${o.value}</option>`).join('')}
+                <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #0284c7; min-width: 65px;">Mount #${idx + 1}:</span>
+                <select class="modal-mecha-slot-select" data-slot="${idx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;" onchange="window.onFeatSpecOptionChange()">
+                  ${optsToRender.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === slotVal ? 'selected' : ''}>${o.value}</option>`).join('')}
                 </select>
               </div>
             `;
@@ -2689,7 +6244,7 @@ window.onFeatModalSelect = function() {
           <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
             ⚙️ ${adv.name} Sub-Options:
           </label>
-          <span class="badge" style="background: var(--accent-primary); font-size: 11px;">Rank 1</span>
+          <span class="badge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank 1</span>
         </div>
         <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Choose Sub-Option / Specification:</label>
         <select id="selFeatSpecOption" class="modal-mecha-slot-select" data-slot="0" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; margin-bottom: 6px;" onchange="window.onFeatSpecOptionChange()">
@@ -2704,16 +6259,19 @@ window.onFeatModalSelect = function() {
           <label style="font-weight: 700; font-size: var(--font-size-labels); color: #0284c7; margin: 0;">
             ⚙️ ${adv.name} Sub-Options (${r} Ranks = ${r} Choices):
           </label>
-          <span class="badge" style="background: var(--accent-primary); font-size: 11px;">Rank ${r}</span>
+          <span class="badge" style="background: var(--accent-primary); font-size: var(--font-size-tags);">Rank ${r}</span>
         </div>
         <div style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; padding-right: 4px;">
           ${Array.from({ length: r }).map((_, idx) => {
-            const slotVal = prevValues[idx] || (opts[idx % opts.length] ? opts[idx % opts.length].value : opts[0].value);
+            const otherTaken = prevValues.filter((v, i) => i !== idx && v);
+            const availOpts = opts.filter(o => !otherTaken.includes(o.value));
+            const optsToRender = availOpts.length > 0 ? availOpts : opts;
+            const slotVal = prevValues[idx] || (optsToRender[0] ? optsToRender[0].value : opts[0].value);
             return `
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 11px; font-weight: 700; color: #0284c7; min-width: 50px;">Slot #${idx + 1}:</span>
-              <select class="modal-mecha-slot-select" data-slot="${idx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;">
-                ${opts.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === slotVal ? 'selected' : ''}>${o.value}</option>`).join('')}
+              <span style="font-size: var(--font-size-minor-controls); font-weight: 700; color: #0284c7; min-width: 50px;">Slot #${idx + 1}:</span>
+              <select class="modal-mecha-slot-select" data-slot="${idx}" style="flex: 1; font-size: var(--font-size-controls); padding: 3px 6px;" onchange="window.onFeatSpecOptionChange()">
+                ${optsToRender.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === slotVal ? 'selected' : ''}>${o.value}</option>`).join('')}
               </select>
             </div>
           `;
@@ -2834,12 +6392,71 @@ window.onEMSealPerceptionChange = function() {
 window.onFeatSpecOptionChange = function() {
   const sel = document.getElementById("selFeatSpecOption");
   const txt = document.getElementById("txtFeatCustomSpec");
-  if (!sel || !txt) return;
-  if (sel.value === "__custom__") {
-    txt.style.display = "block";
-    txt.focus();
-  } else {
-    txt.style.display = "none";
+  if (sel && txt) {
+    if (sel.value === "__custom__") {
+      txt.style.display = "block";
+      txt.focus();
+    } else {
+      txt.style.display = "none";
+    }
+  }
+
+  const selFlurry = document.getElementById("selFlurryPrimaryForm");
+  const txtFlurry = document.getElementById("txtFlurryCustomPrimary");
+  if (selFlurry && txtFlurry) {
+    if (selFlurry.value === "__custom__") {
+      txtFlurry.style.display = "block";
+      txtFlurry.focus();
+    } else {
+      txtFlurry.style.display = "none";
+    }
+  }
+
+  const selChoice = document.getElementById("selFeatChoice");
+  if (selChoice && selChoice.value === "(Attack) Flurry") {
+    const numRank = document.getElementById("numFeatInitialRank");
+    const r = numRank ? (parseInt(numRank.value) || 1) : 1;
+    const prevSelects = document.querySelectorAll(".modal-flurry-slot-select");
+    const prevValues = Array.from(prevSelects).map(s => s.value);
+    const pVal = prevValues[0] || (selFlurry ? selFlurry.value : "Unarmed Combat");
+    const actualPrimary = (pVal === "__custom__" && txtFlurry && txtFlurry.value.trim()) ? txtFlurry.value.trim() : (pVal === "__custom__" ? "Custom Melee" : pVal);
+    const stats = window.calculateFlurryStats(r, [actualPrimary, ...prevValues.slice(1)], char, "(Attack) Flurry");
+    const badgeContainer = document.getElementById("flurryLiveStats");
+    if (badgeContainer) {
+      badgeContainer.innerHTML = `
+        <span style="font-weight: 700; color: var(--accent-primary);">⚡ Interval: ${stats.interval} (+1 dmg / ${stats.interval} over Def)</span>
+        <span style="font-weight: 700; color: #8b5cf6;">💥 Max Bonus: +${stats.maxBonus}</span>
+        <span style="font-weight: 700; color: #10b981;">⚔️ Forms: ${stats.forms.join(', ')}</span>
+      `;
+    }
+
+    // Refresh upgrade selects so forms assigned elsewhere are filtered out
+    const upgradeSelects = document.querySelectorAll("#boxFlurryUpgrades .modal-flurry-slot-select");
+    upgradeSelects.forEach((uSel, uIdx) => {
+      const curVal = uSel.value;
+      const choices = window.getFlurryUpgradeChoicesForSlot(stats, uIdx, char, "(Attack) Flurry");
+      if (curVal && !choices.includes(curVal)) choices.unshift(curVal);
+      uSel.innerHTML = choices.map(c => `<option value="${c.replace(/"/g, '&quot;')}" ${c === curVal ? 'selected' : ''}>${c}</option>`).join('');
+    });
+  }
+
+  // Refresh multi-slot mecha/suboptions dropdowns so chosen options are excluded from other slots
+  const mechaSelects = document.querySelectorAll(".modal-mecha-slot-select");
+  if (mechaSelects.length > 1 && selChoice) {
+    const advName = selChoice.value;
+    const opts = (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[advName]) ? MECHA_SUBOPTIONS_MAP[advName] : [];
+    if (opts.length > 0) {
+      const curVals = Array.from(mechaSelects).map(s => s.value);
+      mechaSelects.forEach((mSel, idx) => {
+        const currentVal = mSel.value;
+        const otherTaken = curVals.filter((v, i) => i !== idx && v);
+        const availOpts = opts.filter(o => !otherTaken.includes(o.value));
+        const list = availOpts.length > 0 ? availOpts : opts;
+        const hasVal = currentVal && list.some(o => o.value === currentVal);
+        const listToRender = (currentVal && !hasVal) ? [{ value: currentVal }, ...list] : list;
+        mSel.innerHTML = listToRender.map(o => `<option value="${o.value.replace(/"/g, '&quot;')}" ${o.value === currentVal ? 'selected' : ''}>${o.value}</option>`).join('');
+      });
+    }
   }
 };
 
@@ -2848,7 +6465,23 @@ window.extractFeatSpecification = function(adv, ranksToAdd) {
   let specDetail = "";
   let finalRanks = ranksToAdd;
 
-  if (adv.name === "Attack Focus") {
+  if (adv.name === "(Attack) Flurry") {
+    const selP = document.getElementById("selFlurryPrimaryForm");
+    const txtP = document.getElementById("txtFlurryCustomPrimary");
+    let primary = "Unarmed Combat";
+    if (selP && selP.value === "__custom__") {
+      primary = txtP ? txtP.value.trim() : "Custom Melee";
+    } else if (selP) {
+      primary = selP.value;
+    }
+    if (!primary) primary = "Unarmed Combat";
+
+    const upgradeSelects = document.querySelectorAll("#boxFlurryUpgrades .modal-flurry-slot-select");
+    const upgrades = Array.from(upgradeSelects).map(s => s.value);
+    specDetail = [primary, ...upgrades];
+    finalName = adv.name;
+    return { finalName, specDetail, ranksToAdd: finalRanks };
+  } else if (adv.name === "Attack Focus") {
     const rad = document.querySelector('input[name="radAttackFocusType"]:checked');
     const type = rad ? rad.value : "Melee";
     finalName = `Attack Focus (${type})`;
@@ -2907,7 +6540,7 @@ window.extractFeatSpecification = function(adv, ranksToAdd) {
     specDetail = [loc];
     finalName = `Equipment Mount`;
     return { finalName, specDetail, ranksToAdd: finalRanks };
-  } else if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[adv.name]) {
+  } else if (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && FEAT_SUBOPTIONS_MAP[adv.name]) {
     const slotSelects = document.querySelectorAll(".modal-mecha-slot-select");
     if (slotSelects && slotSelects.length > 0) {
       const chosenSlots = Array.from(slotSelects).map(s => s.value);
@@ -2923,8 +6556,8 @@ window.extractFeatSpecification = function(adv, ranksToAdd) {
     } else if (sel) {
       chosen = sel.value;
     }
-    if (!chosen && MECHA_SUBOPTIONS_MAP[adv.name][0]) {
-      chosen = MECHA_SUBOPTIONS_MAP[adv.name][0].value;
+    if (!chosen && FEAT_SUBOPTIONS_MAP[adv.name][0]) {
+      chosen = FEAT_SUBOPTIONS_MAP[adv.name][0].value;
     }
     specDetail = [chosen || "Standard"];
     finalName = adv.name;
@@ -2966,17 +6599,25 @@ window.getDefaultFeatSpecification = function(adv) {
     "Electromagnetic Seal": "Base Seal (Radiation & Cosmic Rays)",
     "Environmental Seal": "Vacuum & Deep Space",
     "Ejector Seat": "Leaping 5 Launch Distance",
-    "Equipment Mount": "Right Shoulder Hardpoint"
+    "Equipment Mount": "Right Shoulder Hardpoint",
+    "(Attack) Flurry": ["Unarmed Combat"],
+    "Uncanny Dodge": ["Auditory (Hearing)"],
+    "Second Chance": ["Falling Damage (Toughness save)"],
+    "Challenge": ["Improved Demoralize (Intimidate as Move action)"],
+    "Favored Conditions": ["When Outnumbered (2+ opponents)"],
+    "Interface": ["Computers (Hacking & Systems)"],
+    "Fascinate": ["Bluff (Captivate with deception / stories)"],
+    "Distract": ["Bluff (Trick / feint distraction)"]
   };
   let spec = defaults[adv.name];
-  if (!spec && typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && MECHA_SUBOPTIONS_MAP[adv.name] && MECHA_SUBOPTIONS_MAP[adv.name][0]) {
-    spec = MECHA_SUBOPTIONS_MAP[adv.name][0].value;
+  if (!spec && typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && FEAT_SUBOPTIONS_MAP[adv.name] && FEAT_SUBOPTIONS_MAP[adv.name][0]) {
+    spec = FEAT_SUBOPTIONS_MAP[adv.name][0].value;
   }
-  const isMecha = adv.category === "Mecha" || (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && !!MECHA_SUBOPTIONS_MAP[adv.name]);
-  if (isMecha) {
+  const isOptionFeat = adv.name === "(Attack) Flurry" || (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && !!FEAT_SUBOPTIONS_MAP[adv.name]) || adv.category === "Mecha";
+  if (isOptionFeat) {
     return {
       finalName: adv.name,
-      specDetail: spec ? [spec] : [],
+      specDetail: Array.isArray(spec) ? spec : (spec ? [spec] : []),
       ranksToAdd: 1
     };
   }
@@ -2989,6 +6630,12 @@ window.getDefaultFeatSpecification = function(adv) {
 };
 
 window.confirmAddFeat = function() {
+  const now = Date.now();
+  if (window._lastConfirmFeatTime && (now - window._lastConfirmFeatTime < 350)) {
+    return;
+  }
+  window._lastConfirmFeatTime = now;
+
   const selChoice = document.getElementById("selFeatChoice");
   const listRef = (typeof FEATS_LIST !== 'undefined') ? FEATS_LIST : ((typeof ADVANTAGES_LIST !== 'undefined') ? ADVANTAGES_LIST : []);
 
@@ -3033,7 +6680,9 @@ window.confirmAddFeat = function() {
         char.featDetails[finalName] = specDetail;
       }
       const bKey = finalName.includes(" (") ? finalName.split(" (")[0].trim() : finalName.trim();
-      if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[bKey] || bKey === "Electromagnetic Seal" || bKey === "Ejector Seat")) {
+      if (finalName === "(Attack) Flurry") {
+        char.featDetails[finalName] = specDetail || ["Unarmed Combat"];
+      } else if (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && (FEAT_SUBOPTIONS_MAP[bKey] || bKey === "Electromagnetic Seal" || bKey === "Ejector Seat")) {
         char.featDetails[finalName] = window.getFeatSubOptionsList(finalName, char.feats[finalName]);
       }
       addedCount++;
@@ -3082,7 +6731,9 @@ window.confirmAddFeat = function() {
     char.featDetails[finalName] = specDetail;
   }
   const baseKey = finalName.includes(" (") ? finalName.split(" (")[0].trim() : finalName.trim();
-  if (typeof MECHA_SUBOPTIONS_MAP !== 'undefined' && (MECHA_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
+  if (finalName === "(Attack) Flurry") {
+    char.featDetails[finalName] = specDetail || ["Unarmed Combat"];
+  } else if (typeof FEAT_SUBOPTIONS_MAP !== 'undefined' && (FEAT_SUBOPTIONS_MAP[baseKey] || baseKey === "Electromagnetic Seal" || baseKey === "Ejector Seat")) {
     char.featDetails[finalName] = window.getFeatSubOptionsList(finalName, char.feats[finalName]);
   }
 
@@ -3386,6 +7037,12 @@ window.onSkillSpecializationChange = function() {
 };
 
 window.confirmAddSkill = function() {
+  const now = Date.now();
+  if (window._lastConfirmSkillTime && (now - window._lastConfirmSkillTime < 350)) {
+    return;
+  }
+  window._lastConfirmSkillTime = now;
+
   const selChoice = document.getElementById("selSkillChoice");
 
   // Multi-select batch adding if multiple checkboxes are checked
@@ -3547,7 +7204,15 @@ window.saveSkillMastery = function(modal) {
   buildAdvantagesUI();
   buildSkillsUI();
   refreshUI();
-}
+};
+
+window.isEffectCustomNameSet = function(eff) {
+  if (!eff) return false;
+  if (eff.hasCustomName !== undefined) return eff.hasCustomName;
+  if (eff.customName && eff.customName.trim() !== "" && eff.customName !== eff.effectName) return true;
+  if (eff.name && eff.name !== "New Effect" && eff.name !== eff.effectName && !eff.isProfileExplicitlySelected) return true;
+  return false;
+};
 
 window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = false) {
   if (!char.activePowers[pIdx] || !char.activePowers[pIdx].effects[eIdx]) return;
@@ -3619,13 +7284,21 @@ window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = fals
   if (!config) return;
 
   effect.effectName = config.effectName || targetEffectName;
-  effect.name = config.name;
+  if (!window.isEffectCustomNameSet(effect)) {
+    effect.name = config.name;
+    effect.hasCustomName = false;
+    effect.customName = "";
+  }
   effect.isProfileExplicitlySelected = true;
   effect.descriptors = config.descriptors || "";
 
-  if (!char.activePowers[pIdx].name || char.activePowers[pIdx].name === "New Power Container") {
-    char.activePowers[pIdx].name = config.name;
-    const headerTitle = document.getElementById(`powerContainerName_${pIdx}`);
+  const powerContainer = char.activePowers[pIdx];
+  const oldEffName = effect.effectName;
+  if (powerContainer && !powerContainer.hasCustomName && (!powerContainer.name || powerContainer.name === "New Power Container" || powerContainer.name === oldEffName || powerContainer.name === targetEffectName || powerContainer.name === config.effectName)) {
+    powerContainer.name = config.name;
+    const containerId = (window.activePowerContext === 'blueprints') ? "blueprintsContainer" : "powersContainer";
+    const container = document.getElementById(containerId);
+    const headerTitle = container ? container.querySelector(`#powerContainerName_${pIdx}`) : document.getElementById(`powerContainerName_${pIdx}`);
     if (headerTitle) headerTitle.value = config.name;
   }
   
@@ -3640,7 +7313,7 @@ window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = fals
   effect.subPowers = config.subPowers ? JSON.parse(JSON.stringify(config.subPowers)) : [];
   effect.notes = config.notes ? config.notes : "";
 
-  const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Immunity", "Super-Senses"].includes(effect.effectName);
+  const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Features", "Immunity", "Super-Senses", "Super-Movement", "Senses", "Movement"].includes(effect.effectName);
   if (!isComposite) {
       let maxR = window.getMaxPowerRank(effect); 
       if (effect.rank > maxR) effect.rank = maxR;
@@ -3675,6 +7348,9 @@ window.applyEffectProfile = function(pIdx, eIdx, profileName, skipHistory = fals
         profileHistory: [linkedCfg.name || ""],
         profileHistoryIdx: 0
       };
+      if (linkedCfg.action) newLinkedEff.action = linkedCfg.action;
+      if (linkedCfg.range) newLinkedEff.range = linkedCfg.range;
+      if (linkedCfg.duration) newLinkedEff.duration = linkedCfg.duration;
       
       char.activePowers[pIdx].effects.splice(eIdx + 1 + lIdx, 0, newLinkedEff);
     });
@@ -3754,7 +7430,7 @@ function calculateEffectiveRange(effect, baseRange) {
   }
 
   // Preserve Extended or Rank ranges unless explicitly modified by Range extras/flaws
-  const hasRangeMod = effect.modifiers.some(m => m.name === "Range (Extra)" || m.name === "Range (Flaw)");
+  const hasRangeMod = effect.modifiers.some(m => m.name === "Range (Extra)" || m.name === "Range (Flaw)" || m.name === "Increased Range" || m.name === "Reduced Range");
   if ((effectiveRange === "Extended" || effectiveRange === "Rank") && !hasRangeMod) {
     return effectiveRange;
   }
@@ -3763,13 +7439,25 @@ function calculateEffectiveRange(effect, baseRange) {
   let currentIdx = rangeSteps.indexOf(effectiveRange);
   if (currentIdx === -1) currentIdx = 1;
 
+  const isDisablePerception = (typeof char !== 'undefined' && char.houseRules && char.houseRules.disablePerceptionRange) || 
+                              (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_disable_perception_range") === "true");
+  const maxUpgradedIdx = isDisablePerception ? 2 : 3;
+
   effect.modifiers.forEach(m => {
     const ranks = parseInt(m.ranks) || 1;
-    if (m.name === "Range (Extra)") {
-      currentIdx = Math.min(3, currentIdx + ranks);
-    } else if (m.name === "Range (Flaw)") {
+    if (m.name === "Range (Extra)" || m.name === "Increased Range") {
+      currentIdx = Math.min(maxUpgradedIdx, currentIdx + ranks);
+    } else if (m.name === "Range (Flaw)" || m.name === "Reduced Range") {
       currentIdx = Math.max(1, currentIdx - ranks); // Can't reduce Personal below Touch usually
-    } else if (m.name === "Affects Others" || m.name === "Affects Corporeal") {
+    } else if (m.name === "Ranged") {
+      currentIdx = Math.max(currentIdx, 2);
+    } else if (m.name === "Perception Range" || m.name === "Range (Perception)") {
+      if (!isDisablePerception) {
+        currentIdx = 3;
+      } else {
+        currentIdx = Math.min(currentIdx, 2);
+      }
+    } else if (m.name === "Attack" || m.name === "Affects Others" || m.name === "Affects Corporeal") {
       if (currentIdx === 0) currentIdx = 1;
     }
   });
@@ -3784,69 +7472,235 @@ function getEffectiveEffectTraits(effect) {
     ? POWER_EFFECTS_LIST.find(e => e.name === effect.effectName) 
     : null;
     
-  let pAction = baseData?.action || "Standard";
-  let pRange = baseData?.range || "Touch";
-  let pDuration = baseData?.duration || "Instant";
-  let pCheck = baseData?.check || "None";
+  let pAction = (effect.action) || baseData?.action || "Standard";
+  let pRange = (effect.range) || baseData?.range || "Touch";
+  let pDuration = (effect.duration) || baseData?.duration || "Instant";
+  let pCheck = effect.savingThrow || baseData?.savingThrow || baseData?.check || "None";
 
-  if (baseData && baseData.profiles && effect.name) {
-    const profile = baseData.profiles.find(p => p.name === effect.name);
-    if (profile) {
-      if (profile.action) pAction = profile.action;
-      if (profile.range) pRange = profile.range;
-      if (profile.duration) pDuration = profile.duration;
-      if (profile.check) pCheck = profile.check;
-    }
+  const profile = (baseData && baseData.profiles && baseData.profiles.find(p => p.name === effect.name)) ||
+                  (typeof POWER_PROFILES_LIST !== 'undefined' && POWER_PROFILES_LIST.find(p => p.name === effect.name)) || null;
+  if (profile) {
+    if (profile.action) pAction = profile.action;
+    if (profile.range) pRange = profile.range;
+    if (profile.duration) pDuration = profile.duration;
+    if (profile.check || profile.savingThrow) pCheck = profile.savingThrow || profile.check;
   }
 
-  let action = pAction;
   let range = calculateEffectiveRange(effect, pRange);
-  let duration = pDuration;
   let check = pCheck;
-  
+
+  // Action calculation
+  const actionSteps = ["Reaction", "Free", "Move", "Standard", "Full-Round"];
+  let cleanAction = (pAction || "Standard").replace(/\s*\(.*?\)/g, '').trim();
+  if (cleanAction === "Full") cleanAction = "Full-Round";
+  else if (cleanAction.startsWith("Standard/")) cleanAction = "Standard";
+  else if (cleanAction.startsWith("Move/")) cleanAction = "Move";
+
+  let isNoneAction = (cleanAction === "None" || cleanAction === "—");
+  let actionIdx = actionSteps.indexOf(cleanAction);
+  if (actionIdx === -1) {
+    actionIdx = isNoneAction ? -1 : 3;
+  }
+
+  // Duration calculation
+  const durationSteps = ["Instant", "Concentration", "Sustained", "Continuous", "Permanent"];
+  let cleanDuration = (pDuration || "Instant").replace(/\s*\(.*?\)/g, '').trim();
+  let isSpecialDuration = ["Varies", "Special", "See description", "—"].includes(cleanDuration);
+  let durationIdx = durationSteps.indexOf(cleanDuration);
+  if (durationIdx === -1) {
+    if (cleanDuration.toLowerCase().includes("concentration")) durationIdx = 1;
+    else if (cleanDuration.toLowerCase().includes("sustained")) durationIdx = 2;
+    else if (cleanDuration.toLowerCase().includes("continuous")) durationIdx = 3;
+    else if (cleanDuration.toLowerCase().includes("permanent")) durationIdx = 4;
+    else durationIdx = isSpecialDuration ? -1 : 0;
+  }
+
   if (Array.isArray(effect.modifiers)) {
-    const actionSteps = ["Reaction", "Free", "Move", "Standard", "Full-Round"];
-    let actionIdx = actionSteps.indexOf(action);
-    if (actionIdx === -1) actionIdx = 3;
-
-    const durationSteps = ["Instant", "Concentration", "Sustained", "Continuous", "Permanent"];
-    let durationIdx = durationSteps.indexOf(duration);
-    if (durationIdx === -1) durationIdx = 0;
-
     effect.modifiers.forEach(m => {
       const ranks = parseInt(m.ranks) || 1;
-      
-      if (m.name === "Action (Extra)") {
-         actionIdx = Math.max(0, actionIdx - ranks);
-      } else if (m.name === "Action (Flaw)") {
-         actionIdx = Math.min(4, actionIdx + ranks);
+      const mName = m.name || "";
+
+      // Action modifiers
+      if (mName === "Reaction" || mName === "Action (Reaction)") {
+        actionIdx = 0;
+        isNoneAction = false;
+      } else if (mName === "Action (Free)" || mName === "Free Action") {
+        actionIdx = 1;
+        isNoneAction = false;
+      } else if (mName === "Action (Move)") {
+        actionIdx = 2;
+        isNoneAction = false;
+      } else if (mName === "Action (Standard)" || mName === "Attack") {
+        actionIdx = 3;
+        isNoneAction = false;
+      } else if (mName === "Action (Full-Round)" || mName === "Action (Full)") {
+        actionIdx = 4;
+        isNoneAction = false;
+      } else if (mName === "Action (Extra)") {
+        if (isNoneAction) {
+          actionIdx = 1;
+          isNoneAction = false;
+        } else {
+          actionIdx = Math.max(0, actionIdx - ranks);
+        }
+      } else if (mName === "Action (Flaw)") {
+        if (isNoneAction) {
+          actionIdx = 3;
+          isNoneAction = false;
+        } else {
+          actionIdx = Math.min(4, actionIdx + ranks);
+        }
       }
-      
-      if (m.name === "Duration (Extra)") {
-         durationIdx = Math.min(3, durationIdx + ranks); // Continuous is max for active
-      } else if (m.name === "Duration (Flaw)") {
-         durationIdx = Math.max(0, durationIdx - ranks);
-      } else if (m.name === "Concentration") {
-         durationIdx = 1;
-      } else if (m.name === "Independent") {
-         durationIdx = 2;
+
+      // Duration modifiers
+      if (mName === "Duration (Extra)") {
+        durationIdx = Math.min(3, durationIdx + ranks);
+        isSpecialDuration = false;
+      } else if (mName === "Duration (Flaw)") {
+        durationIdx = Math.max(0, durationIdx - ranks);
+        isSpecialDuration = false;
+      } else if (mName === "Continuous" || mName === "Duration (Continuous)" || mName === "Increased Duration (Continuous)") {
+        durationIdx = 3;
+        isSpecialDuration = false;
+      } else if (mName === "Sustained" || mName === "Duration (Sustained)" || mName === "Increased Duration (Sustained)" || mName === "Decreased Duration (Sustained)" || mName === "Independent") {
+        durationIdx = 2;
+        isSpecialDuration = false;
+      } else if (mName === "Concentration" || mName === "Increased Duration (Concentration)" || mName === "Decreased Duration (Concentration)") {
+        durationIdx = 1;
+        isSpecialDuration = false;
+      } else if (mName === "Decreased Duration (Instant)") {
+        durationIdx = 0;
+        isSpecialDuration = false;
+      } else if (mName === "Permanent") {
+        durationIdx = 4;
+        isSpecialDuration = false;
       }
     });
-
-    action = actionSteps[actionIdx];
-    duration = durationSteps[durationIdx];
   }
-  
+
+  let action = isNoneAction ? (cleanAction || "None") : (actionSteps[actionIdx] || "Standard");
+  let duration = (isSpecialDuration && durationIdx === -1) ? cleanDuration : (durationSteps[durationIdx] || cleanDuration || "Instant");
+
   return { action, range, duration, check };
 }
 window.getEffectiveEffectTraits = getEffectiveEffectTraits;
 
+window.getEffectSaveDc = function(effect, effectiveRank = null) {
+  if (!effect || !effect.effectName) return "None";
+  const baseRank = parseInt(effect.rank !== undefined ? effect.rank : (effect.ranks || 1)) || 1;
+  const rVal = (effectiveRank !== null && effectiveRank !== undefined) ? parseInt(effectiveRank) : baseRank;
+  const rankNum = Math.max(1, rVal);
+  const boostDelta = (effectiveRank !== null && effectiveRank !== undefined && rVal > baseRank) ? (rVal - baseRank) : 0;
+  const effectiveTraits = getEffectiveEffectTraits(effect);
+  const baseData = (typeof POWER_EFFECTS_LIST !== 'undefined') ? POWER_EFFECTS_LIST.find(e => e.name === effect.effectName) : null;
+  const saveType = effectiveTraits?.check || effect.savingThrow || baseData?.savingThrow || baseData?.check || "None";
+
+  // Check for Alternate Save modifier
+  let altSave = null;
+  if (Array.isArray(effect.modifiers)) {
+    const altMod = effect.modifiers.find(m => m.name && m.name.includes("Alternate Save"));
+    if (altMod) {
+      const match = altMod.name.match(/Alternate Save\s*\(([^)]+)\)/i);
+      if (match) altSave = match[1];
+    }
+  }
+
+  let dc = "None";
+  if (effect.effectName === "Teleport") {
+    dc = `Reflex DC ${10 + rankNum} (unwilling)`;
+  } else if (["Strike", "Blast", "Damage", "Corrosion", "Disintegrate"].includes(effect.effectName)) {
+    dc = `${altSave || "Toughness"} DC ${15 + rankNum}`;
+  } else if (["Snare", "Trip"].includes(effect.effectName)) {
+    dc = `${altSave || "Reflex"} DC ${10 + rankNum}`;
+  } else if (["Stun", "Nauseate", "Suffocate", "Drain", "Fatigue"].includes(effect.effectName)) {
+    dc = `${altSave || "Fortitude"} DC ${10 + rankNum}`;
+  } else if (["Paralyze", "Mind Control", "Mind Reading", "Emotion Control", "Illusion", "Confuse"].includes(effect.effectName)) {
+    dc = `${altSave || "Will"} DC ${10 + rankNum}`;
+  } else if (effect.effectName === "Nullify") {
+    dc = `Opposed (+${rankNum}) vs Will/Power`;
+  } else if (effect.effectName === "Transform") {
+    dc = `${altSave || "Fortitude"} DC ${10 + rankNum}`;
+  } else if (altSave) {
+    dc = `${altSave} DC ${10 + rankNum}`;
+  } else if (saveType === "Toughness") {
+    dc = `Toughness DC ${15 + rankNum}`;
+  } else if (["Will", "Fortitude", "Reflex"].includes(saveType)) {
+    dc = `${saveType} DC ${10 + rankNum}`;
+  } else if (saveType === "Reflex/Strength") {
+    dc = `Reflex/Str DC ${10 + rankNum}`;
+  } else if (saveType && saveType !== "None" && saveType !== "—") {
+    dc = `${saveType} DC ${10 + rankNum}`;
+  } else if (baseData && baseData.type === "Attack") {
+    dc = `DC ${10 + rankNum} Save`;
+  }
+
+  if (boostDelta > 0 && dc !== "None" && dc !== "—") {
+    dc += ` (+${boostDelta} Boost)`;
+  }
+
+  const hasNoAttackRollMod = Array.isArray(effect.modifiers) && effect.modifiers.some(m => m.name === "No Attack Roll");
+  if (hasNoAttackRollMod) {
+    if (dc && dc !== "None" && dc !== "—") {
+      dc += " (No attack roll required)";
+    } else {
+      dc = "No attack roll required";
+    }
+  }
+
+  return dc;
+};
+
 window.updatePowerContainerName = function(pIdx, val) {
   if (char.activePowers[pIdx]) {
       char.activePowers[pIdx].name = val;
-      const headerTitle = document.getElementById(`powerContainerName_${pIdx}`);
+      char.activePowers[pIdx].hasCustomName = !!(val && val.trim() !== "");
+      const containerId = (window.activePowerContext === 'blueprints') ? "blueprintsContainer" : "powersContainer";
+      const container = document.getElementById(containerId);
+      const headerTitle = container ? container.querySelector(`#powerContainerName_${pIdx}`) : document.getElementById(`powerContainerName_${pIdx}`);
       if (headerTitle) headerTitle.value = val;
   }
+};
+
+window.updateBoostScopeDirect = function(pIdx, eIdx, val) {
+  const eff = char.activePowers[pIdx]?.effects[eIdx];
+  if (!eff) return;
+  if (!eff.options) eff.options = {};
+  eff.options.boostScope = val;
+  const costMap = {
+    "Single Trait": 1,
+    "One Specific Trait (Fixed at purchase)": 1,
+    "One Trait of Descriptor": 2,
+    "Any One Trait of Descriptor (Flexible per use)": 2,
+    "All Traits of Descriptor": 3,
+    "All Traits of Descriptor (Simultaneous)": 3,
+    "All Powers of Subject": 4,
+    "All Powers of Subject (Simultaneous)": 4,
+    "All Traits of Subject": 5,
+    "All Traits of Subject (Simultaneous)": 5
+  };
+  eff.baseCost = costMap[val] || 1;
+  refreshUI();
+};
+
+window.updateBoostTargetDirect = function(pIdx, eIdx, val) {
+  const eff = char.activePowers[pIdx]?.effects[eIdx];
+  if (!eff) return;
+  if (!eff.options) eff.options = {};
+  eff.options.boostTarget = val;
+  eff.boostTarget = val;
+  buildPowersUI();
+  refreshUI();
+};
+
+window.updateBoostActiveDirect = function(pIdx, eIdx, val) {
+  const eff = char.activePowers[pIdx]?.effects[eIdx];
+  if (!eff) return;
+  eff.active = val;
+  if (!eff.options) eff.options = {};
+  eff.options.boostActive = val;
+  eff.boostActive = val;
+  buildPowersUI();
+  refreshUI();
 };
 
 
@@ -3898,22 +7752,37 @@ window.navigateProfileHistory = function(pIdx, eIdx, dir) {
     window.applyEffectProfile(pIdx, eIdx, effect.profileHistory[newIdx], true);
 };
 
-function buildPowersUI() {
-  const containerId = (window.activePowerContext === 'blueprints') ? "blueprintsContainer" : "powersContainer";
+function renderPowersContainer(containerId, powersList, isBlueprint) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  if (!char.activePowers || char.activePowers.length === 0) {
-    container.innerHTML = `<p class="secondary-text" style="padding: 12px 0;">No powers constructed yet. Click <strong>+ Add New Power Container</strong> above to build a power container.</p>`;
+  if (!powersList || powersList.length === 0) {
+    if (isBlueprint) {
+      container.innerHTML = `<p class="secondary-text" style="padding: 12px 0;">No plans constructed yet. Click <strong>+ Add Plan</strong> above to create a plan.</p>`;
+    } else {
+      container.innerHTML = `<p class="secondary-text" style="padding: 12px 0;">No powers constructed yet. Click <strong>+ Add New Power Container</strong> above to build a power container.</p>`;
+    }
     return;
   }
 
-  container.innerHTML = char.activePowers.map((powerContainer, pIdx) => {
+  const prevContext = typeof window !== 'undefined' ? window.activePowerContext : 'powers';
+  if (typeof window !== 'undefined') {
+    window.activePowerContext = isBlueprint ? 'blueprints' : 'powers';
+  }
+
+  try {
+    container.innerHTML = powersList.map((powerContainer, pIdx) => {
     const containerCost = char.calculateTotalPowerCost(powerContainer);
     const isCollapsed = powerContainer.collapsed ? 'collapsed' : '';
-    const summaryText = powerContainer.effects.map(e => `${e.effectName || 'No Effect'} ${e.rank}`).join(" | ");
+    const summaryText = powerContainer.effects.map(e => {
+      const r = e.rank !== undefined ? e.rank : (e.ranks || 1);
+      const dc = window.getEffectSaveDc ? window.getEffectSaveDc(e) : "None";
+      const dcBadge = (dc && dc !== "None" && dc !== "—" && !dc.startsWith("No attack")) ? ` [${dc}]` : "";
+      return `${e.effectName || 'No Effect'} ${r}${dcBadge}`;
+    }).join(" | ");
+    const isContainerActive = powerContainer.active !== false && (!Array.isArray(powerContainer.effects) || powerContainer.effects.length === 0 || powerContainer.effects.some(e => e.active !== false));
 
     let effectsHtml = powerContainer.effects.map((effect, eIdx) => {
-        const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Immunity", "Super-Senses"].includes(effect.effectName);
+        const isComposite = ["Enhanced Senses", "Enhanced Movement", "Enhanced Trait", "Comprehend", "Feature", "Features", "Immunity", "Super-Senses", "Super-Movement", "Senses", "Movement"].includes(effect.effectName);
         
         let effectData = null;
         if (effect.effectName) {
@@ -3938,6 +7807,9 @@ function buildPowersUI() {
           
         if (!effect.options) effect.options = {};
         if (!effect.subPowers) effect.subPowers = [];
+        if (typeof CharacterModel !== 'undefined' && CharacterModel.normalizeEffectSubPowers) {
+          CharacterModel.normalizeEffectSubPowers(effect);
+        }
         
         let maxPowerRank = window.getMaxPowerRank(effect);
         if (effect.rank > maxPowerRank) effect.rank = maxPowerRank;
@@ -3964,6 +7836,50 @@ function buildPowersUI() {
         const baseRange = effectData ? (effectData.range || "Close") : "Close";
         const effectiveRange = calculateEffectiveRange(effect, baseRange);
         const rankNum = Math.max(1, parseInt(effect.rank) || 1);
+
+        // Check if this effect is targeted by any active Boost on the sheet
+        const boostSubsidiesData = (typeof char.getBoostSubsidies === 'function') ? char.getBoostSubsidies() : { subsidies: {}, rankBonuses: {} };
+        const isAlteringRanks = !!((char && char.houseRules && char.houseRules.boostAltersRanks) || (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true"));
+        let boostRankBonus = 0;
+        let boostPPBonus = 0;
+
+        const effectCustomName = (effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName) ? effect.name : '';
+        const possibleTargets = [effect.id, effect.name, effect.effectName, effectCustomName, powerContainer.name].filter(Boolean);
+
+        if (isAlteringRanks) {
+          const rb = boostSubsidiesData.rankBonuses || {};
+          for (const target of possibleTargets) {
+            if (rb[target]) {
+              boostRankBonus = rb[target];
+              break;
+            }
+          }
+        } else {
+          const sb = boostSubsidiesData.subsidies || {};
+          for (const target of possibleTargets) {
+            if (sb[target]) {
+              boostPPBonus = sb[target];
+              break;
+            }
+          }
+        }
+
+        const perRankCost = (rawEffectCost > 0 && rankNum > 0) ? Math.max(1, Math.round(rawEffectCost / rankNum)) : 1;
+        const effRank = isAlteringRanks ? (rankNum + boostRankBonus) : (rankNum + Math.floor(boostPPBonus / perRankCost));
+        const isBoosted = (boostRankBonus > 0 || boostPPBonus > 0);
+
+        let boostBadgeHtml = '';
+        if (boostRankBonus > 0) {
+          const effRankTitle = `Effective Rank: ${effRank} (Base Rank: ${rankNum} + ${boostRankBonus} from active Boost)`;
+          boostBadgeHtml = `<span class="badge badge-boost-active" title="${effRankTitle}" style="font-size: var(--font-size-tags); font-weight: bold; background: rgba(16, 185, 129, 0.18); color: #10b981; border: 1px solid #10b981; white-space: nowrap; display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px;">⚡ +${boostRankBonus} Boost (Eff: ${effRank})</span>`;
+        } else if (boostPPBonus > 0) {
+          const effRankTitle = `Boosted by +${boostPPBonus} PP pool from active Boost (Effective Rank: ${effRank})`;
+          boostBadgeHtml = `<span class="badge badge-boost-active" title="${effRankTitle}" style="font-size: var(--font-size-tags); font-weight: bold; background: rgba(16, 185, 129, 0.18); color: #10b981; border: 1px solid #10b981; white-space: nowrap; display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px;">⚡ +${boostPPBonus} PP Boost (Eff: ${effRank})</span>`;
+        }
+
+        if (!isAlteringRanks && boostPPBonus > 0 && effect.association !== 'alternate' && effect.association !== 'dynamic') {
+          effectCostDisplay = `${Math.max(0, rawEffectCost - boostPPBonus)} PP`;
+        }
 
         const PROGRESSION_VALUES = [
           1, 2, 5, 10, 25, 50, 100, 250, 500, 1000,
@@ -4180,19 +8096,14 @@ function buildPowersUI() {
         }
 
         // Save DC / Check
-        let saveDcDisplay = effectiveTraits.check || "None";
-        if (effect.effectName === "Teleport") {
-          saveDcDisplay = `Reflex DC ${10 + rankNum} (unwilling passenger)`;
-        } else if (["Strike", "Blast", "Damage", "Corrosion", "Disintegrate"].includes(effect.effectName)) {
-          saveDcDisplay = `Toughness DC ${15 + rankNum}`;
-        } else if (["Snare", "Trip"].includes(effect.effectName)) {
-          saveDcDisplay = `Reflex DC ${10 + rankNum}`;
-        } else if (["Stun", "Nauseate", "Suffocate", "Drain", "Fatigue"].includes(effect.effectName)) {
-          saveDcDisplay = `Fortitude DC ${10 + rankNum}`;
-        } else if (["Paralyze", "Mind Control", "Mind Reading", "Emotion Control", "Illusion", "Confuse"].includes(effect.effectName)) {
-          saveDcDisplay = `Will DC ${10 + rankNum}`;
-        } else if (effectData && effectData.type === "Attack") {
-          saveDcDisplay = `DC ${10 + rankNum} ${effectiveTraits.check && effectiveTraits.check !== 'None' ? effectiveTraits.check : 'Save'}`;
+        let saveDcDisplay = window.getEffectSaveDc ? window.getEffectSaveDc(effect, (isBoosted && effRank > rankNum) ? effRank : null) : (effectiveTraits.check || "None");
+        const hasNoAttackRollMod = Array.isArray(effect.modifiers) && effect.modifiers.some(m => m.name === "No Attack Roll");
+        if (hasNoAttackRollMod) {
+          if (saveDcDisplay && saveDcDisplay !== "None" && saveDcDisplay !== "—") {
+            saveDcDisplay += " (No attack roll required)";
+          } else {
+            saveDcDisplay = "No attack roll required";
+          }
         }
 
         let measurementHtml = "";
@@ -4285,71 +8196,60 @@ function buildPowersUI() {
             let subMeasurementHtml = "";
 
             let isSenseTypeOpt = sType.includes("Sense Type");
-            let mySenseType = isSenseTypeOpt ? (sType.includes(" - ") ? sType.split(" - ")[1] : sType.replace("Sense Type ", "")) : (SENSE_TYPE_MAP[sType] || "Unknown");
+            let mySenseType = sub.senseCategory || SENSE_TYPE_MAP[sType] || (isSenseTypeOpt ? sType.replace("Sense Type", "").trim() : "Unknown");
 
-            let isVisual = mySenseType === "Visual" || /Sight|Visual|vision/i.test(sType);
-            let isAuditory = mySenseType === "Auditory" || /Hearing|Auditory/i.test(sType);
-            let isTactile = mySenseType === "Tactile" || /Touch|Tactile/i.test(sType);
+            let cleanSubName = (sub.type || sub.name || "").split(" [")[0].trim();
+            let defaults = INHERENT_SENSE_TRAITS[cleanSubName] || INHERENT_SENSE_TRAITS[sType] || [];
+            let defaultText = defaults.length > 0 ? `<div style="margin-top: 2px; color: var(--accent-primary);"><strong>Inherent Traits:</strong> ${defaults.join(", ")}</div>` : "";
 
-            let defaults = [];
-            if (isVisual) { defaults.push("Accurate", "Acute"); }
-            if (isAuditory) { defaults.push("Acute"); }
-            if (isTactile) { defaults.push("Accurate"); }
-
-            let defaultText = defaults.length > 0 ? `<div style="margin-top: 2px; color: var(--accent-primary);"><strong>Default Traits:</strong> ${defaults.join(", ")}</div>` : "";
-
-            if (sType.includes("Dimensional Travel")) {
-                let dest = "Home dimension and one other (Base 2 ranks)";
-                let baseDestRank = 2;
-                if (sRank >= 6) { dest = "Any dimension known to you (Base 6 ranks)"; baseDestRank = 6; }
-                else if (sRank >= 4) { dest = "A related group of dimensions (Base 4 ranks)"; baseDestRank = 4; }
-                let massIncrease = Math.max(0, sRank - baseDestRank);
+            if (sType.includes("Air Walking")) {
+                dynDesc = sRank >= 2 ? "Walk on air at full ground speed." : "Walk on air at half ground speed (tread air).";
+            } else if (sType.includes("Dimensional Movement") || sType.includes("Dimensional Travel")) {
+                let dest = "Home dimension and one other (Rank 1)";
+                if (sRank >= 3) { dest = "Any dimension (Rank 3)"; }
+                else if (sRank >= 2) { dest = "A related group of dimensions (Rank 2)"; }
                 
-                const incMassMod = sub.modifiers ? sub.modifiers.find(m => m.name === "Increased Mass") : null;
-                if (incMassMod) massIncrease += parseInt(incMassMod.ranks) || 1;
-
+                const incMassMod = sub.modifiers ? sub.modifiers.find(m => m.name.includes("Increased Mass") || m.name.includes("Progression (Mass)")) : null;
+                let massIncrease = incMassMod ? (parseInt(incMassMod.ranks) || 1) : 0;
                 let massStr = "50 lbs (Rank 0)";
                 if (typeof CharacterModel !== 'undefined') {
                     massStr = CharacterModel.formatWeight(CharacterModel.getProgressionValue(massIncrease) * 5) + " (Rank " + massIncrease + ")";
                 }
-                if (sRank < 2) dynDesc = `<span style="color: #ef4444;">Requires at least 2 ranks.</span>`;
-                else dynDesc = `<strong>Destination Tier:</strong> ${dest}. <br><strong>Mass Capacity:</strong> ${massStr}.`;
+                dynDesc = `<strong>Destination Tier:</strong> ${dest}. <br><strong>Mass Capacity:</strong> ${massStr}.`;
             } else if (sType.includes("Space Travel")) {
-                let dest = "Solar System / Other planets (Base 2 ranks)";
-                let baseDestRank = 2;
-                if (sRank >= 6) { dest = "Intergalactic / Distant star systems (Base 6 ranks)"; baseDestRank = 6; }
-                else if (sRank >= 4) { dest = "Interstellar / Other star systems (Base 4 ranks)"; baseDestRank = 4; }
-                if (sRank < 2) dynDesc = `<span style="color: #ef4444;">Requires at least 2 ranks.</span>`;
-                else dynDesc = `<strong>Destination Tier:</strong> ${dest}.`; 
+                let dest = "Sub-light travel within a star system (Rank 1)";
+                if (sRank >= 3) { dest = "Intergalactic / distant star systems (Rank 3)"; }
+                else if (sRank >= 2) { dest = "Interstellar / other star systems (Rank 2)"; }
+                dynDesc = `<strong>Destination Tier:</strong> ${dest}.`; 
+            } else if (sType.includes("Temporal Movement")) {
+                let dest = "Fixed point in time (Rank 1)";
+                if (sRank >= 3) { dest = "Any point in time (Rank 3)"; }
+                else if (sRank >= 2) { dest = "Related era of time (Rank 2)"; }
+                dynDesc = `<strong>Temporal Range:</strong> ${dest}.`;
             } else if (sType.includes("Environmental Adaptation")) {
                 placeholderText = "Specify adapted environment(s) (e.g. Underwater, Zero-G)...";
                 dynDesc = `Provides normal movement and action in ${sRank} specific hazardous environment(s).`;
             } else if (sType.includes("Permeate")) {
-                let spd = "Speed rank 0";
-                let baseRank = 2;
-                if (sRank >= 6) { spd = "Normal ground speed"; baseRank = 6; }
-                else if (sRank >= 4) { spd = "Speed rank 1"; baseRank = 4; }
-                if (sRank < 2) {
-                    dynDesc = `<span style="color: #ef4444;">Requires at least 2 ranks.</span>`;
-                } else {
-                    dynDesc = `<strong>Permeate Speed:</strong> ${spd} through obstacles (Base ${baseRank} ranks).`;
-                }
+                let spd = "1/4 normal speed (Rank 1)";
+                if (sRank >= 3) { spd = "Full normal speed (Rank 3)"; }
+                else if (sRank >= 2) { spd = "1/2 normal speed (Rank 2)"; }
+                dynDesc = `<strong>Permeate Speed:</strong> ${spd} through solid obstacles.`;
             } else if (sType.includes("Wall-Crawling")) {
-                dynDesc = sRank >= 4 ? "Full ground speed rank, not Vulnerable" : "Ground speed rank -1, Vulnerable while climbing";
-            } else if (sType.includes("Water-Walking")) {
-                dynDesc = sRank >= 2 ? "Can stand, move, and lie Prone on liquid surfaces" : "Can stand or move across liquid surfaces (sinks if Prone)";
-            } else if (sType.includes("Safe Fall")) {
-                dynDesc = "Fall any reasonable distance without harm.";
+                dynDesc = sRank >= 2 ? "Climb walls and ceilings at full ground speed; not flat-footed." : "Climb walls and ceilings at half ground speed; flat-footed while climbing.";
+            } else if (sType.includes("Water Walking") || sType.includes("Water-Walking")) {
+                dynDesc = sRank >= 2 ? "Can walk, stand, run, or lie prone on liquid surfaces." : "Can walk, stand, and run across liquid surfaces (sinks if knocked prone).";
+            } else if (sType.includes("Slow Fall") || sType.includes("Safe Fall")) {
+                dynDesc = "Automatically fall at terminal speed of 25 mph, taking no falling damage.";
             } else if (sType.includes("Slithering")) {
-                dynDesc = "Move at normal ground speed while Prone.";
+                dynDesc = "Crawl at normal ground speed while prone.";
             } else if (sType.includes("Swinging")) {
-                dynDesc = sRank < 2 ? `<span style="color: #ef4444;">Requires 2 ranks.</span>` : "Swing through the air at speed rank 2.";
-            } else if (sType.includes("Stable")) {
-                placeholderText = "Specify unstable movement mode(s)...";
-                dynDesc = `Ignore movement penalties for ${sRank} unstable movement mode(s).`;
+                dynDesc = "Swing through the air using lines or webs at normal ground speed.";
+            } else if (sType.includes("Sure-Footed") || sType.includes("Stable")) {
+                placeholderText = "Notes or specifics...";
+                dynDesc = `Reduce movement penalties for difficult movement by ${Math.min(100, sRank * 25)}%${sRank >= 4 ? ' (ignore all penalties)' : ''}.`;
             } else if (sType.includes("Trackless")) {
                 placeholderText = "Specify sense type(s)...";
-                dynDesc = `Leave no trail and cannot be tracked using ${sRank} sense type(s).`;
+                dynDesc = sRank >= 3 ? "Leave no trail and cannot be tracked by any sense type." : `Leave no trail and cannot be tracked by ${sRank} sense type(s).`;
             } else if (sType.includes("Microscopic Vision")) {
                 dynDesc = sRank >= 4 ? "Atomic scale" : (sRank >= 3 ? "DNA / Molecules" : (sRank >= 2 ? "Cellular scale" : "Dust-sized"));
             } else if (sType.includes("Sense Type")) {
@@ -4362,15 +8262,18 @@ function buildPowersUI() {
               else dynDesc = `All senses within the ${mySenseType} sense type.`;
             } else if (effect.effectName === "Comprehend") {
               if (sType.includes("Animals")) dynDesc = sRank === 1 ? "Communicate to OR comprehend animals." : "Communicate to AND comprehend animals.";
-              else if (sType.includes("Computers")) dynDesc = sRank === 1 ? "Communicate to OR receive from digital devices." : "Communicate to AND comprehend digital devices.";
+              else if (sType.includes("Computers") || sType.includes("Machines")) dynDesc = sRank === 1 ? "Communicate to OR receive from digital devices / machines." : "Communicate to AND comprehend digital devices / machines.";
               else if (sType.includes("Languages")) {
-                if (sRank === 1) dynDesc = "Communicate in OR understand any language.";
-                else if (sRank === 2) dynDesc = "Communicate in AND understand any language.";
-                else if (sRank === 3) dynDesc = "Communicate in multiple languages at once.";
-                else dynDesc = "Communicate in any language and gain physical ability to do so.";
-              } else if (sType.includes("Objects")) dynDesc = sRank >= 2 ? "Communicate with inanimate objects." : "Requires 2 ranks to function.";
-              else if (sType.includes("Plants")) dynDesc = sRank >= 2 ? "Communicate to and comprehend plants." : "Requires 2 ranks to function.";
-              else if (sType.includes("Spirits")) dynDesc = sRank === 1 ? "Comprehend spirits." : "Comprehend spirits and be understood by them.";
+                if (sRank === 1) dynDesc = "Understand OR speak any one language at a time (or read any).";
+                else if (sRank === 2) dynDesc = "Speak and understand all languages.";
+                else if (sRank === 3) dynDesc = "Read, write, speak, and understand all languages.";
+                else dynDesc = "Speak, read, write, and understand all languages, and communicate across language barriers (anyone can understand you).";
+              } else if (sType.includes("Objects")) dynDesc = "Read psychic impressions and past experiences from inanimate objects.";
+              else if (sType.includes("Plants")) dynDesc = sRank === 1 ? "Communicate to OR comprehend plants." : "Communicate to AND comprehend plants.";
+              else if (sType.includes("Spirits")) dynDesc = sRank === 1 ? "Communicate with spirits (ghosts, astral forms)." : "Communicate with spirits and they are compelled to understand you.";
+            } else if (effect.effectName === "Features" || effect.effectName === "Feature") {
+              dynDesc = sub.desc || "Grants a minor utility benefit or quirk.";
+              placeholderText = "Details or description...";
             } else if (effect.effectName === "Enhanced Trait") {
               if (typeof ADVANTAGES_LIST !== 'undefined' && ADVANTAGES_LIST.some(a => a.name === sType)) {
                 let adv = ADVANTAGES_LIST.find(a => a.name === sType);
@@ -4406,33 +8309,85 @@ function buildPowersUI() {
             let subModsHtml = "";
             let metaTagsHtml = "";
             if (!isSenseTypeOpt && mySenseType !== "Unknown" && sub.modifiers && sub.modifiers.length > 0) {
-                let parentSenseTypeSub = effect.subPowers.find(sp => sp.type.includes(mySenseType) && sp.type.includes("Sense Type"));
+                let parentSenseTypeSub = effect.subPowers.find(sp => {
+                    let t = sp.type || sp.name || "";
+                    return t.includes("Sense Type") && (sp.senseCategory === mySenseType || t.includes(mySenseType));
+                });
                 if (parentSenseTypeSub && parentSenseTypeSub.modifiers) {
-                    let parentMetaNames = parentSenseTypeSub.modifiers.map(pm => pm.name.split(" (")[0]);
+                    let parentMetaNames = parentSenseTypeSub.modifiers.map(pm => pm.name.split(" (")[0].trim());
                     sub.modifiers = sub.modifiers.filter(sm => {
-                        let coreName = sm.name.split(" (")[0];
+                        let coreName = sm.name.split(" (")[0].trim();
                         return !parentMetaNames.includes(coreName);
                     });
+                }
+            }
+
+            const supersetNamesForSub = getSupersetsForOption(effect.effectName, cleanSubName);
+            if (supersetNamesForSub.length > 0 && sub.modifiers && sub.modifiers.length > 0 && effect.subPowers) {
+                const parentSubs = effect.subPowers.filter(sp => {
+                    const spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+                    return supersetNamesForSub.includes(spClean);
+                });
+                if (parentSubs.length > 0) {
+                    const parentModifierCores = [];
+                    parentSubs.forEach(ps => {
+                        (ps.modifiers || []).forEach(pm => {
+                            const core = pm.name.split(" (")[0].split(" [")[0].trim();
+                            if (!parentModifierCores.includes(core)) parentModifierCores.push(core);
+                        });
+                    });
+                    if (parentModifierCores.length > 0) {
+                        sub.modifiers = sub.modifiers.filter(sm => {
+                            const coreName = sm.name.split(" (")[0].split(" [")[0].trim();
+                            if ((coreName === "Affects Others" || coreName === "Affects Others Only") &&
+                                (parentModifierCores.includes("Affects Others") || parentModifierCores.includes("Affects Others Only"))) {
+                                return false;
+                            }
+                            if (coreName === "Redirect" && parentModifierCores.includes("Redirect")) {
+                                return false;
+                            }
+                            return !parentModifierCores.includes(coreName);
+                        });
+                    }
                 }
             }
 
             if (sub.modifiers && sub.modifiers.length > 0) {
               sub.modifiers.forEach((sMod, smIdx) => {
                 if (sMod.isMeta) {
-                  let mDescText = "";
                   let m = sMod.name;
+                  let mClean = m.split(" [+")[0].trim();
                   let smRank = parseInt(sMod.ranks) || 1;
+                  let mDescText = "";
                   
                   if (m.includes("Extended")) {
                       let mult = Math.pow(10, smRank).toLocaleString();
-                      mDescText = `x${mult} distance`;
+                      mDescText = `<p>Multiplies the range increment for the sense by 10 per rank.</p><p><strong>Rank ${smRank}:</strong> <strong>x${mult} distance</strong> (–1 Notice check penalty per ${mult}0 feet rather than every 10 feet).</p>`;
                   } else if (m.includes("Rapid")) {
                       let mult = Math.pow(10, smRank).toLocaleString();
-                      mDescText = `x${mult} perception speed`;
+                      mDescText = `<p>Decreases the time needed to use the sense by a factor of 10 per rank.</p><p><strong>Rank ${smRank}:</strong> <strong>x${mult} perception speed</strong> (read, assess, or process sensory information ${mult} times faster).</p>`;
+                  } else if (m.includes("Accurate")) {
+                      mDescText = "<p>Accurate senses can be used to target things in combat without penalty (like normal human sight). Attacks made relying solely on inaccurate senses suffer a 50% miss chance.</p>";
+                  } else if (m.includes("Acute")) {
+                      mDescText = "<p>Acute senses can perceive fine details and distinguish between specific individuals or items of the same general type (like normal human sight or hearing).</p>";
+                  } else if (m.includes("Analytical")) {
+                      mDescText = "<p>Analytical senses can perceive detailed composition, exact measurements, and qualitative properties (such as chemical breakdown, structural flaws, or exact energy signatures).</p>";
+                  } else if (m.includes("Counters Concealment")) {
+                      mDescText = m.includes("All") ? "<p>Ignores <strong>all</strong> concealment effects (darkness, smoke, invisibility, etc.), allowing normal perception and targeting.</p>" : "<p>Ignores concealment of a <strong>specific descriptor</strong> (such as darkness, smoke, or invisibility).</p>";
                   } else if (m.includes("Counters Illusion")) {
-                      mDescText = "Ignores Illusion effects";
+                      mDescText = "<p>Immediately recognizes and pierces illusions perceived by this sense as false, allowing you to ignore illusionary effects.</p>";
+                  } else if (m.includes("Counters Obscure")) {
+                      mDescText = m.includes("All") ? "<p>Ignores <strong>all</strong> Obscure effects, allowing normal perception regardless of obscuring fields.</p>" : "<p>Ignores Obscure effects of a <strong>specific descriptor</strong> (such as magical darkness, fog, or radio jamming).</p>";
                   } else if (m.includes("Penetrates Concealment")) {
-                      mDescText = "Ignores solid barriers and obstacles";
+                      mDescText = "<p>Perceives through solid barriers and obstacles as if they were transparent (like X-Ray vision), up to the sense's normal range increment.</p>";
+                  } else if (m.includes("Radius")) {
+                      mDescText = "<p>Can perceive in a full 360-degree radius all around you at once without turning or suffering blind spots.</p>";
+                  } else if (m.includes("Ranged")) {
+                      mDescText = "<p>Can perceive at a distance beyond personal touch or reach, with range increments based on the sense type.</p>";
+                  } else if (m.includes("Tracking")) {
+                      mDescText = m.includes("Full Speed") ? "<p>Can follow sensory trails left by subjects at <strong>full normal movement speed</strong> without penalty.</p>" : "<p>Can follow sensory trails left by subjects at <strong>half normal movement speed</strong> with Survival or Notice checks.</p>";
+                  } else {
+                      mDescText = `<p>${mClean} sense modifier.</p>`;
                   }
                   
                   let stepperHtml = "";
@@ -4447,11 +8402,11 @@ function buildPowersUI() {
                   }
                   
                   metaTagsHtml += `
-                    <div class="modifier-chip" style="background: rgba(59, 130, 246, 0.1); border-color: var(--accent-primary);">
-                      <span><strong>${m.split(" [+")[0]}</strong></span>
+                    <div class="modifier-chip" style="background: rgba(59, 130, 246, 0.1); border-color: var(--accent-primary); display: inline-flex; align-items: center;">
+                      <span><strong>${mClean}</strong></span>
                       ${stepperHtml}
+                      <button type="button" class="btn-info-circle" style="margin-left: 2px; vertical-align: middle;" onclick="showOptionInfo('${mClean.replace(/'/g, "\\'")}', '${mDescText.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')" title="View Modifier Details">?</button>
                       <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 4px; margin-left: 4px;" onclick="removeSubPowerModifier(${pIdx}, ${eIdx}, ${sIdx}, ${smIdx})" title="Remove Meta-Option">✕</button>
-                      ${mDescText ? `<div style="font-size: 10px; width: 100%; color: var(--text-muted); margin-top: 2px;">${mDescText}</div>` : ''}
                     </div>
                   `;
                 } else {
@@ -4459,15 +8414,17 @@ function buildPowersUI() {
                   let mCostType = sMod.costType === "flat" ? " flat" : "/r";
                   let mCost = sMod.cost !== undefined ? sMod.cost : 1;
                   let isEx = sMod.category === 'extra' ? '+' : '-';
+                  let modClean = sMod.name.split(" [")[0].trim();
                   
                   subModsHtml += `
-                    <div class="modifier-chip" style="font-size: calc(var(--font-size-minor-controls) * 0.9);">
-                      <span><strong>${sMod.name.split(" [")[0]}</strong> (${isEx}${mCost}${mCostType})</span>
+                    <div class="modifier-chip" style="display: inline-flex; align-items: center;">
+                      <span><strong>${modClean}</strong> (${isEx}${mCost}${mCostType})</span>
                       <div class="modifier-stepper-group" style="margin-left: 6px;">
                         <button type="button" class="modifier-stepper-btn" onclick="stepSubPowerModifierRank(${pIdx}, ${eIdx}, ${sIdx}, ${smIdx}, -1, 1, 20)">−</button>
                         <span class="modifier-stepper-val">${mRanks}</span>
                         <button type="button" class="modifier-stepper-btn" onclick="stepSubPowerModifierRank(${pIdx}, ${eIdx}, ${sIdx}, ${smIdx}, 1, 1, 20)">+</button>
                       </div>
+                      <button type="button" class="btn-info-circle" style="margin-left: 2px; vertical-align: middle;" onclick="showModifierInfo('${modClean.replace(/'/g, "\\'")}', '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}')" title="View Modifier Rule">?</button>
                       <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 4px; margin-left: 4px;" onclick="removeSubPowerModifier(${pIdx}, ${eIdx}, ${sIdx}, ${smIdx})" title="Remove Modifier">✕</button>
                     </div>
                   `;
@@ -4484,6 +8441,7 @@ function buildPowersUI() {
                 "Analytical (Single Sense) [+1 pt]", "Analytical (Sense Type) [+2 pts]",
                 "Counters Concealment (One Descriptor) [+2 pts]", "Counters Concealment (All) [+5 pts]", 
                 "Counters Illusion [+2 pts]", 
+                "Counters Obscure (One Descriptor) [+2 pts]", "Counters Obscure (All) [+5 pts]",
                 "Extended (Single Sense) [+1 pt/r]", "Extended (Sense Type) [+2 pts/r]", 
                 "Penetrates Concealment [+4 pts]",
                 "Radius (Single Sense) [+1 pt]", "Radius (Sense Type) [+2 pts]", 
@@ -4492,35 +8450,66 @@ function buildPowersUI() {
                 "Tracking (Half Speed) [+1 pt]", "Tracking (Full Speed) [+2 pts]"
               ];
 
-              if (isSenseTypeOpt) {
-                  metaChoices = metaChoices.filter(c => !c.includes("(Single Sense)"));
+              let isSenseType = sub.isSenseType || isSenseTypeOpt;
+
+              if (isSenseType) {
+                  metaChoices = metaChoices.filter(c => c.startsWith("- Select") || c.includes("(Sense Type)") || c.includes("Counters Concealment") || c.includes("Counters Illusion") || c.includes("Counters Obscure") || c.includes("Penetrates Concealment") || c.includes("Tracking"));
               } else {
                   metaChoices = metaChoices.filter(c => !c.includes("(Sense Type)"));
               }
 
-              if (!isSenseTypeOpt && mySenseType !== "Unknown") {
-                  let parentSenseTypeSub = effect.subPowers.find(sp => sp.type.includes(mySenseType) && sp.type.includes("Sense Type"));
-                  if (parentSenseTypeSub && parentSenseTypeSub.modifiers) {
-                      parentSenseTypeSub.modifiers.forEach(pm => {
-                          let coreMeta = pm.name.split(" (")[0]; 
-                          metaChoices = metaChoices.filter(c => !c.startsWith(coreMeta));
+              let inherentList = INHERENT_SENSE_TRAITS[cleanSubName] || INHERENT_SENSE_TRAITS[sub.type] || [];
+              if (inherentList.length > 0) {
+                  metaChoices = metaChoices.filter(c => {
+                      if (c.startsWith("- Select")) return true;
+                      let coreMeta = c.split(" (")[0].trim();
+                      if (inherentList.includes(coreMeta)) return false;
+                      if (coreMeta === "Counters Concealment" && inherentList.some(inh => inh.startsWith("Counters Concealment"))) return false;
+                      return true;
+                  });
+              }
+
+              if (!isSenseType && mySenseType && mySenseType !== "Unknown") {
+                  let parentSenseTypeSub = effect.subPowers.find(sp => {
+                      let t = sp.type || sp.name || "";
+                      return t.includes("Sense Type") && (sp.senseCategory === mySenseType || t.includes(mySenseType));
+                  });
+                  if (parentSenseTypeSub && parentSenseTypeSub.modifiers && parentSenseTypeSub.modifiers.length > 0) {
+                      let parentMetaNames = parentSenseTypeSub.modifiers.map(pm => pm.name.split(" (")[0].trim());
+                      metaChoices = metaChoices.filter(c => {
+                          if (c.startsWith("- Select")) return true;
+                          let coreMeta = c.split(" (")[0].trim();
+                          return !parentMetaNames.includes(coreMeta);
                       });
                   }
               }
 
-              if (isVisual) metaChoices = metaChoices.filter(c => !c.includes("Accurate") && !c.includes("Acute"));
-              if (isAuditory) metaChoices = metaChoices.filter(c => !c.includes("Acute"));
-              if (isTactile) metaChoices = metaChoices.filter(c => !c.includes("Accurate"));
-
-              if (sub.modifiers && sub.modifiers.some(m => m.name.includes("Counters Concealment (All)"))) {
-                  metaChoices = metaChoices.filter(c => !c.includes("Counters Concealment (One Descriptor)"));
+              if (sub.modifiers && sub.modifiers.length > 0) {
+                  let existingMeta = sub.modifiers.map(m => m.name.split(" (")[0].trim());
+                  metaChoices = metaChoices.filter(c => {
+                      if (c.startsWith("- Select")) return true;
+                      let coreMeta = c.split(" (")[0].trim();
+                      return !existingMeta.includes(coreMeta);
+                  });
+                  if (sub.modifiers.some(m => m.name.includes("Counters Concealment (All)"))) {
+                      metaChoices = metaChoices.filter(c => !c.includes("Counters Concealment (One Descriptor)"));
+                  }
+                  if (sub.modifiers.some(m => m.name.includes("Counters Concealment (One Descriptor)"))) {
+                      metaChoices = metaChoices.filter(c => !c.includes("Counters Concealment (All)"));
+                  }
+                  if (sub.modifiers.some(m => m.name.includes("Counters Obscure (All)"))) {
+                      metaChoices = metaChoices.filter(c => !c.includes("Counters Obscure (One Descriptor)"));
+                  }
+                  if (sub.modifiers.some(m => m.name.includes("Counters Obscure (One Descriptor)"))) {
+                      metaChoices = metaChoices.filter(c => !c.includes("Counters Obscure (All)"));
+                  }
               }
 
               metaPickerHtml = `
-                <select id="selSubMeta_${pIdx}_${eIdx}_${sIdx}" class="minor-control" style="font-size: 11px; max-width: 200px;">
+                <select id="selSubMeta_${pIdx}_${eIdx}_${sIdx}" class="minor-control" style="font-size: var(--font-size-minor-controls); max-width: 200px;">
                   ${metaChoices.map(c => `<option value="${c}">${c}</option>`).join('')}
                 </select>
-                <button type="button" class="btn minor-control-btn" style="font-size: 11px; padding: 2px 6px;" onclick="addSubPowerMeta(${pIdx}, ${eIdx}, ${sIdx}, 'selSubMeta_${pIdx}_${eIdx}_${sIdx}')">+ Add Modifier</button>
+                <button type="button" class="btn minor-control-btn" style="font-size: var(--font-size-minor-controls); padding: 2px 6px;" onclick="addSubPowerMeta(${pIdx}, ${eIdx}, ${sIdx}, 'selSubMeta_${pIdx}_${eIdx}_${sIdx}')">+ Add Modifier</button>
                 <div style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                   ${metaTagsHtml}
                 </div>
@@ -4539,11 +8528,60 @@ function buildPowersUI() {
                 "Concentration [-1 pt/r]",
                 "Resistance [-1 pt/r]"
               ];
+
+              // 1. Superset Filtering: If this option is covered by any superset, exclude modifiers already present on that superset
+              const supersetNames = getSupersetsForOption("Immunity", cleanSubName);
+              if (supersetNames.length > 0 && effect.subPowers) {
+                const parentSubs = effect.subPowers.filter(sp => {
+                  const spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+                  return supersetNames.includes(spClean);
+                });
+                const parentModifierCores = [];
+                parentSubs.forEach(ps => {
+                  (ps.modifiers || []).forEach(pm => {
+                    const core = pm.name.split(" (")[0].split(" [")[0].trim();
+                    if (!parentModifierCores.includes(core)) parentModifierCores.push(core);
+                  });
+                });
+
+                if (parentModifierCores.length > 0) {
+                  metaChoices = metaChoices.filter(c => {
+                    if (c.startsWith("- Select")) return true;
+                    const choiceCore = c.split(" (")[0].split(" [")[0].trim();
+                    if (parentModifierCores.includes(choiceCore)) return false;
+                    if ((choiceCore === "Affects Others" || choiceCore === "Affects Others Only") &&
+                        (parentModifierCores.includes("Affects Others") || parentModifierCores.includes("Affects Others Only"))) {
+                      return false;
+                    }
+                    if (choiceCore === "Redirect" && parentModifierCores.includes("Redirect")) return false;
+                    return true;
+                  });
+                }
+              }
+
+              // 2. Self-duplicate and Mutual Exclusion Filtering on this subpower
+              if (sub.modifiers && sub.modifiers.length > 0) {
+                const currentCores = sub.modifiers.map(m => m.name.split(" (")[0].split(" [")[0].trim());
+                metaChoices = metaChoices.filter(c => {
+                  if (c.startsWith("- Select")) return true;
+                  const choiceCore = c.split(" (")[0].split(" [")[0].trim();
+                  if (currentCores.includes(choiceCore)) return false;
+                  if ((choiceCore === "Affects Others" || choiceCore === "Affects Others Only") &&
+                      (currentCores.includes("Affects Others") || currentCores.includes("Affects Others Only"))) {
+                    return false;
+                  }
+                  if (choiceCore === "Redirect" && currentCores.includes("Redirect")) return false;
+                  if (choiceCore === "Sustained" && currentCores.includes("Concentration")) return false;
+                  if (choiceCore === "Concentration" && currentCores.includes("Sustained")) return false;
+                  return true;
+                });
+              }
+
               metaPickerHtml = `
-                <select id="selSubMeta_${pIdx}_${eIdx}_${sIdx}" class="minor-control" style="font-size: 11px; max-width: 200px;">
+                <select id="selSubMeta_${pIdx}_${eIdx}_${sIdx}" class="minor-control" style="font-size: var(--font-size-minor-controls); max-width: 200px;">
                   ${metaChoices.map(c => `<option value="${c}">${c}</option>`).join('')}
                 </select>
-                <button type="button" class="btn minor-control-btn" style="font-size: 11px; padding: 2px 6px;" onclick="addSubPowerMeta(${pIdx}, ${eIdx}, ${sIdx}, 'selSubMeta_${pIdx}_${eIdx}_${sIdx}')">+ Add Modifier</button>
+                <button type="button" class="btn minor-control-btn" style="font-size: var(--font-size-minor-controls); padding: 2px 6px;" onclick="addSubPowerMeta(${pIdx}, ${eIdx}, ${sIdx}, 'selSubMeta_${pIdx}_${eIdx}_${sIdx}')" ${metaChoices.length <= 1 ? 'disabled' : ''}>+ Add Modifier</button>
                 <div style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                   ${subModsHtml}
                 </div>
@@ -4574,7 +8612,7 @@ function buildPowersUI() {
             
             let arrowIcon = "";
             if (effect.effectName === "Enhanced Trait") {
-                arrowIcon = sub.isReduced ? '<span style="color: #ef4444; font-size: 14px;" title="Reduced Trait">▼</span> ' : '<span style="color: #10b981; font-size: 14px;" title="Enhanced Trait">▲</span> ';
+                arrowIcon = sub.isReduced ? '<span style="color: #ef4444; font-size: var(--font-size-controls);" title="Reduced Trait">▼</span> ' : '<span style="color: #10b981; font-size: var(--font-size-controls);" title="Enhanced Trait">▲</span> ';
             }
 
             return `
@@ -4583,11 +8621,11 @@ function buildPowersUI() {
                   <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
                     <strong style="font-size: var(--font-size-controls); color: var(--accent-primary); white-space: nowrap;">
                       ${arrowIcon}${sub.name.split(" [")[0] || sub.type}
-                      ${dynDesc ? `<button type="button" class="btn-info-circle" style="min-width: 16px; min-height: 16px; font-size: 10px; margin-left: 4px; vertical-align: middle;" onclick="showOptionInfo('${(sub.name.split(" [")[0] || sub.type).replace(/'/g, "\\'")}', '${dynDesc.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')" title="View Option Info">?</button>` : ''}
+                      ${dynDesc ? `<button type="button" class="btn-info-circle" style="min-width: 16px; min-height: 16px; font-size: var(--font-size-tags); margin-left: 2px; vertical-align: middle;" onclick="showOptionInfo('${(sub.name.split(" [")[0] || sub.type).replace(/'/g, "\\'")}', '${dynDesc.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')" title="View Option Info">?</button>` : ''}
                     </strong>
-                    <span class="badge effect-cost-badge" style="font-size: 11px; white-space: nowrap;">${sub.baseCost || 1} ${sub.costType === 'per_rank' ? 'PP/r' : 'PP'}</span>
+                    <span class="badge effect-cost-badge" style="font-size: var(--font-size-tags); white-space: nowrap;">${sub.baseCost || 1} ${sub.costType === 'per_rank' ? 'PP/r' : 'PP'}</span>
                     ${effect.effectName !== "Enhanced Trait" && effect.effectName !== "Super-Senses" ? `
-                        <input type="text" class="minor-control" placeholder="${placeholderText}" value="${sub.details || ''}" oninput="updateSubPowerDetails(${pIdx}, ${eIdx}, ${sIdx}, this.value)" style="flex: 1; min-width: 80px; border: 1px solid var(--border-color); background: var(--bg-panel); color: var(--text-main); font-size: 12px; padding: 2px 6px; margin-left: 4px; height: 24px;">
+                        <input type="text" class="minor-control" placeholder="${placeholderText}" value="${sub.details || ''}" oninput="updateSubPowerDetails(${pIdx}, ${eIdx}, ${sIdx}, this.value)" style="flex: 1; min-width: 80px; border: 1px solid var(--border-color); background: var(--bg-panel); color: var(--text-main); font-size: var(--font-size-minor-controls); padding: 2px 6px; margin-left: 4px; height: 24px;">
                     ` : ''}
                     ${effect.effectName === "Super-Senses" && metaPickerHtml ? `
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: 8px; flex: 1;">
@@ -4603,7 +8641,7 @@ function buildPowersUI() {
                         ${stepperControls}
                       </div>
                     </div>
-                    <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 11px;" onclick="removeSubPower(${pIdx}, ${eIdx}, ${sIdx})" title="Delete Option">Delete</button>
+                    <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: var(--font-size-minor-controls);" onclick="removeSubPower(${pIdx}, ${eIdx}, ${sIdx})" title="Delete Option">Delete</button>
                   </div>
                 </div>
                 
@@ -4621,15 +8659,44 @@ function buildPowersUI() {
 
         let optionPickersHtml = "";
         if (effectData && effectData.options && effectData.options.length > 0) {
+          let availableOptions = effectData.options;
+          if (effect.effectName === "Super-Senses") {
+            availableOptions = availableOptions.filter(opt => {
+              let isAlreadyAdded = (effect.subPowers || []).some(sp => {
+                let spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+                return spClean === opt.name;
+              });
+              if (isAlreadyAdded) return false;
+
+              let cat = SENSE_TYPE_MAP[opt.name];
+              if (!opt.name.includes("Sense Type") && cat && isSenseCategoryMaxed(cat, effect)) {
+                return false;
+              }
+              return true;
+            });
+          } else if (["Immunity", "Super-Movement", "Movement", "Comprehend", "Features", "Feature"].includes(effect.effectName)) {
+            availableOptions = availableOptions.filter(opt => {
+              let isAlreadyAdded = (effect.subPowers || []).some(sp => {
+                let spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+                return spClean === opt.name;
+              });
+              if (isAlreadyAdded) return false;
+              if (effect.effectName === "Immunity" && isOptionCoveredByExisting(effect, opt.name)) {
+                return false;
+              }
+              return true;
+            });
+          }
+
           optionPickersHtml = `
             <div class="power-options-row" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; background: var(--bg-panel); padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; margin-top: 4px;">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <label style="font-size: var(--font-size-secondary); font-weight: 600; white-space: nowrap;">${effect.effectName} Option:</label>
                 <select id="selOptionChoice_${pIdx}_${eIdx}" class="minor-control" style="width: 250px;">
-                  <option value="">- Select Option -</option>
-                  ${effectData.options.map(opt => `<option value="${opt.name} [${opt.cost} ${opt.costType === 'flat' ? 'pts' : 'pts/r'}]">${opt.name} [${opt.cost} ${opt.costType === 'flat' ? 'pts' : 'pts/r'}]</option>`).join('')}
+                  <option value="">${availableOptions.length > 0 ? "- Select Option -" : "(All options added)"}</option>
+                  ${availableOptions.map(opt => `<option value="${opt.name} [${opt.cost} ${opt.costType === 'flat' ? 'pts' : 'pts/r'}]">${opt.name} [${opt.cost} ${opt.costType === 'flat' ? 'pts' : 'pts/r'}]</option>`).join('')}
                 </select>
-                <button type="button" class="btn minor-control-btn btn-add-option" style="height: 26px;" onclick="addOptionSubPower(${pIdx}, ${eIdx}, 'selOptionChoice_${pIdx}_${eIdx}')">+ Add Option</button>
+                <button type="button" class="btn minor-control-btn btn-add-option" style="height: 26px;" onclick="addOptionSubPower(${pIdx}, ${eIdx}, 'selOptionChoice_${pIdx}_${eIdx}')" ${availableOptions.length === 0 ? 'disabled' : ''}>+ Add Option</button>
               </div>
             </div>
           `;
@@ -4790,6 +8857,101 @@ function buildPowersUI() {
               ` : ''}
             </div>
           `;
+        } else if (effect.effectName === "Boost") {
+          const isAlteringRanks = (char.houseRules && char.houseRules.boostAltersRanks) || (localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true");
+          const targetChoices = [
+            { value: "", label: "- Select Target Trait / Power -" },
+            { value: "Strength", label: "Ability: Strength" },
+            { value: "Dexterity", label: "Ability: Dexterity" },
+            { value: "Constitution", label: "Ability: Constitution" },
+            { value: "Intelligence", label: "Ability: Intelligence" },
+            { value: "Wisdom", label: "Ability: Wisdom" },
+            { value: "Charisma", label: "Ability: Charisma" }
+          ];
+
+          if (char.activePowers) {
+            char.activePowers.forEach((power, pi) => {
+              (power.effects || []).forEach((eff, ei) => {
+                if (eff !== effect && eff.effectName) {
+                  const targetName = (eff.name && eff.name !== 'New Effect') ? eff.name : eff.effectName;
+                  const label = `${power.name ? power.name + ': ' : ''}${targetName} (${eff.effectName})`;
+                  targetChoices.push({ value: eff.id, label: label, name: targetName, effectName: eff.effectName });
+                }
+              });
+            });
+          }
+
+          let currentTarget = (effect.options && effect.options.boostTarget) || effect.boostTarget || "";
+          if (currentTarget) {
+            const matchById = targetChoices.find(c => c.value === currentTarget);
+            if (!matchById) {
+              const matchByName = targetChoices.find(c => c.name === currentTarget || c.effectName === currentTarget);
+              if (matchByName) {
+                currentTarget = matchByName.value;
+                effect.boostTarget = currentTarget;
+                if (!effect.options) effect.options = {};
+                effect.options.boostTarget = currentTarget;
+              } else if (!currentTarget.startsWith("eff_") && !currentTarget.startsWith("imp_")) {
+                targetChoices.push({ value: currentTarget, label: `${currentTarget} (Custom Target)` });
+              } else {
+                effect.boostTarget = "";
+                if (effect.options) effect.options.boostTarget = "";
+                currentTarget = "";
+              }
+            }
+          }
+
+          const isBoostActive = (powerContainer.active !== false) && (effect.active !== false);
+          const boostRank = parseInt(effect.rank) || 1;
+
+          let currentScope = (effect.options && effect.options.boostScope);
+          if (!currentScope) {
+            const costToScope = {
+              1: "Single Trait",
+              2: "One Trait of Descriptor",
+              3: "All Traits of Descriptor",
+              4: "All Powers of Subject",
+              5: "All Traits of Subject"
+            };
+            currentScope = costToScope[effect.baseCost] || "Single Trait";
+          }
+
+          const scopes = [
+            { value: "Single Trait", label: "One Specific Trait (Fixed at purchase) (1 PP/r)" },
+            { value: "One Trait of Descriptor", label: "Any One Trait of Descriptor (Flexible per use) (2 PP/r)" },
+            { value: "All Traits of Descriptor", label: "All Traits of Descriptor (Simultaneous) (3 PP/r)" },
+            { value: "All Powers of Subject", label: "All Powers of Subject (Simultaneous) (4 PP/r)" },
+            { value: "All Traits of Subject", label: "All Traits of Subject (Simultaneous) (5 PP/r)" }
+          ];
+
+          optionPickersHtml = `
+            <div class="power-options-row" style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-panel); padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; margin-top: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+                  <span>⚡</span> <strong>Boost Scope &amp; Target Allocation (Ultimate Power):</strong>
+                </div>
+                <span class="badge" style="font-size: var(--font-size-tags); background: ${isBoostActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${isBoostActive ? '#10b981' : '#ef4444'}; border: 1px solid ${isBoostActive ? '#10b981' : '#ef4444'};">
+                  ${isBoostActive ? (isAlteringRanks ? `⚡ Active (+${boostRank} Ranks to target)` : `⚡ Active (+${boostRank} PP Subsidy)`) : 'Inactive (Turn On via effect toggle)'}
+                </span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 220px;">
+                  <label style="font-size: var(--font-size-secondary); font-weight: 600; white-space: nowrap;">Scope:</label>
+                  <select class="minor-control" style="flex: 1;" onchange="window.updateBoostScopeDirect(${pIdx}, ${eIdx}, this.value)">
+                    ${scopes.map(s => `<option value="${s.value}" ${s.value === currentScope ? 'selected' : ''}>${s.label}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1.2; min-width: 240px;">
+                  <label style="font-size: var(--font-size-secondary); font-weight: 600; white-space: nowrap;">Target Trait:</label>
+                  <select class="minor-control" style="flex: 1;" onchange="window.updateBoostTargetDirect(${pIdx}, ${eIdx}, this.value)">
+                    ${targetChoices.map(c => `<option value="${c.value}" ${c.value === currentTarget ? 'selected' : ''}>${c.label}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+            </div>
+          `;
         }
 
         const existingModNames = effect.modifiers ? effect.modifiers.map(m => m.name) : [];
@@ -4809,18 +8971,31 @@ function buildPowersUI() {
         let availableRootFlaws = allowedRootMods.filter(m => m.category === 'flaw' && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
         let availableRootFeats = allowedRootMods.filter(m => m.category === 'feat' && !genericIsShadowed(m.name, specificModNames) && !existingModNames.includes(m.name));
 
+        const isLegacyOn = (char && char.houseRules && char.houseRules.enableLegacyCoreModifiers) || (localStorage.getItem("mm2e_houserule_enable_legacy_modifiers") === "true");
         let smartMods = window.generateSmartModifiers(effect);
         smartMods.extras.forEach(sm => {
+            if (!isLegacyOn && typeof LEGACY_CORE_MODIFIERS !== 'undefined' && LEGACY_CORE_MODIFIERS.includes(sm.name)) return;
             if (!existingModNames.includes(sm.name) && !genericIsShadowed(sm.name, specificModNames) && !availableRootExtras.some(m => m.name === sm.name)) {
                 availableRootExtras.push(sm);
             }
         });
         smartMods.flaws.forEach(sm => {
+            if (!isLegacyOn && typeof LEGACY_CORE_MODIFIERS !== 'undefined' && LEGACY_CORE_MODIFIERS.includes(sm.name)) return;
             if (!existingModNames.includes(sm.name) && !genericIsShadowed(sm.name, specificModNames) && !availableRootFlaws.some(m => m.name === sm.name)) {
                 availableRootFlaws.push(sm);
             }
         });
         
+        const isDisablePerception = (typeof char !== 'undefined' && char.houseRules && char.houseRules.disablePerceptionRange) || 
+                                    (typeof localStorage !== 'undefined' && localStorage.getItem("mm2e_houserule_disable_perception_range") === "true");
+        if (isDisablePerception) {
+          availableRootExtras.forEach(e => {
+            if (e.name === "Range (Extra)" || e.name === "Increased Range") {
+              e.maxRanks = 1;
+            }
+          });
+        }
+
         availableRootExtras.sort((a, b) => a.name.localeCompare(b.name));
         availableRootFlaws.sort((a, b) => a.name.localeCompare(b.name));
         availableRootFeats.sort((a, b) => a.name.localeCompare(b.name));
@@ -4876,6 +9051,7 @@ function buildPowersUI() {
             const needsRanks = (modData.hasRanks === true || modData.costType === 'per_rank' || modData.costType === 'removable');
             let maxR = modData.maxRanks || Math.max(Number(effect.rank) || 1, 1);
             if (mod.name === "Penetrating") maxR = Math.max(Number(effect.rank) || 20, 20); // Penetrating can theoretically exceed, but let's cap at power rank or 20
+            if (isDisablePerception && (mod.name === "Range (Extra)" || mod.name === "Increased Range")) maxR = 1;
             const currentRanks = Math.min(maxR, Math.max(1, Number(mod.ranks) || 1));
             return `
               <div class="modifier-chip">
@@ -5001,8 +9177,10 @@ function buildPowersUI() {
           allConnected.forEach(conn => {
             const connTraits = getEffectiveEffectTraits(conn.effect);
             const warnings = [];
-
-            if (currTraits.action !== connTraits.action && currTraits.action !== "None" && connTraits.action !== "None") {
+            const isActionCompatible = (currTraits.action === connTraits.action) ||
+                                       (currTraits.action === "None" || connTraits.action === "None") ||
+                                       (currTraits.action === "Free" || connTraits.action === "Free");
+            if (!isActionCompatible) {
               warnings.push(`Action mismatch (${currTraits.action} vs ${connTraits.action}) — Linked effects must share the same action`);
             }
             if (currTraits.range !== connTraits.range) {
@@ -5040,9 +9218,9 @@ function buildPowersUI() {
             const cpCost = cp.cost !== undefined ? cp.cost : (cpRank * (cp.effectName ? 1 : 1));
             return `
               <div style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 3px 8px; font-size: var(--font-size-secondary);">
-                <strong>${cpName}</strong> <span class="badge" style="background: var(--bg-panel); color: var(--text-main); font-size: 11px;">Rank ${cpRank} (${cpCost} PP)</span>
-                <button type="button" class="stepper-btn" style="width: 20px !important; height: 20px; font-size: 11px; border-radius: 2px;" onclick="stepContainedPowerRank(${pIdx}, ${eIdx}, ${cpIdx}, -1)">−</button>
-                <button type="button" class="stepper-btn" style="width: 20px !important; height: 20px; font-size: 11px; border-radius: 2px;" onclick="stepContainedPowerRank(${pIdx}, ${eIdx}, ${cpIdx}, 1)">+</button>
+                <strong>${cpName}</strong> <span class="badge" style="background: var(--bg-panel); color: var(--text-main); font-size: var(--font-size-tags);">Rank ${cpRank} (${cpCost} PP)</span>
+                <button type="button" class="stepper-btn" style="width: 20px !important; height: 20px; font-size: var(--font-size-minor-controls); border-radius: 2px;" onclick="stepContainedPowerRank(${pIdx}, ${eIdx}, ${cpIdx}, -1)">−</button>
+                <button type="button" class="stepper-btn" style="width: 20px !important; height: 20px; font-size: var(--font-size-minor-controls); border-radius: 2px;" onclick="stepContainedPowerRank(${pIdx}, ${eIdx}, ${cpIdx}, 1)">+</button>
                 <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 4px;" onclick="removeContainedPower(${pIdx}, ${eIdx}, ${cpIdx})" title="Remove from form">✕</button>
               </div>
             `;
@@ -5053,13 +9231,10 @@ function buildPowersUI() {
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                   <span style="font-weight: 600; font-size: var(--font-size-labels); color: var(--text-main);">Contained Traits &amp; Powers:</span>
-                  <span class="badge" style="background: ${isOver ? '#ef4444' : 'rgba(16, 185, 129, 0.2)'}; color: ${isOver ? '#ffffff' : '#10b981'}; font-weight: bold; font-size: 12px; border: 1px solid ${isOver ? '#ef4444' : '#10b981'};">
+                  <span class="badge" style="background: ${isOver ? '#ef4444' : 'rgba(16, 185, 129, 0.2)'}; color: ${isOver ? '#ffffff' : '#10b981'}; font-weight: bold; font-size: var(--font-size-tags); border: 1px solid ${isOver ? '#ef4444' : '#10b981'};">
                     Pool: ${spent} / ${pool} PP ${isOver ? '⚠️ (Over Budget)' : '✓'}
                   </span>
                 </div>
-                <button type="button" class="btn minor-control-btn" style="font-weight: bold; background: ${isFormActive ? '#10b981' : 'var(--bg-card)'}; color: ${isFormActive ? '#ffffff' : 'var(--text-main)'}; border: 1px solid ${isFormActive ? '#10b981' : 'var(--border-color)'};" onclick="toggleContainerFormActive(${pIdx}, ${eIdx})" title="Toggle whether these traits are applied to the active character sheet">
-                  ${isFormActive ? '⚡ Form Active (Traits Applied)' : '⚪ Form Inactive (Base Stats)'}
-                </button>
               </div>
 
               <div style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center;">
@@ -5140,50 +9315,69 @@ function buildPowersUI() {
           `;
         }
 
+        const isEffectActive = effect.active !== false;
+        const isArrayContainer = powerContainer.containerType === "array" || (Array.isArray(powerContainer.effects) && powerContainer.effects.some(e => e.association === "alternate" || e.association === "dynamic"));
+        const isMasterEffect = isArrayContainer && (effect.association === "primary" || (!effect.association && eIdx === 0));
+        const masterBadgeHtml = isMasterEffect ? `<span class="badge badge-master-effect" title="Master Effect (Primary Array Slot)" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-size: var(--font-size-tags); font-weight: bold; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; cursor: default;">👑 Master</span>` : '';
+
         return `
           <div class="effect-card ${isLinkedCard ? 'is-linked' : ''}" style="margin-top: 12px; padding-top: 12px; border-top: 2px dashed var(--text-muted);">
             
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    
-                    <select onchange="updateEffectAssociation(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="width: 135px; background: var(--bg-app);" title="Slot Role in Array">
-                        <option value="" ${!effect.association || effect.association === '' ? 'selected' : ''}>- Select Array Role -</option>
-                        <option value="primary" ${effect.association === 'primary' ? 'selected' : ''}>Primary Slot</option>
-                        <option value="alternate" ${effect.association === 'alternate' ? 'selected' : ''} ${powerContainer.effects.length === 1 ? 'disabled style="color: var(--text-muted);"' : ''}>Alternate (1 PP)</option>
-                        <option value="dynamic" ${effect.association === 'dynamic' ? 'selected' : ''} ${powerContainer.effects.length === 1 ? 'disabled style="color: var(--text-muted);"' : ''}>Dynamic (2 PP)</option>
-                    </select>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">Effect ${eIdx + 1}${powerContainer.effects.length > 1 ? ` of ${powerContainer.effects.length}` : ''}</span>
+                ${masterBadgeHtml}
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); height: 24px; display: inline-flex; align-items: center; gap: 4px;" onclick="resetEffect(${pIdx}, ${eIdx})" title="Reset Effect Profile">↺ Reset</button>
+                <button type="button" class="btn-delete-power" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); height: 24px; display: inline-flex; align-items: center; gap: 4px;" onclick="deleteEffect(${pIdx}, ${eIdx})" title="Delete Effect">✕ Delete</button>
+              </div>
+            </div>
 
-                    <select onchange="updateEffectLink(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="max-width: 175px; background: var(--bg-app);" title="Link this effect to another effect">
-                        ${linkOptions}
-                    </select>
-                    
-                    <select onchange="updateEffectDirect(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="min-width: 160px; color: var(--accent-primary); font-weight: bold;">
-                      <option value="" ${effect.effectName === "" ? "selected" : ""} style="color: var(--text-main); font-weight: normal;">- Select Effect -</option>
-                      ${POWER_EFFECTS_LIST.filter(e => !e.effectName && e.name !== "Pre-built Powers").map(eff => `<option value="${eff.name}" ${eff.name === effect.effectName ? 'selected' : ''} style="color: var(--text-main); font-weight: normal;">${eff.name} (${eff.baseCost} PP/r)</option>`).join('')}
-                    </select>
-                    ${effectData && effect.effectName !== "" ? `<button type="button" class="btn-info-circle" onclick="showPowerEffectInfo('${effect.effectName}', '${(effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName) ? effect.name : ''}')" title="View Effect Rules">?</button>` : ''}
-                </div>
-                
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <label>Rank:</label>
-                    ${rankStepperHtml}
-                    <span class="badge effect-cost-badge" style="margin-left: 8px; font-size: 11px;" title="Base Cost: ${rawEffectCost} PP">${effectCostDisplay}</span>
-                    <button type="button" class="btn" style="padding: 2px 6px; font-size: 11px; margin-left: 8px;" onclick="resetEffect(${pIdx}, ${eIdx})" title="Reset Effect Profile">Reset</button>
-                    <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 11px; margin-left: 4px;" onclick="deleteEffect(${pIdx}, ${eIdx})" title="Delete Effect">Delete</button>
+            <!-- Row 1: Primary Effect Controls -->
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin-bottom: 6px;">
+                <button type="button" class="btn minor-control-btn btn-effect-toggle" style="background: ${isEffectActive ? '#10b981' : 'var(--bg-app)'}; color: ${isEffectActive ? '#ffffff' : 'var(--text-muted)'}; border: 1px solid ${isEffectActive ? '#10b981' : 'var(--border-color)'};" onclick="toggleEffectActive(${pIdx}, ${eIdx})" title="${isEffectActive ? 'Effect is Active (click to turn Off)' : 'Effect is Inactive (click to turn On)'}">${isEffectActive ? 'On' : 'Off'}</button>
+                <button type="button" class="btn minor-control-btn btn-effect-roll" onclick="window.rollEffectCheck(${pIdx}, ${eIdx})" title="Roll Attack or Power Check for this effect">🎲 Roll</button>
+
+                <input type="text" class="minor-control" style="flex: 1; min-width: 135px; font-weight: 600;" value="${effect.customName || (effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName ? effect.name : '')}" placeholder="${effect.effectName || 'Effect Name'}" oninput="updateEffectCustomName(${pIdx}, ${eIdx}, this.value)" onblur="refreshUI();" title="Custom name for this effect">
+
+                <select onchange="updateEffectDirect(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="min-width: 160px; color: var(--accent-primary); font-weight: bold;">
+                  <option value="" ${effect.effectName === "" ? "selected" : ""} style="color: var(--text-main); font-weight: normal;">- Select Effect -</option>
+                  ${POWER_EFFECTS_LIST.filter(e => !e.effectName && e.name !== "Pre-built Powers").map(eff => `<option value="${eff.name}" ${eff.name === effect.effectName ? 'selected' : ''} style="color: var(--text-main); font-weight: normal;">${eff.name} (${eff.baseCost} PP/r)</option>`).join('')}
+                </select>
+                ${effectData && effect.effectName !== "" ? `<button type="button" class="btn-info-circle" onclick="showPowerEffectInfo('${effect.effectName}', '${(effect.name && effect.name !== 'New Effect' && effect.name !== effect.effectName) ? effect.name : ''}')" title="View Effect Rules">?</button>` : ''}
+
+                <label style="font-size: var(--font-size-minor-controls); font-weight: 600;">Rank:</label>
+                ${rankStepperHtml}
+                ${(isBoosted && effRank > rankNum) ? `<span class="badge badge-boost-eff-rank" style="margin-left: 2px; font-size: var(--font-size-tags); background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: bold; padding: 2px 6px; border-radius: 4px;" title="Base Rank ${rankNum} + Boost = Effective Rank ${effRank}">(Eff: ${effRank})</span>` : ''}
+                <span class="badge effect-cost-badge" style="margin-left: 4px; font-size: var(--font-size-tags);" title="Base Cost: ${rawEffectCost} PP${boostPPBonus > 0 ? ` (-${boostPPBonus} PP Boost Subsidy = ${Math.max(0, rawEffectCost - boostPPBonus)} PP)` : ''}">${effectCostDisplay}</span>
+                ${(saveDcDisplay && saveDcDisplay !== "None" && saveDcDisplay !== "—" && !saveDcDisplay.startsWith("No attack")) ? `<span class="badge" style="margin-left: 4px; font-size: var(--font-size-tags); background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: bold; padding: 2px 6px;" title="Saving Throw / Check DC">🎯 ${saveDcDisplay}</span>` : ''}
+            </div>
+
+            <!-- Row 2: Secondary Role, Profile, Link, Adjustment Tags, and Descriptors -->
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin-bottom: 8px;">
+                <select onchange="updateEffectAssociation(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="width: 135px; background: var(--bg-app);" title="Slot Role in Array">
+                    <option value="" ${!effect.association || effect.association === '' ? 'selected' : ''}>- Select Array Role -</option>
+                    <option value="primary" ${effect.association === 'primary' ? 'selected' : ''}>Primary Slot</option>
+                    <option value="alternate" ${effect.association === 'alternate' ? 'selected' : ''} ${powerContainer.effects.length === 1 ? 'disabled style="color: var(--text-muted);"' : ''}>Alternate (1 PP)</option>
+                    <option value="dynamic" ${effect.association === 'dynamic' ? 'selected' : ''} ${powerContainer.effects.length === 1 ? 'disabled style="color: var(--text-muted);"' : ''}>Dynamic (2 PP)</option>
+                </select>
+
+                ${templateDropdownHtml}
+
+                <select onchange="updateEffectLink(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="max-width: 160px; background: var(--bg-app);" title="Link this effect to another effect">
+                    ${linkOptions}
+                </select>
+
+                ${boostBadgeHtml}
+
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 140px;">
+                  <label style="font-size: var(--font-size-secondary); color: var(--text-muted); font-weight: 600; white-space: nowrap;">Descriptors:</label>
+                  <input type="text" value="${effect.descriptors || ''}" placeholder="e.g. Fire, Magic, Technology, Piercing" style="flex: 1; min-width: 100px; font-size: var(--font-size-secondary); padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel); color: var(--text-main);" oninput="updateEffectDescriptorsDirect(${pIdx}, ${eIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('descriptors');" title="${effect.descriptors ? `Descriptors: ${effect.descriptors}` : 'Descriptors (e.g. Fire, Magic, Technology)'}">
                 </div>
             </div>
 
             ${linkBannerHtml}
-
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px;">
-                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; flex: 1;">
-                  ${templateDropdownHtml}
-                  <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 200px;">
-                    <label style="font-size: var(--font-size-secondary); color: var(--text-muted); font-weight: 600; white-space: nowrap;">Descriptors:</label>
-                    <input type="text" value="${effect.descriptors || ''}" placeholder="e.g. Fire, Magic, Technology, Piercing" style="flex: 1; min-width: 140px; font-size: var(--font-size-secondary); padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel); color: var(--text-main);" oninput="updateEffectDescriptorsDirect(${pIdx}, ${eIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('descriptors');">
-                  </div>
-                </div>
-            </div>
 
             ${optionPickersHtml}
 
@@ -5191,7 +9385,7 @@ function buildPowersUI() {
 
             ${companionButtonHtml}
 
-            ${subPowersHtml ? `<div style="margin-top: 8px;"><strong style="font-size: var(--font-size-secondary); color: var(--text-main);">Profile Options:</strong><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">${subPowersHtml}</div></div>` : ''}
+            ${subPowersHtml ? `<div style="margin-top: 8px;"><strong style="font-size: var(--font-size-secondary); color: var(--text-main);">${effect.effectName === "Enhanced Trait" ? "Enhanced Traits & Skills:" : "Profile Options:"}</strong><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">${subPowersHtml}</div></div>` : ''}
 
             ${effect.effectName !== "" ? `
             <div class="power-modifiers-row" style="margin-top: 8px;">
@@ -5200,7 +9394,10 @@ function buildPowersUI() {
                   <option value="">+ Add Extra...</option>
                   ${availableSpecificExtras.length > 0 ? `<optgroup label="Effect-Specific Extras">${availableSpecificExtras.map(e => `<option value="${e.name}">${e.name} (+${e.cost || 1}${e.costType === 'flat' ? ' flat' : '/r'})${e.hasRanks && e.maxRanks && e.maxRanks < 20 ? ` (Max rank: ${e.maxRanks})` : ''}</option>`).join('')}</optgroup>` : ''}
                   <optgroup label="Universal Extras">
-                    ${availableRootExtras.map(e => `<option value="${e.name}">${e.name} (+${e.cost}${e.costType === 'flat' ? ' flat' : '/r'})${e.hasRanks && e.maxRanks && e.maxRanks < 20 ? ` (Max rank: ${e.maxRanks})` : ''}</option>`).join('')}
+                    ${availableRootExtras.map(e => {
+                      const legacyTag = (typeof LEGACY_CORE_MODIFIERS !== 'undefined' && LEGACY_CORE_MODIFIERS.includes(e.name)) ? ' [Legacy Core]' : '';
+                      return `<option value="${e.name}">${e.name} (+${e.cost}${e.costType === 'flat' ? ' flat' : '/r'})${legacyTag}${e.hasRanks && e.maxRanks && e.maxRanks < 20 ? ` (Max rank: ${e.maxRanks})` : ''}</option>`;
+                    }).join('')}
                   </optgroup>
                 </select>
                 <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootExtra_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Extra">?</button>
@@ -5224,14 +9421,17 @@ function buildPowersUI() {
                   <option value="">+ Add Flaw...</option>
                   ${availableSpecificFlaws.length > 0 ? `<optgroup label="Effect-Specific Flaws">${availableSpecificFlaws.map(f => `<option value="${f.name}">${f.name} (-${Math.abs(f.cost || -1)}${f.costType === 'flat' ? ' flat' : '/r'})${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}</optgroup>` : ''}
                   <optgroup label="Universal Flaws">
-                    ${availableRootFlaws.map(f => `<option value="${f.name}">${f.name} (-${Math.abs(f.cost)}${f.costType === 'flat' ? ' flat' : '/r'})${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}
+                    ${availableRootFlaws.map(f => {
+                      const legacyTag = (typeof LEGACY_CORE_MODIFIERS !== 'undefined' && LEGACY_CORE_MODIFIERS.includes(f.name)) ? ' [Legacy Core]' : '';
+                      return `<option value="${f.name}">${f.name} (-${Math.abs(f.cost)}${f.costType === 'flat' ? ' flat' : '/r'})${legacyTag}${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`;
+                    }).join('')}
                   </optgroup>
                 </select>
                 <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFlaw_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Flaw">?</button>
                 <button type="button" class="btn btn-secondary minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFlaw_${pIdx}_${eIdx}')">+ Flaw</button>
               </div>
 
-              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1; margin-top: 4px;">
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; flex-basis: 100%; margin-top: 6px;">
                 ${rootModifiersHtml}
               </div>
             </div>
@@ -5252,6 +9452,7 @@ function buildPowersUI() {
               ${targetsDisplay ? `<span><strong>Targets:</strong> ${targetsDisplay}</span>` : ''}
               <span><strong>Duration:</strong> ${effectiveTraits.duration}</span>
               <span><strong>Save DC / Check:</strong> ${saveDcDisplay}</span>
+              ${hasNoAttackRollMod ? `<span class="badge" style="font-size: var(--font-size-tags); background: rgba(59, 130, 246, 0.15); color: var(--accent-primary); border: 1px solid var(--accent-primary);">🎯 No Attack Roll</span>` : ''}
             </div>
 
             <div class="power-notes-row" style="margin-top: 8px;">
@@ -5267,24 +9468,42 @@ function buildPowersUI() {
         <div class="power-card-header" onclick="togglePowerCollapse(${pIdx})">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span id="powerCollapseIcon_${pIdx}" style="font-size: var(--font-size-secondary);">${powerContainer.collapsed ? '▶' : '▼'}</span>
-            <input type="text" id="powerContainerName_${pIdx}" value="${powerContainer.name}" placeholder="Power Container Name" style="font-weight: bold; font-size: var(--font-size-labels); width: 200px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; color: var(--text-main);" onclick="event.stopPropagation();" oninput="updatePowerContainerName(${pIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('container_name');">
-            <span class="secondary-text" style="font-weight: normal; font-size: 13px;">(${summaryText})</span>
+            <button type="button" class="btn minor-control-btn btn-power-toggle" style="font-weight: bold; min-width: 44px; background: ${isContainerActive ? '#10b981' : 'var(--bg-app)'}; color: ${isContainerActive ? '#ffffff' : 'var(--text-muted)'}; border: 1px solid ${isContainerActive ? '#10b981' : 'var(--border-color)'};" onclick="event.stopPropagation(); togglePowerContainerActive(${pIdx})" title="${isContainerActive ? 'Power Container is Active (click to turn Off)' : 'Power Container is Inactive (click to turn On)'}">${isContainerActive ? 'On' : 'Off'}</button>
+            ${isBlueprint ? `<span style="font-size: var(--font-size-labels); display: inline-flex; align-items: center;" title="Plan">📐</span>` : ''}
+            <input type="text" id="powerContainerName_${pIdx}" value="${powerContainer.name && powerContainer.name !== 'New Power Container' ? powerContainer.name : ''}" placeholder="${isBlueprint ? 'New Plan' : 'New Container'}" style="font-weight: bold; font-size: var(--font-size-labels); width: 200px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; color: var(--text-main);" onclick="event.stopPropagation();" oninput="updatePowerContainerName(${pIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('container_name');">
+            <span class="secondary-text" style="font-weight: normal; font-size: var(--font-size-secondary);">(${summaryText})</span>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 12px;" onclick="event.stopPropagation();">
-            ${window.activePowerContext === 'blueprints' ? `
-              <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 2px 8px; font-size: 11px; color: var(--accent-success); display: flex; flex-direction: column; align-items: center; line-height: 1.1; margin-right: 8px;">
-                <strong>Check DC: ${10 + containerCost}</strong>
-                <span>Normal: ${containerCost * 4} hrs | Fast: ${containerCost * 10} min</span>
-              </div>
-            ` : ''}
+          <div style="display: flex; align-items: center; gap: 8px;" onclick="event.stopPropagation();">
+            ${isBlueprint ? `<label style="font-size: var(--font-size-labels); font-weight: 600; color: var(--text-muted); margin: 0; white-space: nowrap;">Plan cost:</label>` : ''}
             <span class="badge" id="powerCostBadge_${pIdx}" style="font-size: var(--font-size-labels); font-weight: normal;">${containerCost} PP</span>
             <button type="button" id="btnPowerCollapse_${pIdx}" class="btn" style="padding: 4px 8px;" onclick="togglePowerCollapse(${pIdx})" title="${powerContainer.collapsed ? 'Edit Power Container' : 'Save and Collapse'}">${powerContainer.collapsed ? 'Edit' : 'Save'}</button>
-            <button type="button" class="btn-delete-power" onclick="deletePowerContainer(${pIdx})" title="Delete Entire Container">Delete Container</button>
+            <button type="button" class="btn-delete-power" onclick="deletePowerContainer(${pIdx})" title="${isBlueprint ? 'Delete Entire Plan' : 'Delete Entire Container'}">${isBlueprint ? 'Delete Plan' : 'Delete Container'}</button>
           </div>
         </div>
 
         <div class="power-card-body">
+            ${isBlueprint ? `
+              <div class="blueprint-details-banner">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px;">
+                  <div class="blueprint-phase-card">
+                    <span class="blueprint-phase-header" style="color: var(--text-muted);">Design Phase (Knowledge)</span>
+                    <div class="blueprint-phase-dc" style="margin-top: 2px;"><strong>Check DC:</strong> <span style="color: var(--accent-primary); font-weight: bold;">DC ${10 + containerCost}</span></div>
+                    <div class="blueprint-phase-time"><strong>Design Time:</strong> ${containerCost} hour${containerCost === 1 ? '' : 's'}</div>
+                  </div>
+                  <div class="blueprint-phase-card">
+                    <span class="blueprint-phase-header" style="color: var(--accent-success);">Invention Construction (Craft)</span>
+                    <div class="blueprint-phase-dc" style="margin-top: 2px;"><strong>Construction DC:</strong> <span style="color: var(--accent-success); font-weight: bold;">DC ${10 + containerCost}</span></div>
+                    <div class="blueprint-phase-time"><strong>Construction Time:</strong> ${containerCost * 4} hours <span class="blueprint-phase-subtext">(Fast: ${containerCost * 10} min)</span></div>
+                  </div>
+                  <div class="blueprint-phase-card">
+                    <span class="blueprint-phase-header" style="color: #8b5cf6;">Ritual Performance (Arcana)</span>
+                    <div class="blueprint-phase-dc" style="margin-top: 2px;"><strong>Performance DC:</strong> <span style="color: #8b5cf6; font-weight: bold;">DC ${10 + containerCost}</span></div>
+                    <div class="blueprint-phase-time"><strong>Performance Time:</strong> ${containerCost * 10} min <span class="blueprint-phase-subtext">(+${containerCost} rnds to cast)</span></div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
             ${effectsHtml}
             <div style="margin-top: 16px; padding-top: 8px; border-top: 2px solid var(--border-color); display: flex; justify-content: flex-end;">
                 <button type="button" class="btn" onclick="addEffectToPower(${pIdx})">+ Add New Effect</button>
@@ -5293,9 +9512,27 @@ function buildPowersUI() {
       </div>
     `;
   }).join("");
+  } finally {
+    if (typeof window !== 'undefined') {
+      window.activePowerContext = prevContext;
+    }
+  }
+}
 
-  if (window.PowerHistoryManager) {
-    window.PowerHistoryManager.updateButtons();
+function buildPowersUI() {
+  const currentContext = (typeof window !== 'undefined' && window.activePowerContext === 'blueprints') ? 'blueprints' : 'powers';
+
+  // Always populate both containers so neither tab is ever stale or unrendered
+  renderPowersContainer("powersContainer", (typeof char !== 'undefined' && char.powers) ? char.powers : [], false);
+  if (typeof document !== 'undefined' && document.getElementById("blueprintsContainer")) {
+    renderPowersContainer("blueprintsContainer", (typeof char !== 'undefined' && char.blueprints) ? char.blueprints : [], true);
+  }
+
+  if (typeof window !== 'undefined') {
+    window.activePowerContext = currentContext;
+    if (window.PowerHistoryManager) {
+      window.PowerHistoryManager.updateButtons();
+    }
   }
 }
 
@@ -5316,7 +9553,54 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
   else if (effect.effectName === "Insubstantial") bCost = 10;
   else if (effect.effectName === "Comprehend") bCost = 2;
 
-  if (optChoice.includes("[") && optChoice.includes("pts")) {
+  let cleanName = optChoice.split(" [")[0].trim();
+  let coreName = cleanName.split(" (")[0].trim(); 
+  
+  if (["Immunity", "Super-Senses", "Enhanced Trait", "Super-Movement", "Movement", "Enhanced Movement", "Comprehend", "Features", "Feature"].includes(effect.effectName)) {
+      coreName = cleanName;
+  }
+
+  if (effect.subPowers.some(sub => sub.type === coreName || sub.name === cleanName || (sub.name && sub.name.split(" [")[0].trim() === cleanName))) {
+      let warningsDisabled = (localStorage.getItem("mm2e_disable_warnings") ?? localStorage.getItem("mm4e_disable_warnings")) === "true";
+      if (!warningsDisabled) {
+          alert(cleanName + " has already been added to this power. Increase its rank instead.");
+      }
+      return;
+  }
+
+  if (effect.effectName === "Immunity" && isOptionCoveredByExisting(effect, cleanName)) {
+      let warningsDisabled = (localStorage.getItem("mm2e_disable_warnings") ?? localStorage.getItem("mm4e_disable_warnings")) === "true";
+      if (!warningsDisabled) {
+          alert(cleanName + " is already covered by a broader Immunity option.");
+      }
+      return;
+  }
+
+  let inheritedModifiers = [];
+  if (effect.effectName === "Immunity") {
+      const subsets = getSubsetsForOption("Immunity", cleanName);
+      if (subsets.length > 0) {
+          effect.subPowers.forEach(sp => {
+              const spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+              if (subsets.includes(spClean) && sp.modifiers && sp.modifiers.length > 0) {
+                  sp.modifiers.forEach(m => {
+                      if (!inheritedModifiers.some(im => im.name === m.name)) {
+                          inheritedModifiers.push(m);
+                      }
+                  });
+              }
+          });
+          effect.subPowers = effect.subPowers.filter(sp => {
+              const spClean = (sp.name || sp.type || "").split(" [")[0].trim();
+              return !subsets.includes(spClean);
+          });
+      }
+  }
+
+  let isSenseType = cleanName.includes("Sense Type");
+  let senseCat = SENSE_TYPE_MAP[cleanName] || (isSenseType ? cleanName.replace("Sense Type", "").trim() : "Special");
+
+  if (optChoice.includes("[") && optChoice.includes("pt")) {
      const match = optChoice.match(/\[(\+?\d+)\+?\s*pts?(?:\/r)?\]/i) || optChoice.match(/\[(\+?\d+)\s*pt/i);
      if (match) {
          bCost = parseInt(match[1].replace('+', ''));
@@ -5326,30 +9610,6 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
              cType = "flat";
          }
      }
-     if (optChoice.includes("Microscopic") || optChoice.includes("Extended Sense")) {
-         bCost = 1; cType = "per_rank";
-     }
-  }
-
-  let cleanName = optChoice.split(" [")[0];
-  let coreName = cleanName.split(" (")[0]; 
-  
-  if (effect.effectName === "Immunity" || effect.effectName === "Super-Senses" || effect.effectName === "Enhanced Trait") {
-      coreName = cleanName;
-  } else {
-      if (cleanName.includes("Dimensional Travel")) coreName = "Dimensional Travel";
-      else if (cleanName.includes("Space Travel")) coreName = "Space Travel";
-      else if (cleanName.includes("Permeate")) coreName = "Permeate";
-      else if (cleanName.includes("Wall-Crawling")) coreName = "Wall-Crawling";
-      else if (cleanName.includes("Water-Walking")) coreName = "Water-Walking";
-  }
-
-  if (effect.subPowers.some(sub => sub.type === coreName || sub.name === cleanName || (sub.name && sub.name.split(" [")[0] === cleanName))) {
-      let warningsDisabled = (localStorage.getItem("mm2e_disable_warnings") ?? localStorage.getItem("mm4e_disable_warnings")) === "true";
-      if (!warningsDisabled) {
-          alert(coreName + " has already been added to this power. Increase its rank instead.");
-      }
-      return;
   }
 
   if (effect.effectName === "Immunity") {
@@ -5360,18 +9620,19 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
       cType = "per_rank";
       r = optChoice.includes("/r") ? 1 : ptsVal;
   } else if (effect.effectName === "Super-Senses") {
-      let ptsVal = 1;
-      const match = optChoice.match(/\[(\+?\d+)\+?\s*pts?(?:\/r)?\]/i) || optChoice.match(/\[(\+?\d+)\s*pt/i) || optChoice.match(/\[(\d+)\s*ranks?\]/i);
-      if (match) ptsVal = parseInt(match[1].replace('+', ''));
+      r = 1;
+  } else if (effect.effectName === "Super-Movement" || effect.effectName === "Movement" || effect.effectName === "Enhanced Movement") {
+      bCost = 2;
+      cType = optChoice.includes("flat") ? "flat" : "per_rank";
+      r = 1;
+  } else if (effect.effectName === "Comprehend") {
+      bCost = cleanName.includes("Objects") ? 4 : 2;
+      cType = cleanName.includes("Objects") ? "flat" : "per_rank";
+      r = 1;
+  } else if (effect.effectName === "Features" || effect.effectName === "Feature") {
       bCost = 1;
-      cType = "per_rank";
-      r = optChoice.includes("/r") ? 1 : ptsVal;
-  } else {
-      if (cleanName.includes("Dimensional Travel (1 other)") || cleanName.includes("Space Travel (Solar system)") || cleanName.includes("Wall-Crawling (Speed -1)") || cleanName.includes("Permeate (Speed 0)") || cleanName === "Swinging") r = 2;
-      if (cleanName.includes("Dimensional Travel (Related group)") || cleanName.includes("Space Travel (Interstellar)") || cleanName.includes("Permeate (Speed 1)") || cleanName.includes("Wall-Crawling (Full Speed)")) r = 4;
-      if (cleanName.includes("Dimensional Travel (Any)") || cleanName.includes("Space Travel (Intergalactic)") || cleanName.includes("Permeate (Normal Speed)") || cleanName === "Microscopic Vision") r = 6;
-      if (cleanName === "Microscopic Vision") r = 4; 
-      if (cleanName.includes("Water-Walking (Prone)")) r = 2;
+      cType = "flat";
+      r = 1;
   }
 
   effect.subPowers.push({
@@ -5381,13 +9642,18 @@ window.addOptionSubPower = function(pIdx, eIdx, selectId, isReduced = false) {
     baseCost: bCost,
     costType: cType,
     details: "",
-    modifiers: [],
-    isReduced: isReduced
+    modifiers: inheritedModifiers,
+    isReduced: isReduced,
+    isSenseType: isSenseType,
+    senseCategory: senseCat
   });
 
   let subTotalRank = effect.subPowers.reduce((sum, sp) => sum + (parseInt(sp.rank) || 1), 0);
-  if ((parseInt(effect.rank) || 1) < subTotalRank) {
-      effect.rank = subTotalRank;
+  if (effect.effectName === "Super-Senses" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses") {
+      subTotalRank = char.calculateEffectCost(effect);
+  }
+  if ((parseInt(effect.rank) || 1) < subTotalRank || effect.effectName === "Super-Senses" || effect.effectName === "Immunity") {
+      effect.rank = subTotalRank || 1;
   }
 
   sel.selectedIndex = 0;
@@ -5402,9 +9668,14 @@ window.addSubPowerMeta = function(pIdx, eIdx, subIdx, selectId) {
   const metaName = sel.value;
   const effect = char.activePowers[pIdx].effects[eIdx];
 
-  if (effect && effect.subPowers && effect.subPowers[subIdx]) {
+    if (effect && effect.subPowers && effect.subPowers[subIdx]) {
     let sub = effect.subPowers[subIdx];
     if (!sub.modifiers) sub.modifiers = [];
+
+    if (sub.modifiers.some(m => m.name === metaName)) {
+        sel.selectedIndex = 0;
+        return;
+    }
     
     let mCost = 1;
     let mType = "flat";
@@ -5422,6 +9693,29 @@ window.addSubPowerMeta = function(pIdx, eIdx, subIdx, selectId) {
     if (metaName.includes("Counters Concealment (All)")) {
         sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Counters Concealment (One Descriptor)"));
     }
+    if (metaName.includes("Counters Concealment (One Descriptor)")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Counters Concealment (All)"));
+    }
+    if (metaName.includes("Counters Obscure (All)")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Counters Obscure (One Descriptor)"));
+    }
+    if (metaName.includes("Counters Obscure (One Descriptor)")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Counters Obscure (All)"));
+    }
+    if (metaName.includes("Affects Others Only")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Affects Others") || m.name.includes("Affects Others Only"));
+    } else if (metaName.includes("Affects Others")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Affects Others Only"));
+    }
+    if (metaName.includes("Redirect")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Redirect"));
+    }
+    if (metaName.includes("Sustained")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Concentration"));
+    }
+    if (metaName.includes("Concentration")) {
+        sub.modifiers = sub.modifiers.filter(m => !m.name.includes("Sustained"));
+    }
 
     const isSenseMeta = effect.effectName === "Super-Senses";
 
@@ -5434,14 +9728,15 @@ window.addSubPowerMeta = function(pIdx, eIdx, subIdx, selectId) {
       isMeta: isSenseMeta
     });
     
-    let addedMetaCore = metaName.split(" (")[0];
+    let addedMetaCore = metaName.split(" (")[0].split(" [")[0].trim();
     let subType = sub.type || sub.name;
     
-    if (subType.includes("Sense Type") && metaName.includes("(Sense Type)")) {
-        let mySenseCategory = subType.split(" - ")[0].replace(" Senses", "");
+    if (sub.isSenseType || subType.includes("Sense Type") || metaName.includes("(Sense Type)")) {
+        let mySenseCategory = sub.senseCategory || SENSE_TYPE_MAP[subType] || subType.replace(" Sense Type", "").trim();
         effect.subPowers.forEach(otherSub => {
             let oType = otherSub.type || otherSub.name;
-            if (!oType.includes("Sense Type") && SENSE_TYPE_MAP[oType] === mySenseCategory) {
+            let oCat = otherSub.senseCategory || SENSE_TYPE_MAP[oType];
+            if (!otherSub.isSenseType && !oType.includes("Sense Type") && oCat === mySenseCategory) {
                 if (otherSub.modifiers) {
                     otherSub.modifiers = otherSub.modifiers.filter(m => !m.name.startsWith(addedMetaCore));
                 }
@@ -5449,7 +9744,32 @@ window.addSubPowerMeta = function(pIdx, eIdx, subIdx, selectId) {
         });
     }
 
+    let cleanSubName = (sub.type || sub.name || "").split(" [")[0].trim();
+    let subsetNames = getSubsetsForOption(effect.effectName, cleanSubName);
+    if (subsetNames.length > 0) {
+        effect.subPowers.forEach(otherSub => {
+            let oClean = (otherSub.name || otherSub.type || "").split(" [")[0].trim();
+            if (subsetNames.includes(oClean) && otherSub.modifiers && otherSub.modifiers.length > 0) {
+                otherSub.modifiers = otherSub.modifiers.filter(m => {
+                    let mCore = m.name.split(" (")[0].split(" [")[0].trim();
+                    if (addedMetaCore === "Affects Others" || addedMetaCore === "Affects Others Only") {
+                        return mCore !== "Affects Others" && mCore !== "Affects Others Only";
+                    }
+                    if (addedMetaCore === "Redirect") {
+                        return mCore !== "Redirect";
+                    }
+                    return mCore !== addedMetaCore;
+                });
+            }
+        });
+    }
+
+    if (effect.effectName === "Super-Senses" || effect.effectName === "Senses" || effect.effectName === "Enhanced Senses") {
+        effect.rank = char.calculateEffectCost(effect);
+    }
+
     sel.selectedIndex = 0;
+    if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("add_submeta");
     buildPowersUI();
     refreshUI();
   }
@@ -5460,9 +9780,14 @@ window.removeSubPower = function(pIdx, eIdx, subIdx) {
     window.invalidateContainerDeclaredCost(pIdx);
     char.activePowers[pIdx].effects[eIdx].subPowers.splice(subIdx, 1);
     
-    let maxR = window.getMaxPowerRank(char.activePowers[pIdx].effects[eIdx]);
-    if (char.activePowers[pIdx].effects[eIdx].rank > maxR) {
-        char.activePowers[pIdx].effects[eIdx].rank = maxR;
+    if (char.activePowers[pIdx].effects[eIdx].effectName === "Immunity") {
+        let subTotalRank = (char.activePowers[pIdx].effects[eIdx].subPowers || []).reduce((sum, sp) => sum + (parseInt(sp.rank) || 1), 0);
+        char.activePowers[pIdx].effects[eIdx].rank = Math.max(1, subTotalRank);
+    } else {
+        let maxR = window.getMaxPowerRank(char.activePowers[pIdx].effects[eIdx]);
+        if (char.activePowers[pIdx].effects[eIdx].rank > maxR) {
+            char.activePowers[pIdx].effects[eIdx].rank = maxR;
+        }
     }
 
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_subpower");
@@ -5809,7 +10134,7 @@ function setupPowerHandlers() {
   btnAdd.textContent = "+ Add New Power Container"; 
   btnAdd.addEventListener("click", () => {
     char.activePowers.push({
-      name: "New Power Container",
+      name: "",
       collapsed: false,
       effects: [
           {
@@ -5837,9 +10162,11 @@ function setupPowerHandlers() {
 window.togglePowerCollapse = function(index) {
   if (char.activePowers[index]) {
     char.activePowers[index].collapsed = !char.activePowers[index].collapsed;
-    const card = document.getElementById(`powerCard_${index}`);
-    const icon = document.getElementById(`powerCollapseIcon_${index}`);
-    const btn = document.getElementById(`btnPowerCollapse_${index}`);
+    const containerId = (window.activePowerContext === 'blueprints') ? "blueprintsContainer" : "powersContainer";
+    const container = document.getElementById(containerId);
+    const card = container ? container.querySelector(`#powerCard_${index}`) : document.getElementById(`powerCard_${index}`);
+    const icon = container ? container.querySelector(`#powerCollapseIcon_${index}`) : document.getElementById(`powerCollapseIcon_${index}`);
+    const btn = container ? container.querySelector(`#btnPowerCollapse_${index}`) : document.getElementById(`btnPowerCollapse_${index}`);
     if (card && icon) {
       if (char.activePowers[index].collapsed) {
         card.classList.add('collapsed');
@@ -5908,6 +10235,9 @@ window.updateEffectDirect = function(pIdx, eIdx, value, skipHistory = false) {
         };
     }
 
+    const oldEffectName = effect.effectName;
+    const hasCustomName = window.isEffectCustomNameSet(effect);
+
     effect.effectName = value;
     effect.isProfileExplicitlySelected = false;
 
@@ -5917,19 +10247,72 @@ window.updateEffectDirect = function(pIdx, eIdx, value, skipHistory = false) {
         effect.subPowers = JSON.parse(JSON.stringify(cache.subPowers));
         effect.modifiers = JSON.parse(JSON.stringify(cache.modifiers));
         effect.rank = cache.rank;
-        effect.name = cache.name || value;
+        if (!hasCustomName) {
+            effect.name = value || "New Effect";
+            effect.hasCustomName = false;
+            effect.customName = "";
+        } else {
+            effect.name = effect.customName || effect.name;
+        }
     } else {
         effect.options = {}; 
         effect.subPowers = [];
         effect.modifiers = [];
         effect.rank = 1;
-        effect.name = value || "New Effect"; 
+        if (!hasCustomName) {
+            effect.name = value || "New Effect";
+            effect.hasCustomName = false;
+            effect.customName = "";
+        } else {
+            effect.name = effect.customName || effect.name;
+        }
+        if (value === "Boost") {
+          effect.baseCost = 1;
+          effect.options = { boostScope: "Single Trait", boostTarget: "" };
+        } 
+    }
+
+    // Update power container name if it hasn't been given a custom name yet
+    const powerContainer = char.activePowers[pIdx];
+    if (powerContainer) {
+      const containerHasCustom = powerContainer.hasCustomName || (powerContainer.name && powerContainer.name !== "New Power Container" && powerContainer.name !== oldEffectName && (powerContainer.effects.length > 1 || powerContainer.name !== (effect.customName || effect.name)));
+      if (!containerHasCustom || !powerContainer.name || powerContainer.name === "New Power Container" || powerContainer.name === oldEffectName) {
+        if (!hasCustomName) {
+          powerContainer.name = value || "";
+          powerContainer.hasCustomName = false;
+          const containerId = (window.activePowerContext === 'blueprints') ? "blueprintsContainer" : "powersContainer";
+          const container = document.getElementById(containerId);
+          const headerTitle = container ? container.querySelector(`#powerContainerName_${pIdx}`) : document.getElementById(`powerContainerName_${pIdx}`);
+          if (headerTitle) headerTitle.value = value || "";
+        } else {
+          powerContainer.name = effect.name;
+          const containerId = (window.activePowerContext === 'blueprints') ? "blueprintsContainer" : "powersContainer";
+          const container = document.getElementById(containerId);
+          const headerTitle = container ? container.querySelector(`#powerContainerName_${pIdx}`) : document.getElementById(`powerContainerName_${pIdx}`);
+          if (headerTitle) headerTitle.value = effect.name;
+        }
+      }
     }
     
     let maxR = window.getMaxPowerRank(effect);
     if (effect.rank > maxR) {
         effect.rank = maxR;
     }
+
+    // Sync any Boost targeting this effect so it seamlessly tracks the change
+    const allPowerContainers = char.activePowers || char.powers || [];
+    allPowerContainers.forEach(p => {
+      (p.effects || []).forEach(oe => {
+        if (oe.effectName === "Boost") {
+          const tgt = (oe.options && oe.options.boostTarget) || oe.boostTarget;
+          if (tgt === effect.id || tgt === oldEffectName || (oldEffectName && tgt === oldEffectName)) {
+            oe.boostTarget = effect.id;
+            if (!oe.options) oe.options = {};
+            oe.options.boostTarget = effect.id;
+          }
+        }
+      });
+    });
 
     buildPowersUI();
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("update_effect");
@@ -5993,6 +10376,22 @@ window.deletePowerContainer = function(index) {
             return;
         }
     }
+    const deletedEffs = container.effects || [];
+    const allPowerContainers = char.activePowers || char.powers || [];
+    allPowerContainers.forEach(p => {
+      if (p !== container) {
+        (p.effects || []).forEach(oe => {
+          if (oe.effectName === "Boost") {
+            const tgt = (oe.options && oe.options.boostTarget) || oe.boostTarget;
+            if (tgt === container.name || deletedEffs.some(de => de.id === tgt || de.name === tgt || de.effectName === tgt)) {
+              oe.boostTarget = "";
+              if (!oe.options) oe.options = {};
+              oe.options.boostTarget = "";
+            }
+          }
+        });
+      }
+    });
     char.activePowers.splice(index, 1);
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("delete_container");
     buildPowersUI();
@@ -6003,6 +10402,22 @@ window.deletePowerContainer = function(index) {
 window.deleteEffect = function(pIdx, eIdx) {
     if (char.activePowers[pIdx] && char.activePowers[pIdx].effects) {
         window.invalidateContainerDeclaredCost(pIdx);
+        const deletedEff = char.activePowers[pIdx].effects[eIdx];
+        if (deletedEff) {
+          const allPowerContainers = char.activePowers || char.powers || [];
+          allPowerContainers.forEach(p => {
+            (p.effects || []).forEach(oe => {
+              if (oe.effectName === "Boost") {
+                const tgt = (oe.options && oe.options.boostTarget) || oe.boostTarget;
+                if (tgt === deletedEff.id || tgt === deletedEff.name || tgt === deletedEff.effectName) {
+                  oe.boostTarget = "";
+                  if (!oe.options) oe.options = {};
+                  oe.options.boostTarget = "";
+                }
+              }
+            });
+          });
+        }
         char.activePowers[pIdx].effects.splice(eIdx, 1);
         if (char.activePowers[pIdx].effects.length === 0) {
             char.activePowers.splice(pIdx, 1);
@@ -6083,17 +10498,263 @@ window.removeModifier = function(pIdx, eIdx, modIdx) {
    CONTAINER POWERS (BATTLE FORM / ALTERNATE FORM / CONTAINER)
    ========================================================================== */
 
-window.toggleContainerFormActive = function(pIdx, eIdx) {
-  if (char.activePowers && char.activePowers[pIdx] && char.activePowers[pIdx].effects && char.activePowers[pIdx].effects[eIdx]) {
-    const effect = char.activePowers[pIdx].effects[eIdx];
-    effect.formActive = effect.formActive === false ? true : false;
-    if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("toggle_form_active");
-    buildPowersUI();
-    refreshUI();
-    if (typeof showToast === 'function') {
-      showToast(effect.formActive ? "Form activated: contained traits applied." : "Form deactivated: base traits restored.", "info");
+window.getLinkedEffectChain = function(startEffect) {
+  const visited = new Set();
+  if (!startEffect || !char) return visited;
+
+  const queue = [startEffect];
+  visited.add(startEffect);
+
+  const allEffects = [];
+  const effectToContainer = new Map();
+  const powerList = char.activePowers || char.powers || [];
+  powerList.forEach((c, pi) => {
+    (c.effects || []).forEach((e, ei) => {
+      allEffects.push({ effect: e, pIdx: pi, eIdx: ei, container: c });
+      effectToContainer.set(e, { pIdx: pi, eIdx: ei, container: c });
+    });
+  });
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const currMeta = effectToContainer.get(current);
+    if (!currMeta) continue;
+
+    if (current.linkedTo === "previous" && currMeta.eIdx > 0) {
+      const prevEff = currMeta.container.effects[currMeta.eIdx - 1];
+      if (prevEff && !visited.has(prevEff)) {
+        visited.add(prevEff);
+        queue.push(prevEff);
+      }
+    } else if (current.linkedTo && current.linkedTo !== "previous") {
+      const targetFound = allEffects.find(item => item.effect.id === current.linkedTo);
+      if (targetFound && !visited.has(targetFound.effect)) {
+        visited.add(targetFound.effect);
+        queue.push(targetFound.effect);
+      }
+    }
+
+    allEffects.forEach(item => {
+      if (visited.has(item.effect)) return;
+      if (item.effect.linkedTo === current.id) {
+        visited.add(item.effect);
+        queue.push(item.effect);
+      } else if (item.container === currMeta.container && item.eIdx === currMeta.eIdx + 1 && item.effect.linkedTo === "previous") {
+        visited.add(item.effect);
+        queue.push(item.effect);
+      }
+    });
+  }
+
+  return visited;
+};
+
+window.togglePowerContainerActive = function(pIdx) {
+  const powerList = char.activePowers || char.powers;
+  if (!powerList || !powerList[pIdx]) return;
+  const container = powerList[pIdx];
+
+  const isCurrentlyActive = container.active !== false && (Array.isArray(container.effects) && container.effects.some(e => e.active !== false));
+  const newActive = !isCurrentlyActive;
+  container.active = newActive;
+
+  if (Array.isArray(container.effects)) {
+    if (!newActive) {
+      // Switching off a power container turns off all its contained effects!
+      container.effects.forEach(eff => {
+        eff.active = false;
+        if (eff.formActive !== undefined) eff.formActive = false;
+        const chain = window.getLinkedEffectChain(eff);
+        chain.forEach(oe => {
+          oe.active = false;
+          if (oe.formActive !== undefined) oe.formActive = false;
+        });
+      });
+    } else {
+      // Switching on a power container restores its active effects
+      if (container.containerType === "array") {
+        const hasDummyRoot = container.effects[0] && (container.effects[0].effectName === "Array" || container.effects[0].effectName === "Container");
+        let targetIdx = container.effects.findIndex((e, i) => i > 0 && e.isDefaultPower);
+        if (targetIdx === -1 && hasDummyRoot && container.effects.length > 1) targetIdx = 1;
+        container.effects.forEach((eff, i) => {
+          if (hasDummyRoot) {
+            eff.active = (i === 0 || i === targetIdx);
+          } else {
+            eff.active = (eff.association !== "alternate");
+          }
+          if (eff.formActive !== undefined) eff.formActive = eff.active;
+        });
+      } else {
+        container.effects.forEach(eff => {
+          eff.active = (eff.association !== "alternate");
+          if (eff.formActive !== undefined) eff.formActive = true;
+        });
+      }
     }
   }
+
+  if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("toggle_power_container_active");
+  buildPowersUI();
+  refreshUI();
+  if (typeof showToast === 'function') {
+    showToast(newActive ? `${container.name || 'Container'} is now On.` : `${container.name || 'Container'} is now Off.`, "info");
+  }
+};
+
+window.toggleEffectActive = function(pIdx, eIdx) {
+  const powerList = char.activePowers || char.powers;
+  if (!powerList || !powerList[pIdx] || !powerList[pIdx].effects || !powerList[pIdx].effects[eIdx]) return;
+  const container = powerList[pIdx];
+  const effect = container.effects[eIdx];
+  const newActive = effect.active === false ? true : false;
+
+  // Check if this effect represents the container root (dummy Array or Container effect)
+  const isContainerRoot = (effect.effectName === "Array" || effect.effectName === "Container");
+
+  if (isContainerRoot && !newActive) {
+    // Switching off the container root turns off all its contained effects!
+    container.active = false;
+    container.effects.forEach(eff => {
+      eff.active = false;
+      if (eff.formActive !== undefined) eff.formActive = false;
+      if (eff.effectName === "Boost") {
+        if (!eff.options) eff.options = {};
+        eff.options.boostActive = false;
+        eff.boostActive = false;
+      }
+      const chain = window.getLinkedEffectChain(eff);
+      chain.forEach(oe => {
+        oe.active = false;
+        if (oe.formActive !== undefined) oe.formActive = false;
+        if (oe.effectName === "Boost") {
+          if (!oe.options) oe.options = {};
+          oe.options.boostActive = false;
+          oe.boostActive = false;
+        }
+      });
+    });
+  } else if (isContainerRoot && newActive) {
+    // Switching on the container root turns on the container and its default/primary active power
+    container.active = true;
+    effect.active = true;
+    if (effect.effectName === "Boost") {
+      if (!effect.options) effect.options = {};
+      effect.options.boostActive = true;
+      effect.boostActive = true;
+    }
+    if (container.containerType === "array") {
+      let targetIdx = container.effects.findIndex((e, i) => i > 0 && e.isDefaultPower);
+      if (targetIdx === -1 && container.effects.length > 1) targetIdx = 1;
+      if (targetIdx > 0) {
+        container.effects[targetIdx].active = true;
+        if (container.effects[targetIdx].effectName === "Boost") {
+          if (!container.effects[targetIdx].options) container.effects[targetIdx].options = {};
+          container.effects[targetIdx].options.boostActive = true;
+          container.effects[targetIdx].boostActive = true;
+        }
+      }
+    } else {
+      container.effects.forEach(eff => {
+        eff.active = (eff.association !== "alternate");
+        if (eff.formActive !== undefined) eff.formActive = true;
+        if (eff.effectName === "Boost") {
+          if (!eff.options) eff.options = {};
+          eff.options.boostActive = eff.active;
+          eff.boostActive = eff.active;
+        }
+      });
+    }
+  } else {
+    // Standard effect toggle
+    const chain = window.getLinkedEffectChain(effect);
+    chain.forEach(eff => {
+      eff.active = newActive;
+      if (eff.formActive !== undefined) {
+        eff.formActive = newActive;
+      }
+      if (eff.effectName === "Boost") {
+        if (!eff.options) eff.options = {};
+        eff.options.boostActive = newActive;
+        eff.boostActive = newActive;
+      }
+    });
+
+    if (newActive) {
+      container.active = true;
+      if (container.effects[0] && (container.effects[0].effectName === "Array" || container.effects[0].effectName === "Container")) {
+        container.effects[0].active = true;
+      }
+    } else {
+      // If all actual effects in container are now off, mark container inactive and turn off container root
+      const anyActive = container.effects.some((e, i) => i !== eIdx && e.active && e.effectName !== "Array" && e.effectName !== "Container");
+      if (!anyActive) {
+        container.active = false;
+        if (container.effects[0] && (container.effects[0].effectName === "Array" || container.effects[0].effectName === "Container")) {
+          container.effects[0].active = false;
+        }
+      }
+    }
+
+    // Array mutual exclusion rule
+    if (newActive && effect.association === 'alternate') {
+      container.effects.forEach((otherEff, otherIdx) => {
+        if (otherIdx !== eIdx && !chain.has(otherEff) && otherEff.effectName !== "Array") {
+          if (otherEff.association === 'alternate' || otherEff.association === 'primary') {
+            const otherChain = window.getLinkedEffectChain(otherEff);
+            otherChain.forEach(oe => {
+              oe.active = false;
+              if (oe.formActive !== undefined) oe.formActive = false;
+              if (oe.effectName === "Boost") {
+                if (!oe.options) oe.options = {};
+                oe.options.boostActive = false;
+                oe.boostActive = false;
+              }
+            });
+          }
+        }
+      });
+    } else if (newActive && effect.association === 'primary' && effect.effectName !== "Array") {
+      container.effects.forEach((otherEff, otherIdx) => {
+        if (otherIdx !== eIdx && !chain.has(otherEff)) {
+          if (otherEff.association === 'alternate') {
+            const otherChain = window.getLinkedEffectChain(otherEff);
+            otherChain.forEach(oe => {
+              oe.active = false;
+              if (oe.formActive !== undefined) oe.formActive = false;
+            });
+          }
+        }
+      });
+    }
+  }
+
+  if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("toggle_effect_active");
+  buildPowersUI();
+  refreshUI();
+  if (typeof showToast === 'function') {
+    const name = effect.name || effect.effectName || "Effect";
+    showToast(newActive ? `${name} is now On.` : `${name} is now Off.`, "info");
+  }
+};
+
+window.updateEffectCustomName = function(pIdx, eIdx, val) {
+  const powerList = char.activePowers || char.powers;
+  if (!powerList || !powerList[pIdx] || !powerList[pIdx].effects || !powerList[pIdx].effects[eIdx]) return;
+  const eff = powerList[pIdx].effects[eIdx];
+  const trimmed = (val || "").trim();
+  if (trimmed === "" || trimmed === eff.effectName) {
+    eff.hasCustomName = false;
+    eff.customName = "";
+    eff.name = eff.effectName || "New Effect";
+  } else {
+    eff.hasCustomName = true;
+    eff.customName = trimmed;
+    eff.name = trimmed;
+  }
+};
+
+window.toggleContainerFormActive = function(pIdx, eIdx) {
+  window.toggleEffectActive(pIdx, eIdx);
 };
 
 window.addContainedPowerToEffect = function(pIdx, eIdx, selectElemId) {
@@ -6450,7 +11111,7 @@ function buildEquipmentUI() {
                         </div>
                         <button type="button" class="btn-delete-power" onclick="deleteEquipment('vehicle', ${idx})">✕</button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted);">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: var(--font-size-secondary); color: var(--text-muted);">
                         <div style="display: flex; align-items: center; gap: 4px;">
                             <span style="font-weight: 600;">Size:</span>
                             <div class="stepper-group" style="height: 24px; min-width: 70px;">
@@ -6516,7 +11177,7 @@ function buildEquipmentUI() {
                         </div>
                         <button type="button" class="btn-delete-power" onclick="deleteEquipment('hq', ${idx})">✕</button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted);">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: var(--font-size-secondary); color: var(--text-muted);">
                         <div style="display: flex; align-items: center; gap: 4px;">
                             <span style="font-weight: 600;">Size:</span>
                             <div class="stepper-group" style="height: 24px; min-width: 70px;">
@@ -6586,10 +11247,70 @@ window.applyEquipmentTemplate = function(type, idx, templateName) {
     buildEquipmentUI();
 };
 
+function getGenericCompanionNameByType(type, idx = 1) {
+  const t = (type || "").toLowerCase().replace(/[-\s]/g, "_");
+  switch (t) {
+    case "metamorph":
+    case "alternate_form":
+    case "alt_form":
+    case "form":
+      return `Alternate form #${idx}`;
+    case "mecha":
+      return `Mecha form #${idx}`;
+    case "sidekick":
+      return `Sidekick #${idx}`;
+    case "minion":
+      return `Minion #${idx}`;
+    case "summon":
+      return `Summoned creature #${idx}`;
+    case "duplicate":
+      return `Duplicate #${idx}`;
+    case "vehicle":
+      return `Vehicle #${idx}`;
+    case "headquarters":
+    case "base":
+      return `Headquarters #${idx}`;
+    case "equipment":
+    case "device":
+      return `Equipment #${idx}`;
+    default:
+      return `Companion #${idx}`;
+  }
+}
+window.getGenericCompanionNameByType = getGenericCompanionNameByType;
+
+function getGenericCompanionName(comp, rootHero) {
+  if (!comp) return "Companion #1";
+  const type = comp.type || "sidekick";
+  const heroRoot = rootHero || window.primaryHero || char;
+  const companions = heroRoot?.companions || [];
+  const compsOfType = companions.filter(c => c.type === type);
+  const idx = (compsOfType.indexOf(comp) + 1) || 1;
+  return getGenericCompanionNameByType(type, idx);
+}
+window.getGenericCompanionName = getGenericCompanionName;
+
 function populateUIFromCharacter() {
-  if (document.getElementById("heroNameInput")) document.getElementById("heroNameInput").value = char.name || "New Hero";
+  if (document.getElementById("heroNameInput")) {
+    const isComp = !!window.activeCompanionId && !!window.primaryHero;
+    const nameEl = document.getElementById("heroNameInput");
+    if (isComp) {
+      const comp = (window.primaryHero.companions || []).find(c => c.id === window.activeCompanionId);
+      const placeholderText = comp ? getGenericCompanionName(comp, window.primaryHero) : "Companion / Form Name";
+      nameEl.placeholder = placeholderText;
+      nameEl.value = (char.name && char.name !== placeholderText) ? char.name : "";
+    } else {
+      nameEl.placeholder = "New Hero";
+      nameEl.value = (char.name && char.name !== "New Hero") ? char.name : "";
+    }
+  }
   if (document.getElementById("playerNameInput")) document.getElementById("playerNameInput").value = char.playerName || "";
   if (document.getElementById("heroPLInput")) document.getElementById("heroPLInput").value = char.powerLevel || 10;
+  if (document.getElementById("heroPointsInput")) {
+    const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+    document.getElementById("heroPointsInput").value = (typeof char.heroPoints === "number") ? char.heroPoints : defaultHP;
+    if (typeof window.updateHeroPointsLockUI === "function") window.updateHeroPointsLockUI();
+  }
   if (document.getElementById("heroSizeInput")) document.getElementById("heroSizeInput").value = char.sizeCategory || "Medium";
   if (document.getElementById("heroMassInput")) document.getElementById("heroMassInput").value = char.massRank !== undefined ? char.massRank : 3;
   if (document.getElementById("inputATK")) document.getElementById("inputATK").value = char.combat ? (char.combat.ATK || 0) : 0;
@@ -6610,10 +11331,12 @@ function populateUIFromCharacter() {
       const input = document.getElementById(`input_${k}`);
       const dec = document.getElementById(`dec_${k}`);
       const inc = document.getElementById(`inc_${k}`);
+      const rollBtn = document.getElementById(`btnRollAbil_${k}`);
       if (chk) chk.checked = !v;
       if (input) input.disabled = v;
       if (dec) dec.disabled = v;
       if (inc) inc.disabled = v;
+      if (rollBtn) rollBtn.disabled = v;
     }
   }
 
@@ -6625,6 +11348,25 @@ function populateUIFromCharacter() {
   if (document.getElementById("bgComplications")) document.getElementById("bgComplications").value = char.complications || "";
   if (document.getElementById("bgHistory")) document.getElementById("bgHistory").value = char.history || "";
 
+  if (document.getElementById("toggleEnhancedTraitBoost")) {
+    document.getElementById("toggleEnhancedTraitBoost").checked = (char.houseRules && char.houseRules.enhancedTraitBoostsEffects) || (localStorage.getItem("mm2e_houserule_enhanced_trait_boost") === "true");
+  }
+  if (document.getElementById("toggleAltFormVariablePL")) {
+    document.getElementById("toggleAltFormVariablePL").checked = (char.houseRules && char.houseRules.allowAltFormVariablePL) || (localStorage.getItem("mm2e_houserule_alt_form_variable_pl") === "true");
+  }
+  if (document.getElementById("toggleBoostAltersRanks")) {
+    const isBoostAlters = (char.houseRules && char.houseRules.boostAltersRanks) || (localStorage.getItem("mm2e_houserule_boost_alters_ranks") === "true");
+    document.getElementById("toggleBoostAltersRanks").checked = isBoostAlters;
+    if (!char.houseRules) char.houseRules = {};
+    if (isBoostAlters) char.houseRules.boostAltersRanks = true;
+  }
+  if (document.getElementById("toggleEnableLegacyCoreModifiers")) {
+    document.getElementById("toggleEnableLegacyCoreModifiers").checked = (char.houseRules && char.houseRules.enableLegacyCoreModifiers) || (localStorage.getItem("mm2e_houserule_enable_legacy_modifiers") === "true");
+  }
+  if (document.getElementById("toggleDisablePerceptionRange")) {
+    document.getElementById("toggleDisablePerceptionRange").checked = (char.houseRules && char.houseRules.disablePerceptionRange) || (localStorage.getItem("mm2e_houserule_disable_perception_range") === "true");
+  }
+
   buildSkillsUI();
   buildAdvantagesUI();
   buildPowersUI();
@@ -6635,18 +11377,36 @@ function populateUIFromCharacter() {
 function applyLoadedCharacter(loaded) {
   if (!loaded) return;
   char.deserialize(loaded);
+  window.activePowerContext = 'powers';
+
+  // Switch to basics tab so the user begins on the loaded hero's main sheet
+  const basicsTabBtn = (typeof document !== 'undefined' && typeof document.querySelector === 'function')
+    ? document.querySelector('.tab-btn[data-tab="tab-basics"]')
+    : null;
+  if (basicsTabBtn && typeof basicsTabBtn.click === 'function') {
+    basicsTabBtn.click();
+  }
+
   populateUIFromCharacter();
 }
 
 function refreshUI() {
   if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
 
-  document.getElementById("lblHeroName").textContent = char.name;
-  document.getElementById("lblPL").textContent = char.powerLevel;
+  const lblName = document.getElementById("lblHeroName");
+  if (lblName) {
+    const isComp = !!window.activeCompanionId && !!window.primaryHero;
+    const comp = isComp ? (window.primaryHero.companions || []).find(c => c.id === window.activeCompanionId) : null;
+    const placeholderText = comp ? getGenericCompanionName(comp, window.primaryHero) : (isComp ? "Companion" : "New Hero");
+    lblName.textContent = (char.name && char.name.trim()) ? char.name : placeholderText;
+  }
+  const lblPL = document.getElementById("lblPL");
+  if (lblPL) lblPL.textContent = char.powerLevel;
 
   const massRank = char.massRank !== null ? char.massRank : 3;
   const massLbs = typeof CharacterModel !== 'undefined' ? CharacterModel.getProgressionValue(massRank) * 5 : 200;
-  document.getElementById("lblHeroMassVal").textContent = typeof CharacterModel !== 'undefined' ? `(${CharacterModel.formatWeight(massLbs)})` : "";
+  const lblMass = document.getElementById("lblHeroMassVal");
+  if (lblMass) lblMass.textContent = typeof CharacterModel !== 'undefined' ? `(${CharacterModel.formatWeight(massLbs)})` : "";
 
   const unit = char.pointUnit || (char.isMecha ? "MP" : "PP");
 
@@ -6819,7 +11579,7 @@ function refreshUI() {
       const isEnhanced = (char.enhancedTraits && char.enhancedTraits.feats && char.enhancedTraits.feats[item.name]) > 0;
       const clickFn = window.showFeatInfo ? `window.showFeatInfo('${baseName}')` : `window.showAdvantageInfo('${baseName}')`;
       const enhBadge = isEnhanced ? `<span style="color:#10b981; font-weight: bold; margin-left: 2px;" title="Enhanced Trait">▲</span>` : '';
-      return `<span class="skill-adv-tag active-adv-tag" style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; padding: 2px 6px;" onclick="${clickFn}" title="${isEnhanced ? 'Enhanced Feat' : 'View description'}">
+      return `<span class="skill-adv-tag active-adv-tag" style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;" onclick="${clickFn}" title="${isEnhanced ? 'Enhanced Feat' : 'View description'}">
           ${item.name}${rankText}${enhBadge}
         </span>`;
     }).join(" ");
@@ -6843,6 +11603,91 @@ function refreshUI() {
     const enhAtkStr = enhAtk > 0 ? ` + Enhanced ${enhAtk}` : "";
     const enhTag = enhAtk > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced ATK +${enhAtk}]</span>` : "";
     elRangedBreakdown.innerHTML = `(ATK ${baseAtk}${enhAtkStr}${featBonusStr})` + enhTag + generateCombatTags(["Attack Focus", "Attack Focus (Ranged)", "Attack Specialization", "Favored Environment", "Favored Opponent", "Accurate Attack", "All-Out Attack", "Power Attack", "Precise Shot", "Sneak Attack"]);
+  }
+
+  const attacksContainer = document.getElementById("attacksListContainer");
+  if (attacksContainer) {
+    const meleeBonus = derived.meleeAttack !== undefined ? derived.meleeAttack : atk;
+    const rangedBonus = derived.rangedAttack !== undefined ? derived.rangedAttack : atk;
+    const meleeBreakdownStr = `(ATK ${baseAtk}${enhAtk > 0 ? ` + Enh ${enhAtk}` : ''}${meleeAtkFeat > 0 ? ` + Feat ${meleeAtkFeat}` : ''})`;
+    const rangedBreakdownStr = `(ATK ${baseAtk}${enhAtk > 0 ? ` + Enh ${enhAtk}` : ''}${rangedAtkFeat > 0 ? ` + Feat ${rangedAtkFeat}` : ''})`;
+    const strRank = char.getAbilityRank("STR");
+    const unarmedDamage = strRank === null ? 0 : strRank;
+    const unarmedDC = 15 + unarmedDamage;
+
+    const flurryFeatRank = (char.effectiveFeats && char.effectiveFeats["(Attack) Flurry"]) || (char.feats && char.feats["(Attack) Flurry"]) || 0;
+    let flurryStats = null;
+    if (flurryFeatRank > 0 && window.calculateFlurryStats) {
+      flurryStats = window.calculateFlurryStats(flurryFeatRank, char.featDetails ? char.featDetails["(Attack) Flurry"] : null);
+    }
+    const makeFlurryTag = (modeName) => {
+      if (!flurryStats) return "";
+      const matches = flurryStats.forms.some(f => {
+        const lowerF = f.toLowerCase();
+        const lowerM = modeName.toLowerCase();
+        return lowerM.includes(lowerF) || lowerF.includes(lowerM) || lowerF.includes("melee") || (lowerM === "unarmed" && lowerF.includes("unarmed"));
+      });
+      if (!matches) return "";
+      return ` <span class="skill-adv-tag active-adv-tag" style="background: rgba(139, 92, 246, 0.15); border-color: #8b5cf6; color: #8b5cf6; font-weight: 600; padding: 1px 5px;" title="Flurry: -2 Atk, +1 dmg per ${flurryStats.interval} exceeding Defense (max +${flurryStats.maxBonus})">[Flurry: –2 Atk, +1/${flurryStats.interval}&gt;Def, max +${flurryStats.maxBonus}]</span>`;
+    };
+
+    let attacksHtml = `
+      <div class="list-row">
+        <button type="button" class="row-title-btn" onclick="window.rollAttackCheck('Unarmed')" title="Roll Unarmed Attack Check">
+          <span style="font-size: var(--font-size-labels);">🎲</span>
+          <span class="row-title">Unarmed</span>
+        </button>
+        <div style="width: 110px; min-width: 110px; text-align: center; font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary);">${meleeBonus >= 0 ? '+' : ''}${meleeBonus}</div>
+        <div class="row-adjustments">${meleeBreakdownStr}${makeFlurryTag("Unarmed")}</div>
+        <div class="defense-total-col" style="width: 110px; min-width: 110px; text-align: right;">DC ${unarmedDC} / Staged</div>
+      </div>
+      <div class="list-row">
+        <button type="button" class="row-title-btn" onclick="window.rollAttackCheck('Melee Attack')" title="Roll Melee Attack Check">
+          <span style="font-size: var(--font-size-labels);">🎲</span>
+          <span class="row-title">Melee Attack</span>
+        </button>
+        <div style="width: 110px; min-width: 110px; text-align: center; font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary);">${meleeBonus >= 0 ? '+' : ''}${meleeBonus}</div>
+        <div class="row-adjustments">${meleeBreakdownStr}${makeFlurryTag("Melee Attack")}</div>
+        <div class="defense-total-col" style="width: 110px; min-width: 110px; text-align: right;">—</div>
+      </div>
+      <div class="list-row">
+        <button type="button" class="row-title-btn" onclick="window.rollAttackCheck('Ranged Attack')" title="Roll Ranged Attack Check">
+          <span style="font-size: var(--font-size-labels);">🎲</span>
+          <span class="row-title">Ranged Attack</span>
+        </button>
+        <div style="width: 110px; min-width: 110px; text-align: center; font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary);">${rangedBonus >= 0 ? '+' : ''}${rangedBonus}</div>
+        <div class="row-adjustments">${rangedBreakdownStr}</div>
+        <div class="defense-total-col" style="width: 110px; min-width: 110px; text-align: right;">—</div>
+      </div>
+    `;
+
+    const allPowers = char.activePowers || char.powers || [];
+    allPowers.forEach((power, pIdx) => {
+      (power.effects || []).forEach((eff, eIdx) => {
+        const effName = eff.effectName || "";
+        const isDmgEffect = effName === "Damage" || effName === "Blast" || effName === "Strike" || effName === "Corrosion" || effName === "Disintegrate" || effName === "Hellfire" || effName === "Drain" || effName === "Snare" || effName === "Stun";
+        if (isDmgEffect || eff.isAttack) {
+          const isRanged = effName === "Blast" || effName === "Snare" || eff.range === "Ranged";
+          const bonus = isRanged ? rangedBonus : meleeBonus;
+          const rank = parseInt(eff.rank) || 0;
+          const dc = 15 + rank;
+          const name = (eff.name && eff.name !== "New Effect") ? eff.name : (power.name || effName);
+          attacksHtml += `
+            <div class="list-row">
+              <button type="button" class="row-title-btn" onclick="window.rollEffectCheck(${pIdx}, ${eIdx})" title="Roll ${name}">
+                <span style="font-size: var(--font-size-labels);">🎲</span>
+                <span class="row-title" title="${effName}">${name}</span>
+              </button>
+              <div style="width: 110px; min-width: 110px; text-align: center; font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary);">${bonus >= 0 ? '+' : ''}${bonus}</div>
+              <div class="row-adjustments">${isRanged ? rangedBreakdownStr : meleeBreakdownStr} [Rank ${rank}]${!isRanged ? makeFlurryTag(name) : ''}</div>
+              <div class="defense-total-col" style="width: 110px; min-width: 110px; text-align: right;">DC ${dc} / Staged</div>
+            </div>
+          `;
+        }
+      });
+    });
+
+    attacksContainer.innerHTML = attacksHtml;
   }
 
   const elDefClass = document.getElementById("resDefenseClass");
@@ -6971,7 +11816,8 @@ function refreshUI() {
   const elAdjRangedDef = document.getElementById("adjRangedDef");
   if (elAdjRangedDef) elAdjRangedDef.innerHTML = `DEF (${defRank}) [No Dodge bonus]`;
 
-  document.getElementById("resInitiative").textContent = derived.initiative;
+  const elResInit = document.getElementById("resInitiative");
+  if (elResInit) elResInit.textContent = derived.initiative;
   const elAdjInit = document.getElementById("adjInitiative");
   if (elAdjInit) {
     const enhDexTag = enhDex > 0 ? `&nbsp;<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;">[Enhanced DEX +${enhDex}]</span>` : "";
@@ -6980,30 +11826,40 @@ function refreshUI() {
 
   if (typeof CharacterModel !== 'undefined') {
     const groundDist = CharacterModel.getSpeedDistance(derived.groundSpeed);
-    document.getElementById("resGroundSpeed").textContent = derived.groundSpeed ? `Rank ${derived.groundSpeed} (${groundDist})` : `(${groundDist})`;
+    const elGround = document.getElementById("resGroundSpeed");
+    if (elGround) elGround.textContent = derived.groundSpeed ? `Rank ${derived.groundSpeed} (${groundDist})` : `(${groundDist})`;
     
-    if (derived.airSpeed !== null && derived.airSpeed > 0) {
-      const airDist = CharacterModel.getSpeedDistance(derived.airSpeed);
-      document.getElementById("resAirSpeed").textContent = `Rank ${derived.airSpeed} (${airDist})`;
-    } else {
-      document.getElementById("resAirSpeed").textContent = "—";
+    const elAir = document.getElementById("resAirSpeed");
+    if (elAir) {
+      if (derived.airSpeed !== null && derived.airSpeed > 0) {
+        const airDist = CharacterModel.getSpeedDistance(derived.airSpeed);
+        elAir.textContent = `Rank ${derived.airSpeed} (${airDist})`;
+      } else {
+        elAir.textContent = "—";
+      }
     }
 
-    if (derived.waterSpeed !== null && derived.waterSpeed > 0) {
-      const waterDist = CharacterModel.getSpeedDistance(derived.waterSpeed);
-      document.getElementById("resWaterSpeed").textContent = `Rank ${derived.waterSpeed} (${waterDist})`;
-    } else {
-      document.getElementById("resWaterSpeed").textContent = "—";
+    const elWater = document.getElementById("resWaterSpeed");
+    if (elWater) {
+      if (derived.waterSpeed !== null && derived.waterSpeed > 0) {
+        const waterDist = CharacterModel.getSpeedDistance(derived.waterSpeed);
+        elWater.textContent = `Rank ${derived.waterSpeed} (${waterDist})`;
+      } else {
+        elWater.textContent = "—";
+      }
     }
     
-    document.getElementById("resSpaceSpeed").textContent = "—";
+    const elSpace = document.getElementById("resSpaceSpeed");
+    if (elSpace) elSpace.textContent = "—";
     
     const strRank = char.getAbilityRank("STR");
     const totalLiftRank = (strRank === null ? -5 : strRank) + pMods.extraLifting;
     const liftDist = CharacterModel.getCarryingCapacity(totalLiftRank);
-    document.getElementById("resMaxLifting").textContent = `Rank ${totalLiftRank} (${liftDist})`;
+    const elLift = document.getElementById("resMaxLifting");
+    if (elLift) elLift.textContent = `Rank ${totalLiftRank} (${liftDist})`;
   }
-  document.getElementById("resSpacesReach").textContent = `${derived.spaces} / ${derived.reach}`;
+  const elSpaces = document.getElementById("resSpacesReach");
+  if (elSpaces) elSpaces.textContent = `${derived.spaces} / ${derived.reach}`;
 
   const combatAdvListContainer = document.getElementById("combatAdvList");
   let activeCombatAdvHTML = "";
@@ -7024,8 +11880,11 @@ function refreshUI() {
     activeCombatAdvHTML += `
       <div class="combat-conditional-row">
         <span class="combat-conditional-name">
-          ${cs.name}
-          <button type="button" class="btn-info-circle" onclick="showSkillInfo('${cs.name}')" title="View Skill Rules">?</button>
+          <button type="button" class="row-title-btn" onclick="window.rollSkillCheck('${cs.name}')" style="cursor: pointer; padding: 1px 4px; font-weight: bold;" title="Roll 1d20 + Skill Bonus">
+            <span>🎲</span>
+            <span>${cs.name}</span>
+          </button>
+          <button type="button" class="btn-info-circle" onclick="showSkillInfo('${cs.name}')" title="View Skill Rules" style="margin-left: 2px;">?</button>
         </span>
         <span class="combat-conditional-desc">${cs.action}</span>
       </div>
@@ -7047,7 +11906,7 @@ function refreshUI() {
             <div class="combat-conditional-row">
               <span class="combat-conditional-name">
                 ${featKey}${rankLabel}${detail}
-                <button type="button" class="btn-info-circle" onclick="window.showAdvantageInfo('${adv.name}')" title="View Feat Rules">?</button>
+                <button type="button" class="btn-info-circle" onclick="window.showAdvantageInfo('${adv.name.replace(/'/g, "\\'")}')" title="View Feat Rules" style="margin-left: 2px;">?</button>
               </span>
               <span class="combat-conditional-desc">${desc}</span>
             </div>
@@ -7057,7 +11916,9 @@ function refreshUI() {
     });
   }
 
-  combatAdvListContainer.innerHTML = activeCombatAdvHTML;
+  if (combatAdvListContainer) {
+    combatAdvListContainer.innerHTML = activeCombatAdvHTML;
+  }
 
   const abilityRelatedFeats = {
     "STR": [],
@@ -7092,8 +11953,13 @@ function refreshUI() {
         const effFeats = char.effectiveFeats || char.feats;
         const activeFeats = (abilityRelatedFeats[k] || []).filter(advName => (effFeats[advName] || 0) > 0);
         const tags = [];
-        if (enhVal > 0) {
-          tags.push(`<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;" title="Enhanced Trait">+${enhVal} Enhanced Trait</span>`);
+        const boostVal = (char.enhancedTraits && char.enhancedTraits.boostAbilities && char.enhancedTraits.boostAbilities[k]) ? char.enhancedTraits.boostAbilities[k] : 0;
+        const nonBoostEnh = enhVal - boostVal;
+        if (nonBoostEnh > 0) {
+          tags.push(`<span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600;" title="Enhanced Trait">+${nonBoostEnh} Enhanced Trait</span>`);
+        }
+        if (boostVal > 0) {
+          tags.push(`<span class="skill-adv-tag active-adv-tag" style="background: rgba(14, 165, 233, 0.15); border-color: #0ea5e9; color: #0ea5e9; font-weight: 600;" title="Active Boost Effect">+${boostVal} Boost</span>`);
         }
         if (activeFeats.length > 0) {
           activeFeats.forEach(advName => {
@@ -7168,17 +12034,20 @@ function showToast(message, type = "info", durationMs = 3500) {
   if (type === "success") icon = "✅";
   else if (type === "error") icon = "⚠️";
 
-  toast.innerHTML = `<span style="font-size:16px;">${icon}</span><span>${message}</span>`;
+  toast.innerHTML = `<span style="font-size: var(--font-size-labels);">${icon}</span><span>${message}</span>`;
   container.appendChild(toast);
 
-  requestAnimationFrame(() => {
+  const raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : ((fn) => setTimeout(fn, 16));
+  raf(() => {
     toast.classList.add("toast-visible");
   });
 
   setTimeout(() => {
     toast.classList.remove("toast-visible");
     toast.classList.add("toast-hiding");
-    setTimeout(() => toast.remove(), 300);
+    setTimeout(() => {
+      if (toast && typeof toast.remove === 'function') toast.remove();
+    }, 300);
   }, durationMs);
 }
 
@@ -7263,9 +12132,27 @@ const FolderStore = {
   }
 };
 
+window.openFirefoxSettings = function() {
+  let opened = false;
+  try {
+    const w = window.open("about:preferences#general", "_blank");
+    if (w) opened = true;
+  } catch (err) {
+    opened = false;
+  }
+  showToast(
+    opened
+      ? "Attempting to open Firefox Settings... If blocked by browser security, go to Menu button (☰) > Settings > Downloads."
+      : "Firefox blocked opening Settings automatically. Please go to Menu button (☰) > Settings > Downloads (or Tools > Settings > Downloads).",
+    opened ? "info" : "warning",
+    7000
+  );
+};
+
 /* ==========================================================================
    LOCAL FILE MANAGER (.mm2e) WITH FILE SYSTEM ACCESS API & FALLBACKS
    ========================================================================== */
+
 
 const FileManager = {
   currentFileHandle: null,
@@ -7480,26 +12367,49 @@ const FileManager = {
       if (modal && titleEl && bodyEl) {
         titleEl.textContent = "Folder Settings in Firefox";
         bodyEl.innerHTML = `
-          <div style="white-space: normal; line-height: 1.3; font-size: var(--font-size-controls);">
-            <p style="margin: 0 0 6px 0;">Firefox security restricts web pages from directly browsing or changing system folders.</p>
-            <div style="margin: 4px 0 6px 0; padding: 4px 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <div>
-                <span style="color: var(--text-muted); font-size: var(--font-size-secondary);">Firefox Address:</span>
-                <code style="font-weight: bold; color: var(--accent-primary); margin-left: 6px;">about:preferences</code>
-              </div>
-              <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-minor-controls); padding: 2px 8px;" onclick="navigator.clipboard.writeText('about:preferences').then(() => { this.textContent = '✓ Copied!'; setTimeout(() => this.textContent = '📋 Copy Address', 2000); })">📋 Copy Address</button>
+          <div style="white-space: normal; line-height: 1.4; font-size: var(--font-size-controls); display: flex; flex-direction: column; gap: 10px;">
+            <p style="margin: 0;">Firefox security restricts web pages from directly browsing or changing local computer folders.</p>
+            
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn" style="flex: 1; font-weight: bold; padding: 8px 12px; font-size: var(--font-size-labels); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="window.openFirefoxSettings()">
+                ⚙ Open Firefox Settings (Downloads)
+              </button>
             </div>
-            <ol style="margin: 0 0 6px 16px; padding: 0; display: flex; flex-direction: column; gap: 3px;">
-              <li>Open a new tab and go to <code>about:preferences</code>.</li>
-              <li>Under <strong>Downloads</strong>, check <em>"Always ask you where to save files"</em> (or click <strong>Browse...</strong> to set a default folder).</li>
-              <li>When saving in this app, click <strong>OK / Save File</strong> on Firefox's download prompt to choose any directory or filename.</li>
-            </ol>
-            <p style="margin: 0; color: var(--text-muted); font-size: var(--font-size-secondary);">Tip: Chromium browsers (Chrome, Edge) support direct folder selection without download prompts.</p>
+
+            <div style="padding: 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-weight: 600; font-size: var(--font-size-labels); color: var(--accent-primary);">
+                How to set your save folder in Firefox:
+              </div>
+              <ol style="margin: 0 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--font-size-secondary);">
+                <li>
+                  Click the button above to open Settings. If the button doesn't work, open Settings directly from Firefox's menu:
+                  <div style="margin: 4px 0; padding: 6px 10px; background: var(--bg-panel); border-radius: 4px; border: 1px solid var(--border-color); font-weight: 600;">
+                    👉 Menu button (☰) &gt; Settings &gt; Downloads<br>
+                    <span style="font-weight: normal; color: var(--text-muted); font-size: var(--font-size-fine-print);">(or Tools &gt; Settings &gt; Downloads from the top menu)</span>
+                  </div>
+                </li>
+                <li>Under <strong>Files and Applications &gt; Downloads</strong>, check <strong>"Always ask you where to save files"</strong> (or click <strong>Browse...</strong> to set your default folder).</li>
+                <li>When saving characters in this app, click <strong>OK / Save File</strong> on Firefox's download prompt to choose your save folder and filename.</li>
+              </ol>
+
+              <div style="border-top: 1px dashed var(--border-color); margin-top: 6px; padding-top: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span style="font-weight: 600; font-size: var(--font-size-fine-print); color: var(--text-muted);">Fallback: Manual "About:" Command</span>
+                  <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-fine-print); padding: 1px 6px;" onclick="navigator.clipboard.writeText('about:preferences#general').then(() => { this.textContent = '✓ Copied!'; setTimeout(() => this.textContent = '📋 Copy Address', 2000); })">📋 Copy Address</button>
+                </div>
+                <div style="font-family: ui-monospace, monospace; background: var(--bg-panel); padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-size: var(--font-size-fine-print);">
+                  <code style="font-weight: bold; color: var(--accent-primary); user-select: all;">about:preferences#general</code>
+                </div>
+                <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 3px;">Paste into a new tab's address bar as an alternate way to reach Firefox Settings.</div>
+              </div>
+            </div>
+
+            <p style="margin: 0; color: var(--text-muted); font-size: var(--font-size-secondary);">Tip: Chromium browsers (Chrome, Edge) support direct folder selection through the File System Access API without download prompts.</p>
           </div>
         `;
         modal.classList.add("active");
       } else {
-        showToast("Firefox manages save folders in Settings > Downloads.", "info");
+        showToast("Firefox manages save folders in Menu (☰) > Settings > Downloads.", "info");
       }
     }
   },
@@ -7642,7 +12552,7 @@ function updateCharacterSelectorUI() {
   const companions = heroRoot.companions || [];
 
   if (sel) {
-    let optionsHtml = `<option value="main">🦸 Main Hero: ${heroRoot.name || "Hero"} (PL ${heroRoot.powerLevel})</option>`;
+    let optionsHtml = `<option value="main">🦸 Main Hero: ${heroRoot.name || "New Hero"} (PL ${heroRoot.powerLevel})</option>`;
     
     if (companions.length > 0) {
       const typeLabels = {
@@ -7677,14 +12587,30 @@ function updateCharacterSelectorUI() {
             isMechaComp = tempModel.isMecha || (c.type === "mecha");
           }
           const unit = isMechaComp ? "MP" : "PP";
-          optionsHtml += `<option value="${c.id}">${c.name || "Unnamed"} (PL ${c.powerLevel} - ${spent}/${c.totalPointsAllowed} ${unit})</option>`;
+          const compName = (c.name && c.name.trim()) ? c.name : getGenericCompanionName(c, heroRoot);
+          optionsHtml += `<option value="${c.id}">${compName} (PL ${c.powerLevel} - ${spent}/${c.totalPointsAllowed} ${unit})</option>`;
         });
         optionsHtml += `</optgroup>`;
       }
     }
-    optionsHtml += `<option value="__add_new__">➕ Add New Companion / Form...</option>`;
+    optionsHtml += `
+      <optgroup label="➕ Add Character / Form">
+        <option value="__new_hero__">✨ + New Hero (Fresh Sheet)...</option>
+        <option value="__add_alt_form__">🔄 + New Alternate Form (Metamorph)...</option>
+        <option value="__add_mecha__">🤖 + New Mecha Form...</option>
+        <option value="__add_sidekick__">🤝 + New Sidekick...</option>
+        <option value="__add_minion__">👥 + New Minion...</option>
+        <option value="__add_summon__">👥 + New Summoned Creature...</option>
+        <option value="__add_duplicate__">👥 + New Duplicate...</option>
+      </optgroup>
+    `;
     sel.innerHTML = optionsHtml;
     sel.value = window.activeCompanionId || "main";
+
+    const lblRole = document.getElementById("lblContextRole");
+    if (lblRole) {
+      lblRole.textContent = "Character Form:";
+    }
   }
 
   // Update Sticky Companion Active Banner
@@ -7708,7 +12634,8 @@ function updateCharacterSelectorUI() {
       }
 
       if (bannerTitle) {
-        bannerTitle.textContent = `${isMecha ? '🤖' : '👥'} Editing ${cType}: ${char.name} (PL ${char.powerLevel})`;
+        const displayCompName = (char.name && char.name.trim()) || (comp ? getGenericCompanionName(comp, window.primaryHero) : "Companion");
+        bannerTitle.textContent = `${isMecha ? '🤖' : '👥'} Editing ${cType}: ${displayCompName} (PL ${char.powerLevel})`;
       }
       if (bannerBudget) {
         const spent = char.powerPointsSummary.totalSpent;
@@ -7807,10 +12734,10 @@ function buildCompanionsUI() {
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
           <div>
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span class="badge" style="background: ${typeBadgeBg}; color: #ffffff; font-weight: bold; font-size: 11px; text-transform: uppercase;">${typeLabel}</span>
-              <h3 style="font-size: 16px; margin: 0; color: var(--text-main); font-weight: bold;">${comp.name || compModel.name}</h3>
-              <span class="badge" style="background: var(--bg-card); color: var(--text-main); font-size: 12px; border: 1px solid var(--border-color);">PL ${comp.powerLevel}</span>
-              ${isCurrentlyActive ? `<span class="badge" style="background: #10b981; color: #fff; font-weight: bold; font-size: 11px;">⚡ Currently Active Sheet</span>` : ''}
+              <span class="badge" style="background: ${typeBadgeBg}; color: #ffffff; font-weight: bold; font-size: var(--font-size-tags); text-transform: uppercase;">${typeLabel}</span>
+              <h3 style="font-size: var(--font-size-labels); margin: 0; color: var(--text-main); font-weight: bold;">${(comp.name && comp.name.trim()) || (compModel.name && compModel.name.trim()) || getGenericCompanionName(comp, rootHero)}</h3>
+              <span class="badge" style="background: var(--bg-card); color: var(--text-main); font-size: var(--font-size-tags); border: 1px solid var(--border-color);">PL ${comp.powerLevel}</span>
+              ${isCurrentlyActive ? `<span class="badge" style="background: #10b981; color: #fff; font-weight: bold; font-size: var(--font-size-tags);">⚡ Currently Active Sheet</span>` : ''}
             </div>
             <div style="margin-top: 6px; font-size: var(--font-size-secondary); color: var(--text-muted);">
               Abilities: STR ${compModel.getAbilityRank("STR") ?? '—'}, DEX ${compModel.getAbilityRank("DEX") ?? '—'}, CON ${compModel.getAbilityRank("CON") ?? '—'}, INT ${compModel.getAbilityRank("INT") ?? '—'}, WIS ${compModel.getAbilityRank("WIS") ?? '—'}, CHA ${compModel.getAbilityRank("CHA") ?? '—'}
@@ -7821,7 +12748,7 @@ function buildCompanionsUI() {
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <div style="text-align: right; margin-right: 6px;">
               <span style="font-size: var(--font-size-secondary); display: block; color: var(--text-muted);">Budget:</span>
-              <span class="badge" style="background: ${isOver ? '#ef4444' : 'rgba(16, 185, 129, 0.15)'}; color: ${isOver ? '#fff' : '#10b981'}; font-weight: bold; font-size: 13px; border: 1px solid ${isOver ? '#ef4444' : '#10b981'};">
+              <span class="badge" style="background: ${isOver ? '#ef4444' : 'rgba(16, 185, 129, 0.15)'}; color: ${isOver ? '#fff' : '#10b981'}; font-weight: bold; font-size: var(--font-size-tags); border: 1px solid ${isOver ? '#ef4444' : '#10b981'};">
                 ${spent} / ${totalAllowed} ${unit} ${isOver ? '⚠️ (Over Budget)' : '✓'}
               </span>
             </div>
@@ -7912,28 +12839,124 @@ function updateCompanionModalDefaults(prefillSource) {
     lblBudgetTitle.textContent = type === "mecha" ? "Mecha Points Budget (MP):" : "PP Budget Allowed:";
   }
 
+  const allowAltFormVariablePL = (char && char.houseRules && char.houseRules.allowAltFormVariablePL) || (localStorage.getItem("mm2e_houserule_alt_form_variable_pl") === "true");
+
   if (txtName) {
-    txtName.value = defaultName;
+    txtName.value = "";
   }
-  if (numPL) numPL.value = pl;
+  if (numPL) {
+    numPL.value = pl;
+    if (type === "metamorph" && !allowAltFormVariablePL) {
+      numPL.disabled = true;
+      numPL.title = "Alternate Forms must share the primary hero's Power Level. Enable variable PL in Options to change.";
+    } else {
+      numPL.disabled = false;
+      numPL.title = "";
+    }
+  }
   if (numBudget) numBudget.value = budget;
   if (boxHint) boxHint.innerHTML = hint;
+
+  const chkOverride = document.getElementById("chkOverrideCompanionPL");
+  if (chkOverride && numBudget) {
+    const isStandard = (budget === pl * 15);
+    chkOverride.checked = !isStandard;
+    numBudget.readOnly = !chkOverride.checked;
+    numBudget.style.background = chkOverride.checked ? "var(--bg-panel)" : "var(--bg-app)";
+  }
 }
 
-function openCreateCompanionModal(prefillType, prefillSource) {
+function createAndSwitchToCompanion(type, customName) {
+  syncActiveCompanionIfActive();
+  const rootHero = window.primaryHero || char;
+  
+  const existingCount = (rootHero.companions || []).filter(c => c.type === type).length;
+  const nextIdx = existingCount + 1;
+  const genericPlaceholder = getGenericCompanionNameByType(type, nextIdx);
+
+  const chosenName = (customName && typeof customName === 'string') ? customName.trim() : "";
+  const nameForComp = chosenName;
+  const charModelName = chosenName;
+
+  const pl = rootHero.powerLevel || 10;
+  let budget = pl * 15;
+  if (type === "metamorph") {
+    budget = rootHero.totalPointsAllowed || (pl * 15);
+  }
+
+  const newComp = {
+    id: "comp_" + Math.random().toString(36).substr(2, 9),
+    type: type,
+    name: nameForComp,
+    powerLevel: pl,
+    totalPointsAllowed: budget,
+    characterData: null
+  };
+
+  const temp = new CharacterModel();
+  if (type === "duplicate") {
+    const heroCopy = JSON.parse(JSON.stringify(rootHero.serialize().character));
+    heroCopy.name = charModelName;
+    if (heroCopy.powers && Array.isArray(heroCopy.powers)) {
+      heroCopy.powers = heroCopy.powers.filter(c => {
+        if (!c.effects) return true;
+        return !c.effects.some(e => e.effectName === "Duplication");
+      });
+    }
+    temp.deserialize(heroCopy);
+    temp.powerLevel = pl;
+    temp.totalPointsAllowed = budget;
+  } else if (type === "mecha") {
+    temp.name = charModelName;
+    temp.powerLevel = pl;
+    temp.totalPointsAllowed = budget;
+    temp.sizeCategory = "Huge";
+    temp.setMechaMode(true, false);
+  } else {
+    temp.name = charModelName;
+    temp.powerLevel = pl;
+    temp.totalPointsAllowed = budget;
+  }
+  newComp.characterData = temp.serialize().character;
+
+  if (!rootHero.companions) rootHero.companions = [];
+  rootHero.companions.push(newComp);
+
   const modal = document.getElementById("companionCreateModal");
-  if (!modal) return;
+  if (modal) modal.classList.remove("active");
+
+  switchToCompanion(newComp.id);
+
+  const tabBtn = (typeof document !== 'undefined' && typeof document.querySelector === 'function')
+    ? document.querySelector('.tab-btn[data-tab="tab-basics"]')
+    : null;
+  if (tabBtn && typeof tabBtn.click === 'function') tabBtn.click();
+  const nameInput = document.getElementById("heroNameInput");
+  if (nameInput) {
+    nameInput.placeholder = genericPlaceholder;
+    nameInput.value = chosenName;
+    if (typeof nameInput.focus === 'function') nameInput.focus();
+    if (chosenName && typeof nameInput.select === 'function') nameInput.select();
+  }
+
+  const toastLabel = chosenName || genericPlaceholder;
+  showToast(`Created new ${toastLabel.toLowerCase()}! Now editing sheet.`, "success");
+  return newComp;
+}
+window.createAndSwitchToCompanion = createAndSwitchToCompanion;
+
+function openCreateCompanionModal(prefillType, prefillSource) {
   const selType = document.getElementById("selCompanionType");
   if (selType && prefillType) {
     selType.value = prefillType;
   }
   updateCompanionModalDefaults(prefillSource);
-  modal.classList.add("active");
   const txtName = document.getElementById("txtCompanionName");
   if (txtName) {
-    txtName.focus();
-    txtName.select();
+    txtName.value = "";
+    if (typeof txtName.focus === 'function') txtName.focus();
   }
+  return createAndSwitchToCompanion(prefillType || "sidekick");
 }
 window.openCreateCompanionModal = openCreateCompanionModal;
 
@@ -7946,7 +12969,15 @@ function handleConfirmCreateCompanion() {
   const modal = document.getElementById("companionCreateModal");
 
   const type = selType ? selType.value : "sidekick";
-  const name = (txtName && txtName.value.trim()) ? txtName.value.trim() : (type === "mecha" ? "New Mecha" : "New Companion");
+  let fallbackName = "New Companion";
+  if (type === "mecha") fallbackName = "New Mecha";
+  else if (type === "metamorph") fallbackName = "New Alternate Form";
+  else if (type === "duplicate") fallbackName = "New Duplicate";
+  else if (type === "sidekick") fallbackName = "New Sidekick";
+  else if (type === "minion") fallbackName = "New Minion";
+  else if (type === "summon") fallbackName = "New Summon";
+
+  const name = (txtName && txtName.value.trim()) ? txtName.value.trim() : "";
   const pl = numPL ? (parseInt(numPL.value) || 10) : 10;
   const budget = numBudget ? (parseInt(numBudget.value) || (pl * 15)) : (pl * 15);
 
@@ -7990,7 +13021,8 @@ function handleConfirmCreateCompanion() {
 
   if (modal) modal.classList.remove("active");
   switchToCompanion(newComp.id);
-  showToast(`Created ${newComp.name}! Now editing mecha sheet.`, "success");
+  const typeLabel = (type === "mecha") ? "mecha" : (type === "metamorph") ? "alternate form" : (type || "companion");
+  showToast(`Created ${newComp.name}! Now editing ${typeLabel} sheet.`, "success");
 }
 
 function setupCompanionModalHandlers() {
@@ -8025,6 +13057,37 @@ function setupCompanionModalHandlers() {
 
   if (btnConfirm) {
     btnConfirm.addEventListener("click", () => handleConfirmCreateCompanion());
+  }
+
+  const numPL = document.getElementById("numCompanionPL");
+  const numBudget = document.getElementById("numCompanionBudget");
+  const chkOverride = document.getElementById("chkOverrideCompanionPL");
+
+  if (numPL) {
+    const syncBudgetWithPL = () => {
+      const isOverridden = chkOverride && chkOverride.checked;
+      if (!isOverridden && numBudget) {
+        const plVal = parseInt(numPL.value) || 0;
+        numBudget.value = Math.max(0, plVal * 15);
+      }
+    };
+    numPL.addEventListener("input", syncBudgetWithPL);
+    numPL.addEventListener("change", syncBudgetWithPL);
+  }
+
+  if (chkOverride) {
+    chkOverride.addEventListener("change", (e) => {
+      if (numBudget) {
+        numBudget.readOnly = !e.target.checked;
+        numBudget.style.background = e.target.checked ? "var(--bg-panel)" : "var(--bg-app)";
+        if (!e.target.checked && numPL) {
+          const plVal = parseInt(numPL.value) || 0;
+          numBudget.value = Math.max(0, plVal * 15);
+        } else if (e.target.checked) {
+          if (typeof numBudget.focus === 'function') numBudget.focus();
+        }
+      }
+    });
   }
 
   if (btnImport && fileImport) {
@@ -8085,7 +13148,7 @@ window.buildOrEditCompanionForSource = function(type, pIdx, eIdx) {
   }
 };
 
-window.switchToCompanion = function(companionId) {
+function switchToCompanion(companionId) {
   syncActiveCompanionIfActive();
   if (!window.primaryHero) {
     window.primaryHero = char;
@@ -8119,9 +13182,10 @@ window.switchToCompanion = function(companionId) {
   updateCharacterSelectorUI();
   const typeMsg = companion.type === "mecha" ? "🤖 Editing Mecha:" : "Editing";
   showToast(`${typeMsg} ${companion.name}.`, "info");
-};
+}
+window.switchToCompanion = switchToCompanion;
 
-window.returnToPrimaryHero = function() {
+function returnToPrimaryHero() {
   if (!window.primaryHero) return;
   syncActiveCompanionIfActive();
   char = window.primaryHero;
@@ -8132,7 +13196,8 @@ window.returnToPrimaryHero = function() {
   populateUIFromCharacter();
   updateCharacterSelectorUI();
   showToast(`Returned to ${char.name}.`, "info");
-};
+}
+window.returnToPrimaryHero = returnToPrimaryHero;
 
 window.deleteCompanion = function(companionId) {
   if (!confirm("Delete this companion/form? This cannot be undone.")) return;

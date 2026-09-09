@@ -269,7 +269,7 @@ const POWER_MODIFIERS_LIST = [
     "cost": 1,
     "costType": "per_rank",
     "category": "extra",
-    "fullText": "<p>Increases a sustained power's duration to continuous; it remains in effect even when you are stunned or unconscious.</p>"
+    "fullText": "<p>Increases a sustained power's duration to continuous (+1 PP/rank); it remains in effect even when you are stunned or unconscious. This is the Core Rulebook's standalone version of the Ultimate Power <strong>Duration</strong> extra (1 step for Sustained &rarr; Continuous at +1 PP/rank).</p>"
   },
   {
     "name": "Decreased Duration (Concentration)",
@@ -343,12 +343,13 @@ const POWER_MODIFIERS_LIST = [
     "costType": "per_rank",
     "category": "extra",
     "hasRanks": true,
-    "maxRanks": 2,
+    "maxRanks": 3,
     "tiers": [
-      "Rank 1: Instant to Sustained (or similar step)",
-      "Rank 2: Sustained to Continuous"
+      "Rank 1 (+1/r): Increases duration by 1 step (e.g. Sustained to Continuous, Concentration to Sustained, Instant to Concentration)",
+      "Rank 2 (+2/r): Increases duration by 2 steps (e.g. Concentration to Continuous, Instant to Sustained)",
+      "Rank 3 (+3/r): Increases duration by 3 steps (Instant to Continuous)"
     ],
-    "fullText": "<p>Increases the duration of a power.</p>"
+    "fullText": "<p>Increases the duration of an effect by one step along the progression track (Instant &rarr; Concentration &rarr; Sustained &rarr; Continuous) per rank of this extra (+1 PP/rank per rank).</p><p><em>Rule Note: For a <strong>Sustained</strong> power, upgrading to Continuous is exactly <strong>1 step</strong> (Rank 1 = +1 PP/rank). It is functionally and mathematically identical to the Core Rulebook's standalone <strong>Continuous</strong> extra (+1 PP/rank).</em></p>"
   },
   {
     "name": "Duration (Flaw)",
@@ -470,10 +471,10 @@ const POWER_MODIFIERS_LIST = [
   },
   {
     "name": "Increased Duration (Continuous)",
-    "cost": 2,
+    "cost": 1,
     "costType": "per_rank",
     "category": "extra",
-    "fullText": "<p>Increases the power’s duration to Continuous; it remains in effect even if you are stunned or rendered unconscious.</p>"
+    "fullText": "<p>Increases the power’s duration to Continuous (+1 PP/rank per step of increase; e.g. +1/r from Sustained, +2/r from Concentration, +3/r from Instant). The effect remains active even if you are stunned or rendered unconscious.</p>"
   },
   {
     "name": "Increased Duration (Sustained)",
@@ -580,6 +581,15 @@ const POWER_MODIFIERS_LIST = [
     "costType": "flat",
     "category": "feat",
     "fullText": "<p>You apply your Strength bonus to the effect’s damage or save DC, just like a normal melee attack. This applies only to touch range damage effects (such as Strike) or effects that specifically allow it. Your total damage bonus (effect rank plus Strength bonus) cannot exceed the campaign’s power level limit.</p>"
+  },
+  {
+    "name": "No Attack Roll",
+    "cost": 1,
+    "costType": "per_rank",
+    "category": "extra",
+    "hasRanks": false,
+    "book": "House Rule",
+    "fullText": "<p>The attack power does not require an attack roll to hit its target (the target only receives a saving throw to resist), while keeping the power within its normal operational range (such as standard Ranged distance increments). This replaces the attack-roll-bypassing aspect of Perception range without granting infinite perception distance.</p>"
   },
   {
     "name": "No Saving Throw",

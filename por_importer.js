@@ -69,7 +69,9 @@
     "sleight of hand": "Sleight of Hand",
     "stealth": "Stealth",
     "survival": "Survival",
-    "swim": "Swim"
+    "swim": "Swim",
+    "gambling": "Gambling",
+    "navigation": "Navigation"
   };
 
   // ==========================================================================
@@ -214,6 +216,73 @@
       linkedEffects: [
         { name: "Mental Communication", effectName: "Communication", baseCost: 1, range: "ranged", action: "free", duration: "sustained", savingThrow: "none" }
       ]
+    },
+    "Container, Active": {
+      effectName: "Container",
+      profileName: "Container (Active)",
+      baseCost: 5,
+      range: "personal",
+      action: "free",
+      duration: "sustained",
+      savingThrow: "none",
+      isContainer: true
+    },
+    "Container, Passive": {
+      effectName: "Container",
+      profileName: "Container (Passive)",
+      baseCost: 4,
+      range: "personal",
+      action: "none",
+      duration: "continuous",
+      savingThrow: "none",
+      isContainer: true
+    },
+    "Container": {
+      effectName: "Container",
+      profileName: "Container (Active)",
+      baseCost: 5,
+      range: "personal",
+      action: "free",
+      duration: "sustained",
+      savingThrow: "none",
+      isContainer: true
+    },
+    "Alternate Form": {
+      effectName: "Container",
+      profileName: "Alternate Form",
+      baseCost: 5,
+      range: "personal",
+      action: "free",
+      duration: "sustained",
+      savingThrow: "none",
+      isContainer: true
+    },
+    "Impervious Fortitude": {
+      effectName: "Feature",
+      profileName: "Impervious Fortitude",
+      baseCost: 1,
+      range: "personal",
+      action: "none",
+      duration: "continuous",
+      savingThrow: "none"
+    },
+    "Impervious Reflex": {
+      effectName: "Feature",
+      profileName: "Impervious Reflex",
+      baseCost: 1,
+      range: "personal",
+      action: "none",
+      duration: "continuous",
+      savingThrow: "none"
+    },
+    "Impervious Will": {
+      effectName: "Feature",
+      profileName: "Impervious Will",
+      baseCost: 1,
+      range: "personal",
+      action: "none",
+      duration: "continuous",
+      savingThrow: "none"
     }
   };
 
@@ -710,13 +779,14 @@
       return;
     }
 
-    await executeImport(zip, doc, leadNode, fileName, otherCharacters);
+    const leadIdx = charIndexNode.getAttribute("herolableadindex") || "1";
+    await executeImport(zip, doc, leadNode, fileName, otherCharacters, leadIdx);
   }
 
   // ==========================================================================
   // RECURSIVE CHARACTER & XML INGESTION
   // ==========================================================================
-  async function executeImport(zip, doc, rootCharNode, fileName, otherCharacters = []) {
+  async function executeImport(zip, doc, rootCharNode, fileName, otherCharacters = [], leadIndex = "1") {
     const resNode = getDirectChild(rootCharNode, "resources");
     const totalPpAttr = resNode?.getAttribute("totalpp");
     let totalAllowed = totalPpAttr ? parseInt(totalPpAttr) : null;
@@ -739,11 +809,23 @@
       conversions: [],
       companions: [],
       installations: [],
+      libraryPlans: [],
       preservedNotes: [],
       unconvertibleTraits: [],
       unmappedDataPoints: [],
+      heroLabValidationAlerts: [],
+      complianceAlerts: [],
+      costingComparison: [],
       otherCharactersInPortfolio: (otherCharacters || []).map(c => c.getAttribute("name")).filter(Boolean)
     };
+
+    // Ingest Hero Lab native validation report
+    const valNode = getDirectChild(rootCharNode, "validation");
+    const valReportNode = valNode ? getDirectChild(valNode, "report") : null;
+    const rawValReport = valReportNode?.textContent?.trim() || "";
+    if (rawValReport) {
+      audit.heroLabValidationAlerts = rawValReport.split(";").map(s => s.trim()).filter(Boolean);
+    }
 
     // Parse Hero Lab declared resource totals strictly from root resources
     if (resNode) {
@@ -806,6 +888,22 @@
         audit.companions.push(compEntry);
       }
     });
+
+    // Ingest Hero Lab Library Table into Blueprints / Plans
+    try {
+      let leadXmlFile = zip ? (zip.file(`herolab/lead${leadIndex}.xml`) || findZipFile(zip, `herolab/lead${leadIndex}.xml`)) : null;
+      if (!leadXmlFile && zip) {
+        leadXmlFile = zip.file("herolab/lead1.xml") || findZipFile(zip, "herolab/lead1.xml");
+      }
+      if (leadXmlFile) {
+        const leadXmlStr = await leadXmlFile.async("string");
+        if (leadXmlStr) {
+          ingestHeroLabLibrary(leadXmlStr, primaryData, audit);
+        }
+      }
+    } catch (libErr) {
+      console.warn("Failed to parse Hero Lab library table:", libErr);
+    }
 
     // Point Reconciliation Engine: Validate MM2CE model cost against declared Hero Lab costs
     reconcileCharacterPoints(primaryData, audit);
@@ -1069,11 +1167,23 @@
       featNodes.forEach(f => {
         const rawFeatName = f.getAttribute("name");
         const ranksAttr = parseInt(f.getAttribute("ranks") || 1);
-        const featCost = parseInt(getDirectChild(f, "cost")?.getAttribute("value") || ranksAttr);
+        const costValAttr = getDirectChild(f, "cost")?.getAttribute("value");
+        const featCost = (costValAttr !== null && costValAttr !== undefined) ? parseInt(costValAttr, 10) : ranksAttr;
         const featDesc = getDirectChild(f, "description")?.textContent.trim() || "";
+        const featCategory = (f.getAttribute("categorytext") || "").trim();
 
         // Skip feats granted by powers
         if (chainedFeatNames.has(rawFeatName.trim())) {
+          return;
+        }
+
+        // Skip 0 PP combo / fighting style package headers (component feats are purchased individually)
+        const catNodes = getDirectChildren(f, "featcategory");
+        const isCombo = featCategory.toLowerCase().includes("combo") ||
+                        catNodes.some(cn => cn.textContent.trim().toLowerCase() === "combo");
+        if (featCost === 0 || isCombo) {
+          audit.preservedNotes.push(`Fighting Style / Combo Feat '${rawFeatName}' (0 PP): Package header noted. Individual component feats are purchased and accounted for.`);
+          recordUnmappedDataPoint(audit, "Combo Feat / Fighting Style", charObj.name, rawFeatName, "0 PP", "Package Header Noted", `Fighting style package header (${featDesc || rawFeatName}). Component feats are individually accounted for without double-charging.`);
           return;
         }
 
@@ -1170,8 +1280,15 @@
     const deconstructed = deconstructHeroLabPowerName(rawName);
     const containerName = deconstructed.customName || deconstructed.hlBaseName;
 
-    // Check if this is a Device
+    // Check if this is a Device or Container
     const isDevice = deconstructed.hlBaseName.toLowerCase() === "device" || summary.includes("Hard to lose") || summary.includes("Easy to lose");
+    const otherContainer = getDirectChild(powerNode, "otherpowers");
+    const otherPowers = otherContainer ? getDirectChildren(otherContainer, "power") : [];
+    const isGeneralContainer = !isDevice && (
+      otherPowers.length > 0 ||
+      deconstructed.hlBaseName.toLowerCase().startsWith("container") ||
+      deconstructed.hlBaseName.toLowerCase().includes("alternate form")
+    );
     const altContainer = getDirectChild(powerNode, "alternatepowers");
     const altNodes = altContainer ? getDirectChildren(altContainer, "power") : [];
     const isArray = altNodes.length > 0;
@@ -1179,6 +1296,8 @@
     let containerType = "normal";
     if (isDevice) {
       containerType = summary.includes("Easy to lose") ? "device_easy" : "device_hard";
+    } else if (isGeneralContainer) {
+      containerType = "container";
     } else if (isArray) {
       containerType = "array";
     }
@@ -1188,106 +1307,128 @@
       name: containerName,
       containerType: containerType,
       collapsed: false,
+      active: powerNode.getAttribute("active") !== "no",
       declaredCost: declaredCost,
       effects: []
     };
 
-    if (isDevice) {
-      // In M&M 2E / UP: Easy to Lose = 3 PP/rank; Hard to Lose = 4 PP/rank
+    if (isDevice || isGeneralContainer) {
       const isEasyToLose = containerType === "device_easy" || summary.includes("Easy to lose");
-      const deviceBaseCost = isEasyToLose ? 3 : 4;
-      const deviceRank = Math.round(deconstructed.ranks || 1);
+      const isPassive = !deconstructed.hlBaseName.toLowerCase().includes("active") && (
+        deconstructed.hlBaseName.toLowerCase().includes("passive") ||
+        (summary.toLowerCase().includes("continuous") && !summary.toLowerCase().includes("duration (continuous)"))
+      );
+      
+      let containerBaseCost = 5;
+      let containerAction = "free";
+      let containerDuration = "sustained";
+      let containerDescriptors = "Container";
 
-      // Parse modifiers directly on the device container (power feats, drawbacks)
-      const deviceModifiers = parseModifiersFromNode(powerNode, audit, containerName);
-
-      // Check summary for Restricted / Restricted use
-      const restrictedMatch = summary.match(/Restricted(?: use)?(?:\s*\((.*?)\))?/i);
-      if (restrictedMatch && !deviceModifiers.some(m => m.name.toLowerCase().startsWith("restricted"))) {
-        deviceModifiers.push({
-          name: "Restricted",
-          category: "feat",
-          cost: 1,
-          costType: "flat",
-          ranks: 1,
-          details: restrictedMatch[1] || ""
-        });
+      if (isDevice) {
+        containerBaseCost = isEasyToLose ? 3 : 4;
+        containerAction = "none";
+        containerDuration = "continuous";
+        containerDescriptors = "Device";
+      } else if (isPassive) {
+        containerBaseCost = 4;
+        containerAction = "none";
+        containerDuration = "continuous";
+      } else if (deconstructed.hlBaseName.toLowerCase().includes("alternate form")) {
+        containerDescriptors = "Alternate Form";
       }
 
-      // Parse child effects inside Device (<otherpowers>)
-      const otherContainer = getDirectChild(powerNode, "otherpowers");
-      const otherPowers = otherContainer ? getDirectChildren(otherContainer, "power") : [];
-      const containedPowersList = [];
+      const containerRank = Math.round(deconstructed.ranks || parseFloat(powerNode.getAttribute("ranks") || 1));
 
-      otherPowers.forEach((childPower, cIdx) => {
-        const childRawName = childPower.getAttribute("name");
-        const childDecon = deconstructHeroLabPowerName(childRawName);
-        const childCost = parseInt(getDirectChild(childPower, "cost")?.getAttribute("value") || 0);
-        const childRank = Math.round(childDecon.ranks || parseFloat(childPower.getAttribute("ranks") || 1));
-        const childDesc = getDirectChild(childPower, "description")?.textContent.trim() || "";
-        const childSummary = childPower.getAttribute("summary") || "";
+      // Parse modifiers directly on the container (power feats, drawbacks, extras)
+      const containerModifiers = parseModifiersFromNode(powerNode, audit, containerName);
 
-        // Check if child power can be recognized/converted
-        const childAlias = POWER_UP_ALIAS_MAP[childDecon.hlBaseName] ||
-          Object.entries(POWER_UP_ALIAS_MAP).find(([k]) => k.toLowerCase() === childDecon.hlBaseName.toLowerCase())?.[1];
-        const childBase = (typeof POWER_EFFECTS_LIST !== 'undefined')
-          ? POWER_EFFECTS_LIST.find(e => e.name.toLowerCase() === childDecon.hlBaseName.toLowerCase())
-          : null;
-        const childProfile = (typeof POWER_PROFILES_LIST !== 'undefined')
-          ? POWER_PROFILES_LIST.find(p => p.name.toLowerCase() === childDecon.hlBaseName.toLowerCase())
-          : null;
-
-        if (!childAlias && !childBase && !childProfile) {
-          // Unconvertible child power inside device
-          const reason = `Device power '${childDecon.hlBaseName}' is not recognized in canonical Ultimate Power base effects or profiles.`;
-          const notesStr = [childDesc, childSummary].filter(Boolean).join(" | ");
-          audit.unconvertibleTraits.push({
-            name: `${childRawName} (in ${containerName})`,
-            type: "Power",
-            cost: childCost,
-            reason: reason,
-            notes: notesStr
+      if (isDevice) {
+        const restrictedMatch = summary.match(/Restricted(?: use)?(?:\s*\((.*?)\))?/i);
+        if (restrictedMatch && !containerModifiers.some(m => m.name.toLowerCase().startsWith("restricted"))) {
+          containerModifiers.push({
+            name: "Restricted",
+            category: "feat",
+            cost: 1,
+            costType: "flat",
+            ranks: 1,
+            details: restrictedMatch[1] || ""
           });
-          audit.refunds.push(`Unconvertible Device Power '${childRawName}' in '${containerName}' (${childCost} PP inside device): ${reason} Points refunded to device capacity.`);
-          if (notesStr) {
-            audit.preservedNotes.push(`Preserved unconvertible device power notes for '${childRawName}': ${notesStr}`);
-          }
-          recordUnmappedDataPoint(audit, "Unconvertible Power", containerName, childRawName, `${childCost} PP (Device)`, "Refunded to Device", reason);
-          return;
         }
+      }
 
-        containedPowersList.push({
-          id: "cp_" + Math.random().toString(36).substr(2, 9) + "_" + cIdx,
-          name: childRawName,
-          effectName: childAlias ? childAlias.effectName : (childProfile ? childProfile.effectName : childDecon.hlBaseName),
-          rank: childRank,
-          cost: childCost
+      if (otherPowers.length > 0) {
+        container.deviceRank = containerRank;
+        container.deviceModifiers = containerModifiers;
+        otherPowers.forEach((childPower, cIdx) => {
+          const childEff = parseSinglePowerEffect(childPower, cIdx, audit, "primary");
+          if (childEff) {
+            container.effects.push(childEff);
+          }
+          const childAltContainer = getDirectChild(childPower, "alternatepowers");
+          const childAltNodes = childAltContainer ? getDirectChildren(childAltContainer, "power") : [];
+          childAltNodes.forEach((altNode, aIdx) => {
+            const featsContainer = getDirectChild(altNode, "powerfeats");
+            const altFeats = featsContainer ? getDirectChildren(featsContainer, "powerfeat") : [];
+            const isDynamic = altFeats.some(pf => pf.getAttribute("name") === "Dynamic");
+            const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate");
+            if (altEff) {
+              container.effects.push(altEff);
+            }
+          });
         });
+      } else {
+        const notePrefix = isDevice ? `Device (${isEasyToLose ? "Easy to lose" : "Hard to lose"}, Rank ${containerRank})` : `${deconstructed.hlBaseName} (Rank ${containerRank})`;
+        const containerEffect = {
+          id: "eff_" + Math.random().toString(36).substr(2, 9) + "_" + index,
+          name: rawName,
+          effectName: "Container",
+          rank: containerRank,
+          baseCost: containerBaseCost,
+          action: containerAction,
+          range: "personal",
+          duration: containerDuration,
+          savingThrow: "none",
+          association: "primary",
+          linkedTo: null,
+          descriptors: containerDescriptors,
+          notes: `${notePrefix}.`,
+          modifiers: containerModifiers,
+          subPowers: [],
+          active: true
+        };
+        container.effects.push(containerEffect);
+      }
+
+      // Also parse alternate powers if attached
+      altNodes.forEach((altNode, aIdx) => {
+        const featsContainer = getDirectChild(altNode, "powerfeats");
+        const altFeats = featsContainer ? getDirectChildren(featsContainer, "powerfeat") : [];
+        const isDynamic = altFeats.some(pf => pf.getAttribute("name") === "Dynamic");
+        const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate");
+        if (altEff) {
+          container.effects.push(altEff);
+        }
       });
-
-      const deviceEffect = {
-        id: "eff_" + Math.random().toString(36).substr(2, 9) + "_" + index,
-        name: rawName,
-        effectName: "Container",
-        rank: deviceRank,
-        baseCost: deviceBaseCost,
-        action: "none",
-        range: "personal",
-        duration: "continuous",
-        savingThrow: "none",
-        association: "primary",
-        linkedTo: null,
-        descriptors: "Device",
-        notes: `Device (${isEasyToLose ? "Easy to lose" : "Hard to lose"}, Rank ${deviceRank}). Contains ${containedPowersList.length} powers.`,
-        modifiers: deviceModifiers,
-        subPowers: [],
-        isContainer: true,
-        formActive: true,
-        containedPowers: containedPowersList
-      };
-
-      container.effects.push(deviceEffect);
     } else {
+      // Determine default power for Array if specified in elements or summary
+      let defaultPowerName = "";
+      if (isArray) {
+        const elementsContainer = getDirectChild(powerNode, "elements");
+        if (elementsContainer) {
+          const elemNodes = getDirectChildren(elementsContainer, "element");
+          const defElem = elemNodes.find(el => el.getAttribute("name") === "Default Power");
+          if (defElem) defaultPowerName = defElem.getAttribute("info") || "";
+        }
+        if (!defaultPowerName && summary) {
+          const defMatch = summary.match(/Default Power:\s*([^;,]+)/i);
+          if (defMatch) defaultPowerName = defMatch[1].trim();
+        }
+        if (!defaultPowerName && summary) {
+          const optMatch = summary.match(/Other Power\s*\(([^)]+)\)/i);
+          if (optMatch) defaultPowerName = optMatch[1].trim();
+        }
+      }
+
       // Primary effect
       const primaryEff = parseSinglePowerEffect(powerNode, 0, audit, "primary");
 
@@ -1313,6 +1454,29 @@
           container.effects.push(altEff);
         }
       });
+
+      if (isArray) {
+        let matchedDefault = false;
+        if (defaultPowerName) {
+          const matchTarget = defaultPowerName.toLowerCase();
+          for (let i = 1; i < container.effects.length; i++) {
+            const eff = container.effects[i];
+            const effName = (eff.name || "").toLowerCase();
+            const effType = (eff.effectName || "").toLowerCase();
+            if (effName === matchTarget || effType === matchTarget || effName.includes(matchTarget) || matchTarget.includes(effName)) {
+              eff.active = (primaryEff ? primaryEff.active !== false : true);
+              eff.isDefaultPower = true;
+              matchedDefault = true;
+              break;
+            }
+          }
+        }
+        // If primary effect is a dummy "Array" card and no alternate power was activated, activate the first alternate power if array is active
+        if (!matchedDefault && primaryEff && primaryEff.effectName === "Array" && primaryEff.active !== false && container.effects.length > 1) {
+          container.effects[1].active = true;
+          container.effects[1].isDefaultPower = true;
+        }
+      }
     }
 
     if (container.effects.length === 0) {
@@ -1320,6 +1484,847 @@
     }
 
     return container;
+  }
+
+  // ==========================================================================
+  // HERO LAB LIBRARY TABLE INGESTION -> BLUEPRINTS / PLANS
+  // ==========================================================================
+  const HL_LIB_POWER_MAP = {
+    pwBlast: "Blast",
+    pwBoost: "Boost",
+    pwBurrow: "Burrowing",
+    pwComm: "Communication",
+    pwCompre: "Comprehend",
+    pwConceal: "Concealment",
+    pwCreaObj: "Create Object",
+    pwDarkCon: "Darkness Control",
+    pwDensity: "Density",
+    pwDevice: "Device",
+    pwDimPock: "Dimensional Pocket",
+    pwDupli: "Duplication",
+    pwESP: "ESP",
+    pwEmotCon: "Emotion Control",
+    pwEnhTrait: "Enhanced Trait",
+    pwFField: "Force Field",
+    pwFlight: "Flight",
+    pwGrowth: "Growth",
+    pwHeal: "Healing",
+    pwIllusn: "Illusion",
+    pwImmov: "Immovable",
+    pwImmune: "Immunity",
+    pwInsubst: "Insubstantial",
+    pwInvis: "Concealment",
+    pwMagic: "Magic",
+    pwMgBanish: "Nullify",
+    pwMgSeal: "Nullify",
+    pwMgShadCl: "Duplication",
+    pwMindCon: "Mind Control",
+    pwMindRea: "Mind Reading",
+    pwMorph: "Morph",
+    pwNemesis: "Nemesis",
+    pwNullify: "Nullify",
+    pwProtect: "Protection",
+    pwQuick: "Quickness",
+    pwShrink: "Shrinking",
+    pwSnare: "Snare",
+    pwStrike: "Strike",
+    pwStun: "Stun",
+    pwSummon: "Summon",
+    pwSuperSe: "Super-Senses",
+    pwSuperSt: "Super-Strength",
+    pwTeleprt: "Teleport",
+    pwTpathy: "Telepathy",
+    pwUPArray: "Array",
+    pwUPClvoya: "Clairvoyance",
+    pwUPContAc: "Container",
+    pwUPDamage: "Damage",
+    pwUPEarCon: "Earth Control",
+    pwUPExorci: "Exorcism",
+    pwUPFeatur: "Feature",
+    pwUPForceC: "Force Constructs",
+    pwUPGadget: "Gadgets",
+    pwUPHypnos: "Hypnosis",
+    pwUPImFort: "Immunity",
+    pwUPImmort: "Immortality",
+    pwUPMoveOb: "Move Object",
+    pwUPRefFld: "Reflective Field",
+    pwUPShpMat: "Shape Matter",
+    pwUPSleep: "Sleep",
+    pwUPSpiCon: "Mind Control",
+    pwUPTelelo: "Telelocation",
+    pwUPWard: "Ward"
+  };
+
+  const HL_LIB_FEAT_MAP = {
+    pfAfOProg: "Progression (Affects Others)",
+    pfAffectIn: "Affects Insubstantial",
+    pfCrOProg: "Progression (Objects)",
+    pfCustom: "Custom Feat",
+    pfDimen: "Dimensional",
+    pfDupMLnk: "Mental Link",
+    pfDupSac: "Sacrifice",
+    pfHeaProg: "Progression (Healing)",
+    pfHealPers: "Persistent",
+    pfHealRegr: "Regrowth",
+    pfIllProg: "Progression (Area)",
+    pfImpRng: "Improved Range",
+    pfIndir: "Indirect",
+    pfInnate: "Innate",
+    pfMgDevSum: "Device Summon",
+    pfMgDimPro: "Progression (Dimensional)",
+    pfMgSeaTmS: "Time Sense",
+    pfMorMeta: "Metamorph",
+    pfPrecise: "Precise",
+    pfProgArea: "Progression (Area)",
+    pfProgRng: "Progression (Range)",
+    pfProgress: "Progression",
+    pfReverse: "Reversible",
+    pfSSGround: "Grounding",
+    pfSedation: "Sedation",
+    pfSelAura: "Selective Aura",
+    pfSelect: "Selective",
+    pfShCProg: "Progression",
+    pfSlowFade: "Slow Fade",
+    pfStrMghty: "Mighty",
+    pfSubtle: "Subtle",
+    pfSummMLnk: "Mental Link",
+    pfTprtCDir: "Change Direction",
+    pfTprtCVel: "Change Velocity",
+    pfTprtProg: "Progression",
+    pfTprtTurn: "Turnabout",
+    pfUPDamMig: "Mighty",
+    pfUPDevInd: "Indestructible",
+    pfUPHeaSta: "Stabilizing",
+    pfUPVarDsc: "Variable Descriptor"
+  };
+
+  const HL_LIB_EXTRA_MAP = {
+    pxAction: "Action (Free)",
+    pxAffOthO: "Affects Others Only",
+    pxAffOthrs: "Affects Others",
+    pxAreaBrst: "Area (Burst)",
+    pxCommArea: "Area",
+    pxCrObjMov: "Movable",
+    pxCustom: "Custom Extra",
+    pxDupHero: "Heroic",
+    pxDupSurv: "Survival",
+    pxDuration: "Continuous",
+    pxHealRes: "Restoration",
+    pxHealTot: "Total",
+    pxLinkedTo: "Linked",
+    pxMConCons: "Conscious",
+    pxMgAuton: "Autonomous",
+    pxMgBanUni: "Universal",
+    pxMgDimPor: "Portal",
+    pxMgSeaIne: "Inescapable",
+    pxMgShCHor: "Horde",
+    pxPenet: "Penetrating",
+    pxRange: "Range (Perception)",
+    pxSelAtt: "Selective Attack",
+    pxSnaRegen: "Regenerating",
+    pxSummHero: "Heroic",
+    pxSummTypN: "Broad Type",
+    pxTPrtAcc: "Accurate",
+    pxTPrtPrt: "Portal",
+    pxTotalFad: "Total Fade",
+    pxUPArPer: "Area (Perception)",
+    pxUPCrOImp: "Impervious",
+    pxUPHeaRst: "Restorative",
+    pxUPIllSel: "Selective",
+    pxUPMnCEff: "Effortless",
+    pxUPMvODam: "Damaging",
+    pxUPNoSave: "No Saving Throw",
+    pxUPRfFAut: "Autonomous",
+    pxUPTelCas: "Castling"
+  };
+
+  const HL_LIB_FLAW_MAP = {
+    plAction: "Action (Full)",
+    plBstPers: "Personal",
+    plConcPas: "Passive",
+    plCustom: "Custom Flaw",
+    plDistract: "Distracting",
+    plDuration: "Concentration",
+    plESPMedi: "Medium",
+    plFFlBro: "Ablative",
+    plFades: "Fades",
+    plFliGlide: "Gliding",
+    plImmLim: "Limited",
+    plLimited: "Limited",
+    plMCComm: "Sense-Dependent",
+    plRange: "Range (Touch)",
+    plSnareEnt: "Entangle",
+    plTprtLng: "Long-Range Only",
+    plTprtMed: "Medium",
+    plTprtShrt: "Short-Range Only",
+    plUPChkReq: "Check Required",
+    plUPDupSeq: "Sequential",
+    plUPEmCLim: "Limited",
+    plUPFliPla: "Platform",
+    plUPGadEas: "Easy to Lose",
+    plUPMnRLmP: "Limited",
+    plUPSnaMed: "Medium",
+    plUPTelAnc: "Anchor",
+    plWWCursed: "Cursed"
+  };
+
+  const HL_LIB_DRAWBACK_MAP = {
+    pdActAlt: "Action",
+    pdCustom: "Custom Drawback",
+    pdFullPow: "Full Power",
+    pdMgDevCnO: "Cannot Operate",
+    pdMgDimAnc: "Dimensional Anchor",
+    pdNotice: "Noticeable",
+    pdUPArrDst: "Distracting",
+    pdUPDamLet: "Lethal",
+    pdUPFliLow: "Low Ceiling"
+  };
+
+  const HL_LIB_DESCRIPTOR_MAP = {
+    pdsBio: "Biological",
+    pdsDark: "Darkness",
+    pdsDimen: "Dimensional",
+    pdsDivine: "Divine",
+    pdsEarth: "Earth",
+    pdsGood: "Good",
+    pdsMagic: "Magic",
+    pdsMind: "Mental",
+    pdsMystic: "Mystic",
+    pdsOther: "Other",
+    pdsPsychic: "Psychic",
+    pdsSonic: "Sonic",
+    pdsSpace: "Spatial",
+    pdsUPExtra: "Extraordinary"
+  };
+
+  const HL_LIB_OPTION_MAP = {
+    poComLnRd: "Read Languages",
+    poComLnSpk: "Speak Languages",
+    poComLnUnd: "Understand Languages",
+    poConAAur: "Auditory Concealment",
+    poConAOlf: "Olfactory Concealment",
+    poConAVis: "Visual Concealment",
+    poConOther: "Concealment (Other)",
+    poImmAging: "Aging",
+    poImmAlter: "Alteration Effects",
+    poImmDis: "Disease",
+    poImmDmg: "Damage",
+    poImmEnvCA: "Environmental Cold/Heat",
+    poImmFatig: "Fatigue",
+    poImmLife: "Life Support",
+    poImmLifeS: "Life Support",
+    poImmMent: "Mental Effects",
+    poImmPois: "Poison",
+    poImmRare: "Rare Descriptor",
+    poImmUncom: "Uncommon Descriptor",
+    poMagFogFr: "Fog/Freezing",
+    poMagLight: "Light",
+    poMagOther: "Magic (Other)",
+    poSenAcc: "Accurate",
+    poSenAcu: "Acute",
+    poSenAware: "Awareness",
+    poSenDark: "Darkvision",
+    poSenDet: "Detect",
+    poSenExt: "Extended",
+    poSenXray: "X-Ray Vision",
+    poUPMagDis: "Dimensional Shift",
+    poUPSSnAna: "Analytical",
+    poUPSSnCOA: "Counters Obscure/All",
+    poUPSSnCoC: "Counters Concealment",
+    poUPSSnTre: "Tracking"
+  };
+
+  const HL_LIB_TRAIT_MOD_MAP = {
+    // Abilities
+    aSTR: "Strength",
+    aDEX: "Dexterity",
+    aCON: "Constitution",
+    aINT: "Intelligence",
+    aWIS: "Wisdom",
+    aCHA: "Charisma",
+    attrStr: "Strength",
+    attrDex: "Dexterity",
+    attrCon: "Constitution",
+    attrInt: "Intelligence",
+    attrWis: "Wisdom",
+    attrCha: "Charisma",
+
+    // Combat & Saves
+    AtkBonus: "Attack Bonus",
+    Defense: "Defense",
+    svFort: "Fortitude",
+    svRef: "Reflex",
+    svWill: "Will",
+    svTough: "Toughness",
+    saveFort: "Fortitude",
+    saveRef: "Reflex",
+    saveWill: "Will",
+    saveTough: "Toughness",
+
+    // Skills - Standard & Short IDs
+    skAcrobat: "Acrobatics",
+    skAcro: "Acrobatics",
+    skBluff: "Bluff",
+    skClimb: "Climb",
+    skComput: "Computers",
+    skComputer: "Computers",
+    skConcent: "Concentration",
+    skConc: "Concentration",
+    skDiplo: "Diplomacy",
+    skDiplom: "Diplomacy",
+    skDisable: "Disable Device",
+    skDisab: "Disable Device",
+    skDisguise: "Disguise",
+    skDisg: "Disguise",
+    skDrive: "Drive",
+    skEscape: "Escape Artist",
+    skEscA: "Escape Artist",
+    skGather: "Gather Information",
+    skGath: "Gather Information",
+    skHandle: "Handle Animal",
+    skHand: "Handle Animal",
+    skIntim: "Intimidate",
+    skInvest: "Investigate",
+    skInves: "Investigate",
+    skLanguage: "Languages",
+    skLang: "Languages",
+    skMedicine: "Medicine",
+    skMed: "Medicine",
+    skMMGamble: "Gambling",
+    skGamble: "Gambling",
+    skMMNavig: "Navigation",
+    skNavig: "Navigation",
+    skNotice: "Notice",
+    skPilot: "Pilot",
+    skRide: "Ride",
+    skSearch: "Search",
+    skSense: "Sense Motive",
+    skSenseM: "Sense Motive",
+    skSleight: "Sleight of Hand",
+    skSleightH: "Sleight of Hand",
+    skStealth: "Stealth",
+    skSurvival: "Survival",
+    skSurv: "Survival",
+    skSwim: "Swim",
+
+    // Craft
+    skCraft: "Craft",
+    skCrafArt: "Craft (Artistic)",
+    skCrafArti: "Craft (Artistic)",
+    skCrafChem: "Craft (Chemical)",
+    skCrafElec: "Craft (Electronic)",
+    skCrafMech: "Craft (Mechanical)",
+    skCrafStr: "Craft (Structural)",
+    skCrafStru: "Craft (Structural)",
+
+    // Knowledge
+    skKnowledg: "Knowledge",
+    skKnowledge: "Knowledge",
+    skKnowArc: "Knowledge (Arcane Lore)",
+    skKnowArt: "Knowledge (Art)",
+    skKnowBeh: "Knowledge (Behavioral Sciences)",
+    skKnowBehv: "Knowledge (Behavioral Sciences)",
+    skKnowBus: "Knowledge (Business)",
+    skKnowCiv: "Knowledge (Civics)",
+    skKnowCur: "Knowledge (Current Events)",
+    skKnowCurr: "Knowledge (Current Events)",
+    skKnowEar: "Knowledge (Earth Sciences)",
+    skKnowEart: "Knowledge (Earth Sciences)",
+    skKnowHist: "Knowledge (History)",
+    skKnowLife: "Knowledge (Life Sciences)",
+    skKnowLif: "Knowledge (Life Sciences)",
+    skKnowPhy: "Knowledge (Physical Sciences)",
+    skKnowPhys: "Knowledge (Physical Sciences)",
+    skKnowPop: "Knowledge (Popular Culture)",
+    skKnowCult: "Knowledge (Popular Culture)",
+    skKnowStr: "Knowledge (Streetwise)",
+    skKnowStrt: "Knowledge (Streetwise)",
+    skKnowTac: "Knowledge (Tactics)",
+    skKnowTact: "Knowledge (Tactics)",
+    skKnowTec: "Knowledge (Technology)",
+    skKnowTech: "Knowledge (Technology)",
+    skKnowTheo: "Knowledge (Theology & Philosophy)",
+    skKnowThe: "Knowledge (Theology & Philosophy)",
+
+    // Perform
+    skPerform: "Perform",
+    skPerf: "Perform",
+    skPerfAct: "Perform (Acting)",
+    skPerfCom: "Perform (Comedy)",
+    skPerfDan: "Perform (Dance)",
+    skPerfKey: "Perform (Keyboard)",
+    skPerfOrat: "Perform (Oratory)",
+    skPerfPerc: "Perform (Percussion)",
+    skPerfSing: "Perform (Singing)",
+    skPerfStri: "Perform (Stringed Instruments)",
+    skPerfStr: "Perform (Stringed Instruments)",
+    skPerfWind: "Perform (Wind Instruments)",
+
+    // Profession
+    skProf: "Profession",
+    skProfOth: "Profession",
+    skProfession: "Profession"
+  };
+
+  function resolveHlTraitModLabel(menuThing) {
+    if (!menuThing) return "Trait";
+    if (HL_LIB_TRAIT_MOD_MAP[menuThing]) {
+      return HL_LIB_TRAIT_MOD_MAP[menuThing];
+    }
+    const lower = menuThing.toLowerCase();
+    if (typeof SKILL_NAME_NORMALIZATION_MAP !== 'undefined' && SKILL_NAME_NORMALIZATION_MAP[lower]) {
+      return SKILL_NAME_NORMALIZATION_MAP[lower];
+    }
+    const stripped = menuThing.replace(/^skMM|^sk|^sv|^attr|^a/, "");
+    if (typeof SKILL_NAME_NORMALIZATION_MAP !== 'undefined' && SKILL_NAME_NORMALIZATION_MAP[stripped.toLowerCase()]) {
+      return SKILL_NAME_NORMALIZATION_MAP[stripped.toLowerCase()];
+    }
+    let formatted = stripped.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+    if (formatted.startsWith("Know ")) {
+      formatted = `Knowledge (${formatted.replace(/^Know /, "")})`;
+    } else if (formatted.startsWith("Craf ")) {
+      formatted = `Craft (${formatted.replace(/^Craf /, "")})`;
+    } else if (formatted.startsWith("Perf ")) {
+      formatted = `Perform (${formatted.replace(/^Perf /, "")})`;
+    }
+    return formatted || menuThing;
+  }
+
+  function parseHeroLabSingleEffectPick(powerPick, baseThing) {
+    const canonicalName = HL_LIB_POWER_MAP[baseThing] || "Power";
+    let customName = canonicalName;
+    let ranks = 1;
+    let isEasyToLose = false;
+    let restrictedTo = "";
+
+    const children = Array.from(powerPick.children || []);
+    const gizmo = children.find(c => c.tagName.toLowerCase() === "gizmo");
+    const container = gizmo ? Array.from(gizmo.children || []).find(c => c.tagName.toLowerCase() === "container") : null;
+    const childPicks = container ? Array.from(container.children || []).filter(c => c.tagName.toLowerCase() === "pick") : [];
+
+    const modifiers = [];
+    const descriptors = [];
+    const drawbacks = [];
+    const nestedPowerEffects = [];
+    const subPowers = [];
+
+    // Find PowerHelp pick
+    const powerHelp = childPicks.find(p => p.getAttribute("thing") === "PowerHelp");
+    if (powerHelp) {
+      const fields = Array.from(powerHelp.getElementsByTagName ? powerHelp.getElementsByTagName("field") : (powerHelp.children || []).filter(c => c.tagName.toLowerCase() === "field"));
+      const nameField = fields.find(f => f.getAttribute("id") === "pwhName");
+      if (nameField && nameField.getAttribute("text")) customName = nameField.getAttribute("text");
+
+      const rankField = fields.find(f => f.getAttribute("id") === "pwhRankUsr" || f.getAttribute("id") === "pwhRank");
+      if (rankField) {
+        const rVal = parseFloat(rankField.getAttribute("user") || rankField.getAttribute("value") || "1");
+        if (!isNaN(rVal) && rVal > 0) ranks = Math.round(rVal);
+      }
+
+      const easyField = fields.find(f => f.getAttribute("id") === "dvhEasyLos");
+      if (easyField && (easyField.getAttribute("user") === "1." || easyField.getAttribute("value") === "1.")) isEasyToLose = true;
+
+      const restrCondField = fields.find(f => f.getAttribute("id") === "dvhResCond");
+      if (restrCondField && restrCondField.getAttribute("text")) restrictedTo = restrCondField.getAttribute("text");
+    }
+
+    // Iterate sibling picks
+    for (const cp of childPicks) {
+      const th = cp.getAttribute("thing");
+      if (th === "PowerHelp") continue;
+
+      // Nested power inside device
+      if (th.startsWith("pw") && th !== "pwMods" && th !== "pwDescs" && th !== "pwOptions") {
+        const nestedEff = parseHeroLabSingleEffectPick(cp, th);
+        if (nestedEff) nestedPowerEffects.push(nestedEff);
+        continue;
+      }
+
+      const cpFields = Array.from(cp.getElementsByTagName ? cp.getElementsByTagName("field") : (cp.children || []).filter(c => c.tagName.toLowerCase() === "field"));
+
+      // TraitMod (Enhanced Trait)
+      if (th === "TraitMod") {
+        const rField = cpFields.find(f => f.getAttribute("id") === "modRanks");
+        const cField = cpFields.find(f => f.getAttribute("id") === "modChosen");
+        const modRanks = rField ? parseFloat(rField.getAttribute("user") || rField.getAttribute("value") || "1") : 1;
+        const menuThing = cField ? cField.getAttribute("menuthing") : "";
+        const label = resolveHlTraitModLabel(menuThing);
+
+        const lowerName = label.toLowerCase().trim();
+        const abilityMap = {
+          "strength": "Strength", "dexterity": "Dexterity", "constitution": "Constitution",
+          "intelligence": "Intelligence", "wisdom": "Wisdom", "charisma": "Charisma",
+          "str": "Strength", "dex": "Dexterity", "con": "Constitution",
+          "int": "Intelligence", "wis": "Wisdom", "cha": "Charisma"
+        };
+        const saveMap = {
+          "toughness": "Toughness", "fortitude": "Fortitude", "reflex": "Reflex", "will": "Will"
+        };
+        const combatMap = {
+          "attack": "Attack", "attack bonus": "Attack Bonus", "defense": "Defense", "defense bonus": "Defense"
+        };
+
+        if (abilityMap[lowerName]) {
+          const abName = abilityMap[lowerName];
+          subPowers.push({
+            name: `${abName} (+${modRanks})`,
+            type: abName,
+            rank: modRanks / 2,
+            baseCost: 2,
+            costType: "per_rank",
+            details: "",
+            modifiers: [],
+            isReduced: modRanks < 0
+          });
+        } else if (saveMap[lowerName]) {
+          const sName = saveMap[lowerName];
+          subPowers.push({
+            name: `${sName} (+${modRanks})`,
+            type: sName,
+            rank: Math.abs(modRanks),
+            baseCost: 1,
+            costType: "per_rank",
+            details: "",
+            modifiers: [],
+            isReduced: modRanks < 0
+          });
+        } else if (combatMap[lowerName]) {
+          const cName = combatMap[lowerName];
+          subPowers.push({
+            name: `${cName} (+${modRanks})`,
+            type: cName,
+            rank: Math.abs(modRanks),
+            baseCost: 2,
+            costType: "per_rank",
+            details: "",
+            modifiers: [],
+            isReduced: modRanks < 0
+          });
+        } else {
+          // Check Skill
+          const normSkill = (typeof SKILL_NAME_NORMALIZATION_MAP !== 'undefined') ? SKILL_NAME_NORMALIZATION_MAP[lowerName] : null;
+          let matchedSkill = null;
+          if (normSkill) {
+            matchedSkill = normSkill;
+          } else if (typeof SKILLS_LIST !== 'undefined') {
+            const skObj = SKILLS_LIST.find(s => s.name.toLowerCase() === lowerName || lowerName.startsWith(s.name.toLowerCase()));
+            if (skObj) matchedSkill = skObj.name;
+          }
+          if (matchedSkill) {
+            subPowers.push({
+              name: `${matchedSkill} (+${modRanks})`,
+              type: matchedSkill,
+              rank: Math.abs(modRanks),
+              baseCost: 0.25,
+              costType: "per_rank",
+              details: "",
+              modifiers: [],
+              isReduced: modRanks < 0
+            });
+          } else {
+            // Check Feat
+            let matchedFeat = null;
+            if (typeof FEATS_LIST !== 'undefined') {
+              const fObj = FEATS_LIST.find(f => f.name.toLowerCase() === lowerName || lowerName.startsWith(f.name.toLowerCase()));
+              if (fObj) matchedFeat = fObj.name;
+            }
+            if (matchedFeat) {
+              subPowers.push({
+                name: `${matchedFeat} (${modRanks})`,
+                type: matchedFeat,
+                rank: Math.abs(modRanks),
+                baseCost: 1,
+                costType: "per_rank",
+                details: "",
+                modifiers: [],
+                isReduced: modRanks < 0
+              });
+            } else {
+              subPowers.push({
+                name: `${label} (+${modRanks})`,
+                type: label,
+                rank: Math.abs(modRanks),
+                baseCost: 1,
+                costType: "per_rank",
+                details: "",
+                modifiers: [],
+                isReduced: modRanks < 0
+              });
+            }
+          }
+        }
+        continue;
+      }
+
+      // Descriptors
+      if (th.startsWith("pds")) {
+        const dName = HL_LIB_DESCRIPTOR_MAP[th] || th.replace(/^pds/, "");
+        if (!descriptors.includes(dName)) descriptors.push(dName);
+        continue;
+      }
+
+      // Power Options
+      if (th.startsWith("po")) {
+        const oName = HL_LIB_OPTION_MAP[th] || th.replace(/^po/, "");
+        if (["Immunity", "Super-Senses", "Super-Movement", "Comprehend", "Enhanced Movement"].includes(canonicalName)) {
+          let r = 1;
+          let bCost = 1;
+          let cType = "per_rank";
+          if (canonicalName === "Immunity") {
+            const immunityRankMap = {
+              "aging": 1, "disease": 1, "poison": 1, "starvation and thirst": 1, "need for sleep": 1,
+              "suffocation (all)": 2, "suffocation (one type)": 1, "critical hits": 2,
+              "alteration effects": 5, "dazzle effects": 5, "emotion effects": 5, "entrapment": 5,
+              "fatigue effects": 5, "interaction skills": 5, "trait effects": 5, "damage type": 5, "damage": 5,
+              "life support": 9, "mental effects": 10,
+              "rare descriptor": 1, "uncommon descriptor": 2, "common descriptor": 5, "very common descriptor": 10,
+              "all nonlethal physical damage": 20, "all lethal physical damage": 20,
+              "all nonlethal energy damage": 20, "all lethal energy damage": 20
+            };
+            r = immunityRankMap[oName.toLowerCase().trim()] || 1;
+            bCost = 1;
+          } else if (canonicalName === "Super-Senses") {
+            const senseRankMap = {
+              "darkvision": 2, "x-ray vision": 4, "tremorsense": 3,
+              "blindsight": 4, "postcognition": 4, "precognition": 4, "accurate": 2
+            };
+            r = senseRankMap[oName.toLowerCase().trim()] || 1;
+            bCost = 1;
+          } else if (canonicalName === "Super-Movement") {
+            bCost = 2;
+            r = 1;
+          } else if (canonicalName === "Comprehend") {
+            bCost = 2;
+            r = (oName.toLowerCase().includes("languages") ? 1 : 2);
+          }
+          subPowers.push({
+            name: oName,
+            type: oName,
+            rank: r,
+            baseCost: bCost,
+            costType: cType,
+            details: "",
+            modifiers: [],
+            isReduced: false
+          });
+        } else {
+          modifiers.push({
+            name: oName,
+            category: "option",
+            cost: 0
+          });
+        }
+        continue;
+      }
+
+      // Power Feats
+      if (th.startsWith("pf")) {
+        let fName = HL_LIB_FEAT_MAP[th] || th.replace(/^pf/, "");
+        const uField = cpFields.find(f => f.getAttribute("id") === "pwmUserTxt");
+        const rField = cpFields.find(f => f.getAttribute("id") === "pwmRanks");
+        const uTxt = uField ? uField.getAttribute("text") : "";
+        const rVal = rField ? parseFloat(rField.getAttribute("user") || rField.getAttribute("value") || "1") : 1;
+        if (uTxt) fName += ` (${uTxt})`;
+        modifiers.push({
+          name: fName,
+          ranks: rVal,
+          category: "feat",
+          cost: 1
+        });
+        continue;
+      }
+
+      // Extras
+      if (th.startsWith("px")) {
+        let xName = HL_LIB_EXTRA_MAP[th] || th.replace(/^px/, "");
+        const uField = cpFields.find(f => f.getAttribute("id") === "pwmUserTxt");
+        const rField = cpFields.find(f => f.getAttribute("id") === "pwmRankUsr" || f.getAttribute("id") === "pwmRanks");
+        const uTxt = uField ? uField.getAttribute("text") : "";
+        const rVal = rField ? parseFloat(rField.getAttribute("user") || rField.getAttribute("value") || "1") : 1;
+        if (uTxt) xName += ` (${uTxt})`;
+        modifiers.push({
+          name: xName,
+          ranks: rVal,
+          category: "extra",
+          cost: 1,
+          costType: "per_rank"
+        });
+        continue;
+      }
+
+      // Flaws
+      if (th.startsWith("pl")) {
+        let lName = HL_LIB_FLAW_MAP[th] || th.replace(/^pl/, "");
+        const uField = cpFields.find(f => f.getAttribute("id") === "pwmUserTxt");
+        const rField = cpFields.find(f => f.getAttribute("id") === "pwmRankUsr" || f.getAttribute("id") === "pwmRanks");
+        const uTxt = uField ? uField.getAttribute("text") : "";
+        const rVal = rField ? parseFloat(rField.getAttribute("user") || rField.getAttribute("value") || "1") : 1;
+        if (uTxt) lName += ` (${uTxt})`;
+        modifiers.push({
+          name: lName,
+          ranks: rVal,
+          category: "flaw",
+          cost: -1,
+          costType: "per_rank"
+        });
+        continue;
+      }
+
+      // Drawbacks
+      if (th.startsWith("pd")) {
+        let dName = HL_LIB_DRAWBACK_MAP[th] || th.replace(/^pd/, "");
+        const uField = cpFields.find(f => f.getAttribute("id") === "pwmUserTxt");
+        const rField = cpFields.find(f => f.getAttribute("id") === "pwmRanks");
+        const uTxt = uField ? uField.getAttribute("text") : "";
+        const rVal = rField ? parseFloat(rField.getAttribute("user") || rField.getAttribute("value") || "1") : 1;
+        if (uTxt) dName += `: ${uTxt}`;
+        drawbacks.push({
+          name: dName,
+          ranks: rVal,
+          points: rVal,
+          category: "drawback"
+        });
+        continue;
+      }
+    }
+
+    const isDevice = (canonicalName === "Device");
+    if (isDevice) {
+      if (isEasyToLose) {
+        modifiers.unshift({
+          name: "Easy to Lose",
+          cost: -1,
+          costType: "per_rank",
+          category: "flaw"
+        });
+      } else {
+        modifiers.unshift({
+          name: "Hard to Lose",
+          cost: 0,
+          costType: "flat",
+          category: "extra"
+        });
+      }
+      if (restrictedTo) {
+        modifiers.push({
+          name: `Restricted (${restrictedTo})`,
+          cost: 1,
+          costType: "flat",
+          category: "feat"
+        });
+      }
+    }
+
+    const baseData = (typeof POWER_EFFECTS_LIST !== 'undefined') ? POWER_EFFECTS_LIST.find(e => e.name === canonicalName) : null;
+    let finalRank = ranks;
+    if (canonicalName === "Enhanced Trait" && subPowers.length > 0) {
+      finalRank = Math.max(1, Math.round(subPowers.reduce((sum, sp) => sum + (sp.rank * (sp.baseCost || 1)), 0)));
+    } else if ((canonicalName === "Immunity" || canonicalName === "Super-Senses") && subPowers.length > 0) {
+      finalRank = subPowers.reduce((sum, sp) => sum + (sp.rank || 1), 0);
+    }
+
+    const primaryEffect = {
+      id: "eff_" + Math.random().toString(36).substr(2, 9),
+      name: customName || canonicalName,
+      effectName: canonicalName,
+      rank: finalRank,
+      ranks: finalRank,
+      baseCost: baseData ? baseData.baseCost : 1,
+      action: baseData ? baseData.action : "Standard",
+      range: baseData ? baseData.range : "Touch",
+      duration: baseData ? baseData.duration : "Instant",
+      savingThrow: baseData ? (baseData.savingThrow || baseData.check || "None") : "None",
+      modifiers: modifiers,
+      subPowers: subPowers,
+      descriptors: descriptors,
+      drawbacks: drawbacks
+    };
+
+    return {
+      isDevice,
+      isEasyToLose,
+      primaryEffect,
+      nestedPowerEffects
+    };
+  }
+
+  function ingestHeroLabLibrary(leadXmlStr, primaryData, audit) {
+    if (!leadXmlStr) return;
+    const doc = (typeof DOMParser !== 'undefined') ? new DOMParser().parseFromString(leadXmlStr, "text/xml") : null;
+    if (!doc) return;
+
+    let libPicks = [];
+    try {
+      libPicks = Array.from(doc.querySelectorAll('pick[source="libTable"]'));
+    } catch(e) {}
+    if (libPicks.length === 0 && doc.getElementsByTagName) {
+      const allPicks = Array.from(doc.getElementsByTagName("pick"));
+      libPicks = allPicks.filter(p => p.getAttribute("source") === "libTable");
+    }
+    if (libPicks.length === 0) return;
+
+    if (!primaryData.blueprints) primaryData.blueprints = [];
+    if (!audit.libraryPlans) audit.libraryPlans = [];
+
+    libPicks.forEach((p, pIdx) => {
+      const baseThing = p.getAttribute("thing");
+      const pFields = Array.from(p.getElementsByTagName ? p.getElementsByTagName("field") : (p.children || []).filter(c => c.tagName.toLowerCase() === "field"));
+      const activeField = pFields.find(f => f.getAttribute("id") === "pwActive");
+      const isActive = (activeField && (activeField.getAttribute("user") === "1." || activeField.getAttribute("value") === "1.")) || p.getAttribute("default") !== "yes";
+
+      const parsed = parseHeroLabSingleEffectPick(p, baseThing);
+      if (!parsed) return;
+
+      let containerType = "normal";
+      const effects = [parsed.primaryEffect];
+
+      if (parsed.isDevice) {
+        containerType = parsed.isEasyToLose ? "device_easy" : "device_hard";
+        if (parsed.nestedPowerEffects && parsed.nestedPowerEffects.length > 0) {
+          parsed.nestedPowerEffects.forEach(n => {
+            if (n.primaryEffect) {
+              if (n.primaryEffect.rank === undefined && n.primaryEffect.ranks !== undefined) {
+                n.primaryEffect.rank = n.primaryEffect.ranks;
+              }
+              effects.push(n.primaryEffect);
+            }
+          });
+        }
+      }
+
+      // Infer plan type (invention, ritual, device)
+      let planType = "invention";
+      const charFeats = primaryData.feats || {};
+      const featNames = Array.isArray(charFeats) ? charFeats.map(f => (typeof f === 'string' ? f : (f.name || ""))) : Object.keys(charFeats);
+      const hasRitualist = featNames.some(f => f.includes("Ritualist"));
+      const hasInventor = featNames.some(f => f.includes("Inventor"));
+      const isMagicOrRitual = (parsed.primaryEffect.descriptors && /magic|arcane|ritual|divine|demonic/i.test(parsed.primaryEffect.descriptors)) ||
+                              /ritual|spell|enchant/i.test(parsed.primaryEffect.name) ||
+                              (hasRitualist && !hasInventor && !parsed.isDevice);
+      if (parsed.isDevice || baseThing === "pwDevice" || baseThing === "pwUPGadget") {
+        planType = "device";
+      } else if (isMagicOrRitual) {
+        planType = "ritual";
+      }
+
+      const container = {
+        id: "bp_" + Math.random().toString(36).substr(2, 9) + "_" + pIdx,
+        name: parsed.primaryEffect.name,
+        containerType: containerType,
+        planType: planType,
+        collapsed: false,
+        active: isActive,
+        effects: effects
+      };
+
+      primaryData.blueprints.push(container);
+      audit.libraryPlans.push({
+        name: container.name,
+        type: container.containerType === "device_easy" ? "Device (Easy to Lose)" : (container.containerType === "device_hard" ? "Device (Hard to Lose)" : (planType === "ritual" ? "Ritual" : "Invention")),
+        active: container.active,
+        effectsSummary: container.effects.map(e => `${e.effectName} ${e.rank !== undefined ? e.rank : e.ranks}`).join(", ")
+      });
+    });
   }
 
   // ==========================================================================
@@ -1879,6 +2884,8 @@
       linkedTo: null,
       descriptors: descriptors,
       notes: userNotes,
+      active: pNode.getAttribute("active") === "no" ? false : (association === "alternate" ? (pNode.getAttribute("active") === "yes") : (pNode.getAttribute("active") !== "no")),
+      declaredCost: parseInt(getDirectChild(pNode, "cost")?.getAttribute("value") || 0),
       modifiers: modifiers,
       subPowers: parsedSubPowers,
       options: parsedOptions
@@ -1979,6 +2986,223 @@
     if (convertedHlFeats > 0 && summary.feats !== convertedHlFeats) {
       audit.conversions.push(`Feat points re-tallied: ${summary.feats} PP in MM2CE vs. ${convertedHlFeats} PP in Hero Lab.`);
     }
+
+    // Execute comprehensive Rule Compliance & Costing / Bundling Audit
+    auditRuleComplianceAndCosting(charData, audit, tempChar);
+  }
+
+  // ==========================================================================
+  // RULE COMPLIANCE & COSTING / IMPROPER BUNDLING AUDIT ENGINE
+  // ==========================================================================
+  function auditRuleComplianceAndCosting(charData, audit, tempChar) {
+    const hlSpent = audit.heroLabSpent || {};
+    const summary = tempChar.powerPointsSummary;
+    const pl = tempChar.powerLevel || 10;
+    const totalAllowed = tempChar.totalPointsAllowed || (pl * 15);
+
+    if (!audit.complianceAlerts) audit.complianceAlerts = [];
+    if (!audit.costingComparison) audit.costingComparison = [];
+
+    // 1. Comprehensive Costing Cross-Check Table
+    const categoriesToCheck = [
+      { key: "Abilities", label: "Abilities", hl: hlSpent["Abilities"], app: summary.abilities },
+      { key: "Combat", label: "Combat (Attack / Defense)", hl: hlSpent["Combat"], app: summary.combat },
+      { key: "Saves", label: "Resistances (Saves)", hl: hlSpent["Saves"], app: summary.resistances },
+      { key: "Skills", label: "Skills", hl: hlSpent["Skills"], app: summary.skills },
+      { key: "Feats", label: "Feats", hl: hlSpent["Feats"], app: summary.feats },
+      { key: "Powers", label: "Powers", hl: hlSpent["Powers"], app: summary.powers }
+    ];
+
+    if (hlSpent["Drawbacks"] !== undefined && hlSpent["Drawbacks"] !== 0) {
+      categoriesToCheck.push({ key: "Drawbacks", label: "Drawbacks", hl: hlSpent["Drawbacks"], app: summary.drawbacks || 0 });
+    }
+
+    let totalHlSpent = 0;
+    let hasHlSpent = false;
+
+    categoriesToCheck.forEach(cat => {
+      const hlVal = typeof cat.hl === "number" ? cat.hl : null;
+      if (hlVal !== null) {
+        totalHlSpent += hlVal;
+        hasHlSpent = true;
+      }
+      const appVal = cat.app || 0;
+      const diff = hlVal !== null ? (appVal - hlVal) : 0;
+      const status = hlVal === null ? "unspecified" : (diff === 0 ? "match" : (diff > 0 ? "variance_over" : "variance_under"));
+      audit.costingComparison.push({
+        category: cat.label,
+        hl: hlVal !== null ? hlVal : "-",
+        app: appVal,
+        diff: hlVal !== null ? diff : "-",
+        status: status
+      });
+
+      if (diff !== 0 && hlVal !== null) {
+        let explanation = "";
+        if (cat.key === "Feats") {
+          explanation = "Check for combo feat package headers (e.g. Fighting Styles) or power-granted feats.";
+        } else if (cat.key === "Powers") {
+          explanation = "Powers evaluated under canonical Ultimate Power pricing rules.";
+        } else if (cat.key === "Skills") {
+          explanation = "Skills evaluated at 1 PP per 4 ranks (standard M&M 2E rule).";
+        }
+        audit.complianceAlerts.push({
+          type: "Costing Variance",
+          severity: "warning",
+          category: cat.label,
+          message: `${cat.label} point variance: Hero Lab spent ${hlVal} PP vs. MM2CE evaluated ${appVal} PP (diff: ${diff > 0 ? `+${diff}` : diff} PP). ${explanation}`
+        });
+      }
+    });
+
+    // Total Spent Cross-Check
+    const totalDiff = hasHlSpent ? (summary.totalSpent - totalHlSpent) : 0;
+    audit.costingComparison.push({
+      category: "Total Points Spent",
+      hl: hasHlSpent ? totalHlSpent : "-",
+      app: summary.totalSpent,
+      diff: hasHlSpent ? totalDiff : "-",
+      status: (!hasHlSpent || totalDiff === 0) ? "match" : (totalDiff > 0 ? "variance_over" : "variance_under")
+    });
+
+    // 2. Budget Limits Check
+    if (summary.totalSpent > totalAllowed) {
+      audit.complianceAlerts.push({
+        type: "Budget Exceeded",
+        severity: "error",
+        category: "Points Budget",
+        message: `Character spent ${summary.totalSpent} PP, exceeding the campaign allowance of ${totalAllowed} PP by ${summary.totalSpent - totalAllowed} PP.`
+      });
+    }
+
+    // 3. Improper Bundling Check: Device & Container Capacity
+    if (charData.powers && Array.isArray(charData.powers)) {
+      charData.powers.forEach(c => {
+        const isContainer = c.containerType === "device_easy" || c.containerType === "device_hard" || c.containerType === "container";
+        if (isContainer && c.effects && c.effects.length > 0) {
+          const rank = parseInt(c.deviceRank) || parseInt(c.effects[0].rank) || 1;
+          const capacity = rank * 5;
+
+          let totalContained = 0;
+          if (c.effects.length > 1 || (c.effects.length === 1 && !c.effects[0].containedPowers)) {
+            totalContained = c.effects.reduce((sum, eff) => {
+              const effCost = tempChar.calculateEffectCost ? tempChar.calculateEffectCost(eff) : (eff.declaredCost || (eff.rank * (eff.baseCost || 1)));
+              return sum + (effCost || 0);
+            }, 0);
+          } else if (Array.isArray(c.effects[0].containedPowers) && c.effects[0].containedPowers.length > 0) {
+            totalContained = c.effects[0].containedPowers.reduce((sum, p) => sum + (parseFloat(p.cost) || 0), 0);
+          }
+
+          if (totalContained > capacity) {
+            audit.complianceAlerts.push({
+              type: "Improper Bundling",
+              severity: "error",
+              category: "Container Capacity",
+              trait: c.name,
+              message: `Container '${c.name}' (Rank ${rank}, capacity: ${capacity} PP) holds ${totalContained} PP of traits, exceeding its written rule limit by ${totalContained - capacity} PP.`
+            });
+          }
+        }
+
+        // 4. Improper Bundling Check: Array Alternate Powers
+        if (c.containerType === "array" && c.effects && c.effects.length > 1) {
+          const baseEff = c.effects[0];
+          const baseCost = tempChar.calculateEffectCost ? tempChar.calculateEffectCost(baseEff) : (baseEff.rank * (baseEff.baseCost || 1));
+          const isMagic = baseEff.effectName === "Magic" || baseEff.name.toLowerCase().includes("magic") || (baseEff.descriptors && baseEff.descriptors.toLowerCase().includes("magic"));
+          const arrayBudget = isMagic ? Math.max(baseCost, (baseEff.rank || 1) * 2) : Math.max(baseCost, c.declaredCost || 0);
+          
+          let activeNonDynamicCount = 0;
+          const activeAltNames = [];
+
+          if (baseEff.active && baseEff.effectName !== "Array") {
+            activeNonDynamicCount++;
+            activeAltNames.push(baseEff.name);
+          }
+
+          c.effects.slice(1).forEach(altEff => {
+            const altCost = tempChar.calculateEffectCost ? tempChar.calculateEffectCost(altEff) : (altEff.rank * (altEff.baseCost || 1));
+            if (altCost > arrayBudget) {
+              audit.complianceAlerts.push({
+                type: "Improper Bundling",
+                severity: "error",
+                category: "Array Alternate Power",
+                trait: c.name,
+                message: `Alternate Power '${altEff.name}' in array '${c.name}' evaluates to ${altCost} PP, exceeding the array budget (${arrayBudget} PP). Under M&M 2E rules, an Alternate Power cannot cost more than the array budget.`
+              });
+            }
+
+            if (altEff.active && altEff.association !== "dynamic") {
+              activeNonDynamicCount++;
+              activeAltNames.push(altEff.name);
+            }
+          });
+
+          if (activeNonDynamicCount > 1) {
+            audit.complianceAlerts.push({
+              type: "Improper Activation",
+              severity: "warning",
+              category: "Array Alternate Power",
+              trait: c.name,
+              message: `Array '${c.name}' has multiple non-dynamic alternate powers active simultaneously (${activeAltNames.join(", ")}). Under written rules (Core p. 108), only one non-dynamic alternate power can be active at a time.`
+            });
+          }
+        }
+      });
+    }
+
+    // 5. Written Rules & Power Level (PL) Caps
+    // Defense + Toughness Cap <= 2 * PL
+    const baseDef = tempChar.combat?.DEF || 0;
+    const dodgeFocusRanks = (tempChar.feats && (tempChar.feats["Dodge Focus"] || tempChar.feats["(Combat) Dodge Focus"])) || 0;
+    const totalDef = baseDef + dodgeFocusRanks;
+    const baseCon = tempChar.abilities?.CON || 0;
+    const purchasedTough = tempChar.purchasedResistances?.Toughness || 0;
+    let powerProtection = 0;
+    if (charData.powers) {
+      charData.powers.forEach(c => {
+        (c.effects || []).forEach(e => {
+          if (e.effectName === "Protection" || e.name === "Force Field" || e.name === "Armor") {
+            powerProtection += parseInt(e.rank) || 0;
+          }
+        });
+      });
+    }
+    const totalTough = baseCon + purchasedTough + powerProtection;
+    if ((totalDef + totalTough) > (2 * pl)) {
+      audit.complianceAlerts.push({
+        type: "PL Cap Exceeded",
+        severity: "warning",
+        category: "Defense & Toughness",
+        message: `Defense + Toughness trade-off (+${totalDef} Defense, +${totalTough} Toughness = ${totalDef + totalTough}) exceeds the PL ${pl} cap of ${2 * pl} by ${(totalDef + totalTough) - (2 * pl)}.`
+      });
+    }
+
+    // Skill Bonus Cap <= PL + 10
+    if (charData.skills) {
+      for (const [skName, skRanks] of Object.entries(charData.skills)) {
+        const skBonus = (parseInt(skRanks) || 0);
+        if (skBonus > (pl + 10)) {
+          audit.complianceAlerts.push({
+            type: "PL Cap Exceeded",
+            severity: "warning",
+            category: "Skill Cap",
+            message: `Skill '${skName}' (${skBonus} ranks) exceeds the maximum bonus limit (+${pl + 10}) for PL ${pl}.`
+          });
+        }
+      }
+    }
+
+    // 6. Include Hero Lab native validation reports
+    if (audit.heroLabValidationAlerts && audit.heroLabValidationAlerts.length > 0) {
+      audit.heroLabValidationAlerts.forEach(valMsg => {
+        audit.complianceAlerts.push({
+          type: "Hero Lab Rule Alert",
+          severity: "warning",
+          category: "Validation",
+          message: valMsg
+        });
+      });
+    }
   }
 
   // ==========================================================================
@@ -2068,6 +3292,84 @@
           </div>
         </div>
       ` : ""}
+
+      <!-- Rule Compliance & Costing Verification Section -->
+      <div style="background: var(--bg-card); border: 1.5px solid ${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? 'rgba(234, 179, 8, 0.4)' : 'rgba(16, 185, 129, 0.4)'}; border-radius: 6px; padding: 14px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <h4 style="margin: 0; color: ${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? '#eab308' : '#10b981'}; display: flex; align-items: center; gap: 8px; font-size: 1rem;">
+            <span>${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? '⚖️' : '🛡️'}</span>
+            <span>Rule Compliance &amp; Costing Verification</span>
+          </h4>
+          <span class="audit-badge" style="background: ${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? 'rgba(234, 179, 8, 0.15)' : 'rgba(16, 185, 129, 0.15)'}; color: ${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? '#eab308' : '#10b981'}; border: 1px solid ${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(16, 185, 129, 0.3)'}; font-weight: 600;">
+            ${audit.complianceAlerts && audit.complianceAlerts.length > 0 ? `${audit.complianceAlerts.length} Rule Alert${audit.complianceAlerts.length > 1 ? 's' : ''}` : '✓ 100% Rules Compliant'}
+          </span>
+        </div>
+        <p style="margin: 0 0 12px 0; font-size: var(--font-size-secondary); color: var(--text-secondary); line-height: 1.4;">
+          Automatic cross-check comparing Hero Lab declared resource spending against canonical Mutants &amp; Masterminds 2E / Ultimate Power rules, auditing for improper bundling, container over-capacity, and power level caps:
+        </p>
+
+        <!-- Costing Comparison Table -->
+        ${(audit.costingComparison && audit.costingComparison.length > 0) ? `
+          <div style="margin-bottom: 12px; border: 1px solid var(--border-color); border-radius: 4px; overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
+              <thead>
+                <tr style="background: rgba(0,0,0,0.15); border-bottom: 1.5px solid var(--border-color);">
+                  <th style="padding: 6px 10px;">Trait Category</th>
+                  <th style="padding: 6px 10px; text-align: center;">Hero Lab Declared</th>
+                  <th style="padding: 6px 10px; text-align: center;">MM2CE Evaluated</th>
+                  <th style="padding: 6px 10px; text-align: center;">Variance</th>
+                  <th style="padding: 6px 10px; text-align: right;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${audit.costingComparison.map(row => {
+                  const isMatch = row.status === "match";
+                  const isTotal = row.category === "Total Points Spent";
+                  return `
+                    <tr style="border-bottom: 1px solid var(--border-color); ${isTotal ? 'font-weight: 600; background: rgba(2, 132, 199, 0.05);' : ''}">
+                      <td style="padding: 6px 10px;">${escapeHtml(row.category)}</td>
+                      <td style="padding: 6px 10px; text-align: center;">${row.hl}${typeof row.hl === 'number' ? ' PP' : ''}</td>
+                      <td style="padding: 6px 10px; text-align: center;">${row.app} PP</td>
+                      <td style="padding: 6px 10px; text-align: center; color: ${isMatch ? 'var(--text-secondary)' : (row.diff > 0 ? '#ef4444' : '#10b981')};">
+                        ${typeof row.diff === 'number' ? (row.diff === 0 ? '0 PP' : (row.diff > 0 ? `+${row.diff} PP` : `${row.diff} PP`)) : row.diff}
+                      </td>
+                      <td style="padding: 6px 10px; text-align: right;">
+                        <span class="audit-badge" style="background: ${isMatch ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${isMatch ? '#10b981' : '#f87171'}; border: 1px solid ${isMatch ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}; font-size: 0.75rem;">
+                          ${isMatch ? '✓ Match' : (row.diff > 0 ? '⚠️ Over' : '⚠️ Under')}
+                        </span>
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+
+        <!-- Rule Compliance & Improper Bundling Alerts -->
+        ${(audit.complianceAlerts && audit.complianceAlerts.length > 0) ? `
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${audit.complianceAlerts.map(a => `
+              <div style="background: ${a.severity === 'error' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(234, 179, 8, 0.08)'}; border: 1px solid ${a.severity === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(234, 179, 8, 0.3)'}; border-radius: 4px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                  <strong style="color: ${a.severity === 'error' ? '#ef4444' : '#eab308'}; font-size: 0.85rem;">
+                    ${a.severity === 'error' ? '❌' : '⚠️'} ${escapeHtml(a.type)}${a.category ? `: ${escapeHtml(a.category)}` : ''}
+                  </strong>
+                  ${a.trait ? `<span class="audit-badge audit-info" style="font-size: 0.75rem;">${escapeHtml(a.trait)}</span>` : ''}
+                </div>
+                <div style="font-size: var(--font-size-secondary); color: var(--text-primary); line-height: 1.35;">
+                  ${escapeHtml(a.message)}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        ` : `
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 4px; padding: 8px 12px; font-size: var(--font-size-secondary); color: #10b981; display: flex; align-items: center; gap: 8px;">
+            <span>✓</span>
+            <span>Zero improper bundling or written rule violations detected.</span>
+          </div>
+        `}
+      </div>
 
       <!-- Unconvertible Traits & Full Point Refunds Section -->
       ${unconvTraits.length > 0 ? `
@@ -2212,6 +3514,32 @@
         </div>
       ` : ""}
 
+      <!-- Imported Library Plans -->
+      ${(audit.libraryPlans && audit.libraryPlans.length > 0) ? `
+        <div style="background: var(--bg-card); border: 1.5px solid rgba(139, 92, 246, 0.4); border-radius: 6px; padding: 14px 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <h4 style="margin: 0; color: #a78bfa; display: flex; align-items: center; gap: 8px; font-size: 1rem;">
+              <span>📜</span>
+              <span>Imported Library Plans (${audit.libraryPlans.length} items converted to Plans)</span>
+            </h4>
+            <span class="audit-badge" style="background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); font-weight: 600;">
+              Ready in Plans Tab (0 PP Cost)
+            </span>
+          </div>
+          <p style="margin: 0 0 10px 0; font-size: var(--font-size-secondary); color: var(--text-secondary); line-height: 1.4;">
+            Powers, devices, rituals, and inventions stored on Hero Lab's Library tab have been converted into modular blueprints on your <strong>Plans</strong> tab. As unbudgeted blueprints, they do not consume character Power Points.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: var(--font-size-secondary); max-height: 240px; overflow-y: auto;">
+            ${audit.libraryPlans.map(p => `
+              <div style="padding: 6px 10px; background: rgba(139, 92, 246, 0.06); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <span><strong>${escapeHtml(p.name)}</strong> (${escapeHtml(p.type)} • ${escapeHtml(p.effectsSummary)})</span>
+                <span class="audit-badge ${p.active ? 'audit-success' : 'audit-info'}" style="font-size: 0.75rem;">${p.active ? 'Active' : 'Archived'}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+
       <!-- Attached Companions, Mecha & Headquarters -->
       ${(audit.companions.length > 0 || audit.installations.length > 0) ? `
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
@@ -2257,6 +3585,30 @@
     }
     out += `\n`;
 
+    if (audit.costingComparison && audit.costingComparison.length > 0) {
+      out += `=== RULE COMPLIANCE & COSTING VERIFICATION ===\n`;
+      out += `Category                              | Hero Lab | MM2CE   | Variance | Status\n`;
+      out += `--------------------------------------------------------------------------------\n`;
+      audit.costingComparison.forEach(row => {
+        const cat = String(row.category).padEnd(37, ' ');
+        const hl = String(row.hl + (typeof row.hl === 'number' ? ' PP' : '')).padEnd(8, ' ');
+        const app = String(row.app + ' PP').padEnd(7, ' ');
+        const diffStr = typeof row.diff === 'number' ? (row.diff === 0 ? '0 PP' : (row.diff > 0 ? `+${row.diff} PP` : `${row.diff} PP`)) : String(row.diff);
+        const diff = diffStr.padEnd(8, ' ');
+        const status = row.status === 'match' ? 'Match' : (row.diff > 0 ? 'Over' : 'Under');
+        out += `${cat} | ${hl} | ${app} | ${diff} | ${status}\n`;
+      });
+      out += `\n`;
+    }
+
+    if (audit.complianceAlerts && audit.complianceAlerts.length > 0) {
+      out += `=== RULE COMPLIANCE & IMPROPER BUNDLING ALERTS (${audit.complianceAlerts.length}) ===\n`;
+      audit.complianceAlerts.forEach(a => {
+        out += `* [${a.type}] ${a.category ? `${a.category}: ` : ''}${a.trait ? `(${a.trait}) ` : ''}${a.message}\n`;
+      });
+      out += `\n`;
+    }
+
     out += `=== UNCONVERTIBLE TRAITS & FULL POINT REFUNDS ===\n`;
     if (audit.unconvertibleTraits && audit.unconvertibleTraits.length > 0) {
       audit.unconvertibleTraits.forEach(t => {
@@ -2288,6 +3640,14 @@
     if (audit.conversions.length > 0) {
       out += `=== CANONICAL UP TRANSLATIONS ===\n`;
       audit.conversions.forEach(c => out += `* ${c}\n`);
+      out += `\n`;
+    }
+
+    if (audit.libraryPlans && audit.libraryPlans.length > 0) {
+      out += `=== IMPORTED LIBRARY PLANS (${audit.libraryPlans.length}) ===\n`;
+      audit.libraryPlans.forEach(p => {
+        out += `* ${p.name} [${p.type}] (${p.effectsSummary}) - ${p.active ? 'Active' : 'Archived'} (0 PP Cost, Ready in Plans Tab)\n`;
+      });
       out += `\n`;
     }
 

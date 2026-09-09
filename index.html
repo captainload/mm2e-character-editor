@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=20">
+  <link rel="stylesheet" href="styles.css?v=28">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -93,7 +93,7 @@
       </div>
 
       <!-- Options Drop-Down Window / Modal -->
-      <div class="options-dropdown" id="optionsModal" style="display: none; flex-direction: row; gap: 20px;">
+      <div class="options-dropdown prevent-resize" id="optionsModal" style="display: none; flex-direction: row; gap: 20px;">
         <div style="flex: 1; min-width: 200px;">
           <h3>House Rules</h3>
           <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
@@ -102,8 +102,44 @@
             </label>
             <input type="checkbox" id="toggleEnhancedTraitBoost" style="cursor: pointer;">
           </div>
+          <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleAltFormVariablePL" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Allows Alternate Forms (Metamorph) to have different Power Levels than the primary hero (locked to main form PL by default)">
+              Allow variable PL for alternate forms:
+            </label>
+            <input type="checkbox" id="toggleAltFormVariablePL" style="cursor: pointer;">
+          </div>
+          <div id="rowBoostAltersRanks" style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleBoostAltersRanks" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Boost alters ranks instead of Power Points, working like Enhanced Trait, with fade applying to ranks rather than PP">
+              Boost alters ranks instead of PP:
+            </label>
+            <input type="checkbox" id="toggleBoostAltersRanks" style="cursor: pointer;">
+          </div>
+          <div id="rowDisablePerceptionRange" style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleDisablePerceptionRange" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Disables Perception range upgrades for powers and adds 'No Attack Roll' (+1 PP/r) extra to allow auto-hits within normal Ranged distance increments">
+              Disable Perception range / Enable "No Attack Roll":
+            </label>
+            <input type="checkbox" id="toggleDisablePerceptionRange" style="cursor: pointer;">
+          </div>
+
+          <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+            <h3>Legacy Core Rules (2nd Ed)</h3>
+            <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
+              <label for="toggleEnableLegacyCoreModifiers" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Enable legacy standalone Core 2E modifiers (Continuous, Sustained) in power modifier dropdowns instead of relying solely on the unified Ultimate Power Duration extra">
+                Enable legacy Core modifiers:
+              </label>
+              <input type="checkbox" id="toggleEnableLegacyCoreModifiers" style="cursor: pointer;">
+            </div>
+            
+            <details style="margin-top: 8px; font-size: var(--font-size-fine-print); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px 8px;">
+              <summary style="cursor: pointer; font-weight: 600; color: var(--accent-primary); user-select: none;">ℹ View Included Legacy Traits</summary>
+              <div style="margin-top: 6px; line-height: 1.4; color: var(--text-muted);">
+                <div><strong>Legacy Modifiers:</strong> Continuous (+1/r), Sustained (+1/r or +0), Duration (Continuous), Duration (Sustained).</div>
+                <div style="margin-top: 4px; font-style: italic; color: var(--text-main);">Note: Unified Ultimate Power Duration (+1/r per step) is always available. Full compatibility with imported Hero Lab profiles is always preserved.</div>
+              </div>
+            </details>
+          </div>
         </div>
-        <div style="flex: 1; min-width: 240px;">
+        <div style="flex: 1; min-width: 250px;">
           <h3>Display & Interface Settings</h3>
           
           <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;">
@@ -117,11 +153,23 @@
             <input type="checkbox" id="togglePersistentHeader" style="cursor: pointer;" checked>
           </div>
 
-          <div class="font-control-group" style="margin-top: 6px;">
+          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleFixedOptionsDialog" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Keep Options dialog at standard default sizes so controls remain easily readable when adjusting sliders">
+              Freeze Options Dialog Size:
+            </label>
+            <input type="checkbox" id="toggleFixedOptionsDialog" style="cursor: pointer;" checked>
+          </div>
+
+          <!-- Section: Text & Typography -->
+          <div style="font-size: var(--font-size-secondary); font-weight: 700; color: var(--accent-primary); margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+            Text &amp; Typography
+          </div>
+
+          <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-                <label>Labels & Headers:</label>
+                <button class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <label>Headers &amp; Titles:</label>
               </div>
               <span class="secondary-text" id="valLabelFont">16px</span>
             </div>
@@ -131,45 +179,61 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-                <label>Interactive Controls:</label>
-              </div>
-              <span class="secondary-text" id="valControlFont">14px</span>
-            </div>
-            <input type="range" id="sliderControlFont" min="12" max="22" value="14">
-          </div>
-
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button class="btn btn-secondary" onclick="resetFont('Link', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-                <label>Links & Tags (Touch Target):</label>
-              </div>
-              <span class="secondary-text" id="valLinkFont">14px</span>
-            </div>
-            <input type="range" id="sliderLinkFont" min="11" max="18" value="14">
-          </div>
-
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-                <label>Secondary Details:</label>
+                <button class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <label>Body &amp; Trait Details:</label>
               </div>
               <span class="secondary-text" id="valSecondaryFont">14px</span>
             </div>
-            <input type="range" id="sliderSecondaryFont" min="12" max="18" value="14">
+            <input type="range" id="sliderSecondaryFont" min="12" max="20" value="14">
           </div>
 
-          <div class="font-control-group" style="margin-top: 4px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+          <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('MinorControl', 14)" title="Restore Default" style="padding: 2px 6px; font-size: 12px; margin-right: 6px;">⟲</button>
-                <label>Sub-Controls & Dropdowns:</label>
+                <button class="btn btn-secondary" onclick="resetFont('FinePrint', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <label>Fine Print &amp; Footnotes:</label>
               </div>
-              <span class="secondary-text" id="valMinorControlFont">14px</span>
+              <span class="secondary-text" id="valFinePrintFont">13px</span>
             </div>
-            <input type="range" id="sliderMinorControlFont" min="12" max="18" value="14">
+            <input type="range" id="sliderFinePrintFont" min="10" max="18" value="13">
+          </div>
+
+          <!-- Section: Controls & Badges -->
+          <div style="font-size: var(--font-size-secondary); font-weight: 700; color: var(--accent-primary); margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+            Controls &amp; Badges
+          </div>
+
+          <div class="font-control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <label>Primary Buttons &amp; Inputs:</label>
+              </div>
+              <span class="secondary-text" id="valControlFont">14px</span>
+            </div>
+            <input type="range" id="sliderControlFont" min="12" max="24" value="14">
+          </div>
+
+          <div class="font-control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('MinorControl', 15)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <label>Sub-Controls &amp; Dropdowns:</label>
+              </div>
+              <span class="secondary-text" id="valMinorControlFont">15px</span>
+            </div>
+            <input type="range" id="sliderMinorControlFont" min="11" max="20" value="15">
+          </div>
+
+          <div class="font-control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <button class="btn btn-secondary" onclick="resetFont('Tags', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <label>Tags, Badges &amp; Chips:</label>
+              </div>
+              <span class="secondary-text" id="valTagFont">13px</span>
+            </div>
+            <input type="range" id="sliderTagFont" min="10" max="20" value="13">
           </div>
         </div>
 
@@ -191,7 +255,9 @@
               </button>
             </div>
             <div id="boxFirefoxNotice" style="display: none; margin-top: 8px; padding: 6px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.35;">
-              🦊 <strong>Firefox Saving:</strong> In <em>Firefox Settings &gt; General &gt; Downloads</em>, check <strong>"Always ask you where to save files"</strong>. When saving, click <strong>OK / Save File</strong> on Firefox's prompt to open the system Save As dialog.
+              <div>🦊 <strong>Firefox Saving:</strong> In <em>Firefox Settings &gt; Downloads</em>, check <strong>"Always ask you where to save files"</strong>. When saving, click <strong>OK / Save File</strong> on Firefox's prompt to choose your save folder.</div>
+              <button type="button" class="btn btn-secondary" onclick="if(window.openFirefoxSettings) window.openFirefoxSettings(); else window.open('about:preferences#general', '_blank');" style="margin-top: 6px; font-size: var(--font-size-minor-controls); padding: 3px 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;">⚙ Open Firefox Downloads Settings</button>
+              <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 4px;">If button doesn't work: Go to <strong>Menu button (☰) &gt; Settings &gt; Downloads</strong> (or <strong>Tools &gt; Settings &gt; Downloads</strong> from the top menu). Address fallback: <code>about:preferences#general</code></div>
             </div>
           </div>
 
@@ -221,20 +287,29 @@
     <!-- Power Point Totals Header -->
     <div class="summary-bar">
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-        <span style="font-weight: 600;" id="lblContextRole">Hero:</span>
-        <select id="selActiveCharacterContext" class="fit-content" style="font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; cursor: pointer;" title="Switch Active Character / Form">
-          <option value="main">👑 Main Hero: New Hero</option>
+        <span style="font-weight: 600;" id="lblContextRole">Character Form:</span>
+        <select id="selActiveCharacterContext" class="fit-content" style="height: 28px; font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; cursor: pointer; box-sizing: border-box; min-width: 260px; max-width: 440px;" title="Switch Active Character / Form">
+          <option value="main">🦸 Main Hero: New Hero (PL 10)</option>
+          <optgroup label="➕ Add Character / Form">
+            <option value="__new_hero__">✨ + New Hero (Fresh Sheet)...</option>
+            <option value="__add_alt_form__">🔄 + New Alternate Form (Metamorph)...</option>
+            <option value="__add_mecha__">🤖 + New Mecha Form...</option>
+            <option value="__add_sidekick__">🤝 + New Sidekick...</option>
+            <option value="__add_companion__">👥 + New Companion (Minion / Summon)...</option>
+            <option value="__add_minion__">👥 + New Minion...</option>
+            <option value="__add_summon__">👥 + New Summoned Creature...</option>
+            <option value="__add_duplicate__">👥 + New Duplicate...</option>
+          </optgroup>
         </select>
         <span id="lblHeroName" style="display: none;">New Hero</span>
         | PL: <span class="badge" id="lblPL">10</span>
-        <button type="button" class="btn btn-secondary" id="btnTogglePPBreakdown" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Power Points Breakdown">
+        <button type="button" class="btn btn-secondary" id="btnTogglePPBreakdown" style="height: 28px; padding: 0 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Power Points Breakdown">
           <span id="lblPointTypePrefix">⚡ PP:</span> <span class="badge" id="lblTotalPP">0 / 150 PP</span>
         </button>
-        <button type="button" class="btn btn-secondary" id="btnToggleMechaMode" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Toggle Mecha Mode (Construct / Vehicle Rules)">
-          🤖 <span id="lblMechaModeStatus">Mecha: Off</span>
-        </button>
-        <button type="button" class="btn btn-secondary" id="btnOpenTables" style="padding: 2px 10px; font-size: var(--font-size-minor-controls); font-weight: 600;" title="View Reference Tables">📊 Tables</button>
-        <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="display: none; padding: 2px 10px; font-size: var(--font-size-minor-controls); font-weight: 600; align-items: center; gap: 4px;" title="Return to previous view">⬅ Back</button>
+        <button type="button" class="btn btn-secondary" id="btnOpenTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; box-sizing: border-box;" title="View Reference Tables">📊 Tables</button>
+        <button type="button" class="btn btn-secondary" id="btnOpenTracker" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Status &amp; Combat Tracker">⏱ Tracker</button>
+        <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="GM Campaign Hub &amp; Master Tracker">👑 GM</button>
+        <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="display: none; height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; align-items: center; gap: 4px; box-sizing: border-box;" title="Return to previous view">⬅ Back</button>
       </div>
     </div>
 
@@ -242,7 +317,7 @@
     <div id="companionActiveBanner" style="display: none; background: #0284c7; color: #ffffff; padding: 6px 16px; font-size: var(--font-size-controls); font-weight: 600; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
       <div style="display: flex; align-items: center; gap: 10px;">
         <span id="lblCompanionBannerTitle">👥 Editing Sidekick: Sparrow</span>
-        <span id="lblCompanionBannerBudget" class="badge" style="background: rgba(255,255,255,0.25); color: #fff; font-size: 13px;">0 / 50 PP</span>
+        <span id="lblCompanionBannerBudget" class="badge" style="background: rgba(255,255,255,0.25); color: #fff; font-size: var(--font-size-tags);">0 / 50 PP</span>
       </div>
       <button type="button" class="btn" id="btnReturnToPrimaryHero" style="background: #ffffff; color: #0284c7; font-weight: bold; border: none; padding: 3px 12px; cursor: pointer; border-radius: 4px;">⬅ Return to Main Hero</button>
     </div>
@@ -257,6 +332,7 @@
       <button class="tab-btn" data-tab="tab-background" style="font-weight: bold;">Background</button>
       <button class="tab-btn" data-tab="tab-blueprints" style="font-weight: bold;">Plans</button>
       <button class="tab-btn" data-tab="tab-companions" style="font-weight: bold;">Companions &amp; Forms</button>
+      <button class="tab-btn" data-tab="tab-session" style="font-weight: bold;">🎲 Session</button>
     </nav>
   </div>
 
@@ -272,7 +348,7 @@
         <div class="hero-details-single-row">
           <div class="hero-detail-item">
             <label>Name:</label>
-            <input type="text" id="heroNameInput" value="New Hero" style="width: 200px;">
+            <input type="text" id="heroNameInput" value="" placeholder="New Hero" style="width: 200px;">
           </div>
           <div class="hero-detail-item">
             <label>Player:</label>
@@ -286,30 +362,16 @@
               <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('heroPLInput', 1, 1, 20)">+</button>
             </div>
           </div>
-          <div class="hero-detail-item">
-            <label>Size:</label>
-            <select id="heroSizeInput" class="fit-content">
-              <option value="Awesome">Awesome (Rank 5)</option>
-              <option value="Colossal">Colossal (Rank 4)</option>
-              <option value="Gargantuan">Gargantuan (Rank 3)</option>
-              <option value="Huge">Huge (Rank 2)</option>
-              <option value="Large">Large (Rank 1)</option>
-              <option value="Medium" selected>Medium (Rank 0)</option>
-              <option value="Small">Small (Rank -1)</option>
-              <option value="Tiny">Tiny (Rank -2)</option>
-              <option value="Diminutive">Diminutive (Rank -3)</option>
-              <option value="Fine">Fine (Rank -4)</option>
-              <option value="Minuscule">Minuscule (Rank -5)</option>
-            </select>
-          </div>
-          <div class="hero-detail-item">
-            <label>Mass:</label>
-            <div class="stepper-group">
-              <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('heroMassInput', -1, -5, 30)">−</button>
-              <input type="number" id="heroMassInput" class="stepper-input" min="-5" max="30" value="3">
-              <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('heroMassInput', 1, -5, 30)">+</button>
+          <div class="hero-detail-item" style="display: flex; align-items: center; gap: 6px;">
+            <label>Hero Points:</label>
+            <div class="stepper-group" id="stepperHeroPoints">
+              <button type="button" class="stepper-btn stepper-dec" id="btnDecHeroPoints" onclick="stepVal('heroPointsInput', -1, 0, 99)">−</button>
+              <input type="number" id="heroPointsInput" class="stepper-input" min="0" max="99" value="1">
+              <button type="button" class="stepper-btn stepper-inc" id="btnIncHeroPoints" onclick="stepVal('heroPointsInput', 1, 0, 99)">+</button>
             </div>
-            <span class="secondary-text" id="lblHeroMassVal">(200 lbs.)</span>
+            <button type="button" id="btnLockHeroPoints" class="btn btn-secondary" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); height: calc(var(--font-size-controls) * 2.14); min-height: 26px; display: inline-flex; align-items: center; justify-content: center; width: 28px;" title="Lock/Unlock Hero Points Stepper">
+              <span id="icoLockHeroPoints">🔓</span>
+            </button>
           </div>
         </div>
       </div>
@@ -342,7 +404,7 @@
       <div class="panel-body">
         <div class="combat-inline-row" style="margin-bottom: 6px; align-items: center;">
           <div class="combat-item">
-            <label>Attack (ATK):</label>
+            <label>ATK:</label>
             <div class="stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputATK', -1, -5, 20)">−</button>
               <input type="number" id="inputATK" class="stepper-input" min="-5" max="20" value="0">
@@ -350,7 +412,7 @@
             </div>
           </div>
           <div class="combat-item">
-            <label>Defense (DEF):</label>
+            <label>DEF:</label>
             <div class="stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputDEF', -1, -5, 20)">−</button>
               <input type="number" id="inputDEF" class="stepper-input" min="-5" max="20" value="0">
@@ -358,12 +420,18 @@
             </div>
           </div>
           <div class="combat-item" style="border-left: 1px solid var(--border-color); padding-left: 16px;">
-            <label>Melee Attack:</label>
+            <button type="button" class="row-title-btn" id="btnRollMeleeAtk" onclick="window.rollAttackCheck('Melee Attack')" title="Roll Melee Attack Check" style="padding: 0 4px; font-size: inherit;">
+              <span>🎲</span>
+              <label style="cursor: pointer; margin: 0;">Melee Attack:</label>
+            </button>
             <span class="badge" id="lblCloseAttack" style="font-size: var(--font-size-labels);">+0</span>
             <span class="secondary-text" id="lblCloseAtkBreakdown" style="margin-left: 4px;">(ATK + Feat)</span>
           </div>
           <div class="combat-item">
-            <label>Ranged Attack:</label>
+            <button type="button" class="row-title-btn" id="btnRollRangedAtk" onclick="window.rollAttackCheck('Ranged Attack')" title="Roll Ranged Attack Check" style="padding: 0 4px; font-size: inherit;">
+              <span>🎲</span>
+              <label style="cursor: pointer; margin: 0;">Ranged Attack:</label>
+            </button>
             <span class="badge" id="lblRangedAttack" style="font-size: var(--font-size-labels);">+0</span>
             <span class="secondary-text" id="lblRangedAtkBreakdown" style="margin-left: 4px;">(ATK + Feat)</span>
           </div>
@@ -391,10 +459,10 @@
       <div class="panel-body">
         <div class="full-width-list">
           <div class="list-row" style="font-weight: bold; border-bottom: 1px solid var(--border-color);">
-            <span class="row-title" style="flex: 1.5;">Attack Mode</span>
-            <div style="flex: 0.8; text-align: center; color: var(--text-main);">Bonus</div>
-            <div class="row-adjustments" style="flex: 3;">Bonus Breakdown</div>
-            <div class="defense-total-col" style="flex: 1.2;">Damage / DC</div>
+            <span class="row-title">Attack Mode</span>
+            <div style="width: 110px; min-width: 110px; text-align: center; color: var(--text-main); font-weight: bold;">Bonus</div>
+            <div class="row-adjustments">Bonus Breakdown</div>
+            <div class="defense-total-col" style="width: 110px; min-width: 110px; text-align: right;">Damage / DC</div>
           </div>
           <div id="attacksListContainer"></div>
         </div>
@@ -416,7 +484,10 @@
             <div class="defense-total-col" id="resDefenseClass">10</div>
           </div>
           <div class="list-row">
-            <span class="row-title">Reflex</span>
+            <button type="button" class="row-title-btn row-title" id="btnRollSave_Reflex" onclick="window.rollSaveCheck('Reflex')" title="Roll Reflex Save (1d20 + Reflex)">
+              <span style="font-size: var(--font-size-labels);">🎲</span>
+              <span>Reflex</span>
+            </button>
             <div class="stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputReflex', -1, 0, 20)">−</button>
               <input type="number" id="inputReflex" class="stepper-input" min="0" max="20" value="0">
@@ -426,13 +497,19 @@
             <div class="defense-total-col" id="resReflex">0</div>
           </div>
           <div class="list-row">
-            <span class="row-title">Toughness</span>
+            <button type="button" class="row-title-btn row-title" id="btnRollSave_Toughness" onclick="window.rollSaveCheck('Toughness')" title="Roll Toughness Save (1d20 + Toughness)">
+              <span style="font-size: var(--font-size-labels);">🎲</span>
+              <span>Toughness</span>
+            </button>
             <div style="width: 110px; min-width: 110px;"></div>
             <div class="row-adjustments" id="adjToughness">Base CON</div>
             <div class="defense-total-col" id="resToughness">0</div>
           </div>
           <div class="list-row">
-            <span class="row-title">Fortitude</span>
+            <button type="button" class="row-title-btn row-title" id="btnRollSave_Fortitude" onclick="window.rollSaveCheck('Fortitude')" title="Roll Fortitude Save (1d20 + Fortitude)">
+              <span style="font-size: var(--font-size-labels);">🎲</span>
+              <span>Fortitude</span>
+            </button>
             <div class="stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputFort', -1, 0, 20)">−</button>
               <input type="number" id="inputFort" class="stepper-input" min="0" max="20" value="0">
@@ -442,7 +519,10 @@
             <div class="defense-total-col" id="resFortitude">0</div>
           </div>
           <div class="list-row">
-            <span class="row-title">Will</span>
+            <button type="button" class="row-title-btn row-title" id="btnRollSave_Will" onclick="window.rollSaveCheck('Will')" title="Roll Will Save (1d20 + Will)">
+              <span style="font-size: var(--font-size-labels);">🎲</span>
+              <span>Will</span>
+            </button>
             <div class="stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputWill', -1, 0, 20)">−</button>
               <input type="number" id="inputWill" class="stepper-input" min="0" max="20" value="0">
@@ -482,7 +562,10 @@
       <div class="panel-body">
         <div class="full-width-list">
           <div class="list-row">
-            <span class="misc-row-title">Initiative</span>
+            <button type="button" class="row-title-btn misc-row-title" id="btnRollInitMisc" onclick="window.rollInitiativeCheck()" title="Roll Initiative (1d20 + Initiative Bonus)">
+              <span style="font-size: var(--font-size-labels);">🎲</span>
+              <span>Initiative</span>
+            </button>
             <div class="row-adjustments" id="adjInitiative">DEX + Improved Initiative</div>
             <div class="misc-total-col" id="resInitiative">0</div>
           </div>
@@ -510,6 +593,36 @@
             <span class="misc-row-title">Max Lifting Capacity</span>
             <div class="row-adjustments" id="adjMaxLifting">STR Rank Equivalent Mass (Modified by Powers)</div>
             <div class="misc-total-col" id="resMaxLifting">Rank 0 (25 lbs.)</div>
+          </div>
+          <div class="list-row" style="flex-wrap: wrap; gap: 8px 16px;">
+            <span class="misc-row-title">Size &amp; Mass</span>
+            <div style="display: flex; align-items: center; gap: 16px; flex: 1; flex-wrap: wrap;">
+              <div style="display: inline-flex; align-items: center; gap: 6px;">
+                <label for="heroSizeInput" style="font-weight: 600; font-size: var(--font-size-secondary);">Size:</label>
+                <select id="heroSizeInput" class="fit-content">
+                  <option value="Awesome">Awesome (Rank 5)</option>
+                  <option value="Colossal">Colossal (Rank 4)</option>
+                  <option value="Gargantuan">Gargantuan (Rank 3)</option>
+                  <option value="Huge">Huge (Rank 2)</option>
+                  <option value="Large">Large (Rank 1)</option>
+                  <option value="Medium" selected>Medium (Rank 0)</option>
+                  <option value="Small">Small (Rank -1)</option>
+                  <option value="Tiny">Tiny (Rank -2)</option>
+                  <option value="Diminutive">Diminutive (Rank -3)</option>
+                  <option value="Fine">Fine (Rank -4)</option>
+                  <option value="Minuscule">Minuscule (Rank -5)</option>
+                </select>
+              </div>
+              <div style="display: inline-flex; align-items: center; gap: 6px;">
+                <label for="heroMassInput" style="font-weight: 600; font-size: var(--font-size-secondary);">Mass:</label>
+                <div class="stepper-group">
+                  <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('heroMassInput', -1, -5, 30)">−</button>
+                  <input type="number" id="heroMassInput" class="stepper-input" min="-5" max="30" value="3">
+                  <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('heroMassInput', 1, -5, 30)">+</button>
+                </div>
+                <span class="secondary-text" id="lblHeroMassVal" style="font-weight: 600; color: var(--accent-primary);">(200 lbs.)</span>
+              </div>
+            </div>
           </div>
           <div class="list-row">
             <span class="misc-row-title">Spaces / Reach</span>
@@ -543,7 +656,7 @@
               <th>Bought Ranks</th>
               <th>Total Bonus</th>
               <th>Modifying Feats</th>
-              <th style="width: 70px; text-align: center;">Actions</th>
+              <th style="width: 50px; text-align: center;">DEL</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -567,12 +680,11 @@
           <thead>
             <tr>
               <th class="sortable" data-table="feats" data-col="name">Feat</th>
-              <th class="sortable" data-table="feats" data-col="types">Type</th>
-              <th>Rank</th>
-              <th>Total</th>
-              <th>Specification / Details</th>
-              <th>Description</th>
-              <th style="width: 70px; text-align: center;">Actions</th>
+              <th class="sortable" data-table="feats" data-col="types" style="width: 120px;">Type</th>
+              <th class="rank-col" style="width: 105px; text-align: center;">Rank</th>
+              <th class="total-col" style="width: 70px; text-align: center;">Total</th>
+              <th class="spec-col">Specification / Details</th>
+              <th class="actions-col" style="width: 50px; text-align: center;">DEL</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -592,7 +704,7 @@
           <span style="font-weight: 600; font-size: var(--font-size-minor-controls);">History:</span>
           <button type="button" class="btn minor-control-btn" id="btnPowerHistoryBack" onclick="window.PowerHistoryManager && window.PowerHistoryManager.undo()" title="Undo Power Change" disabled>&lt;</button>
           <button type="button" class="btn minor-control-btn" id="btnPowerHistoryForward" onclick="window.PowerHistoryManager && window.PowerHistoryManager.redo()" title="Redo Power Change" disabled>&gt;</button>
-          <button type="button" class="btn minor-control-btn" id="btnPowerHistoryClear" onclick="window.PowerHistoryManager && window.PowerHistoryManager.clear()" title="Clear Power History" style="font-size: 11px;">Clear</button>
+          <button type="button" class="btn minor-control-btn" id="btnPowerHistoryClear" onclick="window.PowerHistoryManager && window.PowerHistoryManager.clear()" title="Clear Power History" style="font-size: var(--font-size-minor-controls);">Clear</button>
           <button type="button" class="btn" id="btnAddPower">+ Add New Power Container</button>
         </div>
       </div>
@@ -612,7 +724,7 @@
           <span class="secondary-text">Spend Equipment Points (EP) gained from the Equipment feat (5 EP per rank).</span>
         </div>
         <div style="font-size: var(--font-size-labels); font-weight: bold;">
-          Available EP: <span class="badge" id="lblAvailableEP" style="background: var(--accent-primary); font-size: 14px;">0 / 0</span>
+          Available EP: <span class="badge" id="lblAvailableEP" style="background: var(--accent-primary); font-size: var(--font-size-tags);">0 / 0</span>
         </div>
       </div>
     </div>
@@ -713,6 +825,92 @@
     <!-- Companions List Container -->
     <div id="companionsContainer">
       <!-- Rendered dynamically by buildCompanionsUI() -->
+    </div>
+  </section>
+
+  <!-- TAB: SESSION (Game Log & Party Tabletop) -->
+  <section id="tab-session" class="tab-content">
+    <div class="session-tab-container" style="display: flex; flex-direction: column; gap: 12px; max-width: 1100px; margin: 0 auto;">
+      
+      <!-- Session Header & Quick Controls -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 16px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="margin: 0; font-size: calc(var(--font-size-labels) * 1.15); color: var(--accent-primary); display: flex; align-items: center; gap: 8px;">
+            🎲 Session Log &amp; Tabletop
+          </h2>
+          <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600;">Offline / Standby</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-secondary" id="btnToggleSilentMode" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Toggle Silent Mode (Don't broadcast rolls)">📡 Broadcast: ON</button>
+          <button type="button" class="btn btn-secondary" id="btnPopoutSessionLog" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Open Session Log in separate pop-out window">↗ Pop Out Log</button>
+        </div>
+      </div>
+
+      <!-- Silent Mode Banner (Visible when silent is active) -->
+      <div id="boxSilentBanner" style="display: none; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 4px; padding: 8px 12px; font-size: var(--font-size-secondary); color: #f59e0b; align-items: center; justify-content: space-between;">
+        <span style="font-weight: 600;">🔇 Silent Mode Active: Your rolls and status updates are logged locally only and NOT broadcast to other players.</span>
+        <button type="button" class="btn btn-secondary" id="btnDisableSilentMode" style="padding: 2px 8px; font-size: var(--font-size-minor-controls); height: 24px;">Disable Silent</button>
+      </div>
+
+      <!-- Connection & Player Identity Bar -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Player Name:</label>
+          <input type="text" id="txtSessionPlayerName" placeholder="Your Name" style="width: 140px; height: 28px; font-size: var(--font-size-secondary); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Campaign Code:</label>
+          <input type="text" id="txtSessionCampaignCode" placeholder="e.g. gotham-xyz" style="width: 150px; height: 28px; font-size: var(--font-size-secondary); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+        </div>
+        <button type="button" class="btn btn-primary" id="btnSessionConnect" style="height: 28px; padding: 0 12px; font-size: var(--font-size-minor-controls); font-weight: 600;">Connect to Campaign</button>
+        <span id="lblSessionConnectMsg" style="font-size: var(--font-size-fine-print); color: var(--text-muted);"></span>
+      </div>
+
+      <!-- Live Party & Turn HUD -->
+      <div id="sessionPartyHud" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-weight: 600; font-size: var(--font-size-secondary);">Party Status:</span>
+          <div id="sessionPartyBadgesContainer" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981;">Party Standby</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search & Filters -->
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <input type="text" id="txtSessionSearch" placeholder="Search rolls... (e.g. Doctor, Toughness, Failed, nat20)" style="flex: 1; min-width: 220px; height: 30px; font-size: var(--font-size-secondary); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 10px;">
+        <button type="button" class="btn btn-secondary" id="btnSessionClearSearch" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);" title="Clear search">Clear</button>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap;" id="sessionFilterChips">
+          <button type="button" class="filter-chip active" data-filter="all">All</button>
+          <button type="button" class="filter-chip" data-filter="attack">Attacks</button>
+          <button type="button" class="filter-chip" data-filter="save">Saves</button>
+          <button type="button" class="filter-chip" data-filter="check">Checks</button>
+          <button type="button" class="filter-chip" data-filter="nat20">Nat 20</button>
+          <button type="button" class="filter-chip" data-filter="failed">Failed</button>
+          <button type="button" class="filter-chip" data-filter="silent">Silent</button>
+        </div>
+      </div>
+
+      <!-- Popped-Out Notification Box (Shown in tab when popped out) -->
+      <div id="boxPoppedOutNotice" style="display: none; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 6px; padding: 16px; text-align: center;">
+        <strong style="font-size: var(--font-size-labels); color: var(--text-muted); display: block; margin-bottom: 8px;">🪟 Session Log is currently open in a separate window.</strong>
+        <button type="button" class="btn btn-secondary" id="btnRedockSessionLog" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls);">⬅ Re-dock Log Here</button>
+      </div>
+
+      <!-- Log Feed Container -->
+      <div id="sessionLogFeedContainer" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; min-height: 280px; max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+        <div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 32px; font-style: italic;">
+          No rolls or events recorded yet in this session.
+        </div>
+      </div>
+
+      <!-- Quick Dice Tray at Bottom -->
+      <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px;">
+        <input type="text" id="txtSessionQuickDice" placeholder="Quick roll: 1d20+5, 2d6+2..." style="flex: 1; height: 30px; font-size: var(--font-size-secondary); background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+        <button type="button" class="btn btn-primary" id="btnSessionQuickRoll" style="height: 30px; padding: 0 14px; font-weight: bold; font-size: var(--font-size-secondary);">🎲 Roll</button>
+        <button type="button" class="btn btn-secondary" id="btnSessionClearLog" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);">Clear Feed</button>
+      </div>
+
     </div>
   </section>
 
@@ -932,7 +1130,7 @@
   <section id="tab-blueprints" class="tab-content">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 8px;">
       <div>
-        <h2 style="margin: 0; font-size: 1.2rem; color: var(--accent-primary);">Plans</h2>
+        <h2 style="margin: 0; font-size: calc(var(--font-size-labels) * 1.15); color: var(--accent-primary);">Plans</h2>
         <div style="font-size: var(--font-size-secondary); color: var(--text-muted); margin-top: 4px;">
           Create temporary Power Stunts, Inventions, Gadgets, and Rituals without altering your main PP totals.
         </div>
@@ -941,7 +1139,7 @@
         <span style="font-weight: 600; font-size: var(--font-size-minor-controls);">History:</span>
         <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryBack" onclick="window.PowerHistoryManager && window.PowerHistoryManager.undo()" title="Undo Change" disabled>&lt;</button>
         <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryForward" onclick="window.PowerHistoryManager && window.PowerHistoryManager.redo()" title="Redo Change" disabled>&gt;</button>
-        <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryClear" onclick="window.PowerHistoryManager && window.PowerHistoryManager.clear()" title="Clear History" style="font-size: 11px;">Clear</button>
+        <button type="button" class="btn minor-control-btn" id="btnBlueprintHistoryClear" onclick="window.PowerHistoryManager && window.PowerHistoryManager.clear()" title="Clear History" style="font-size: var(--font-size-minor-controls);">Clear</button>
         <button type="button" class="btn minor-control-btn" onclick="document.getElementById('fileLoadBlueprint').click()" title="Load a saved Plan">Load Plan</button>
         <button type="button" class="btn" id="btnAddBlueprint">+ Add Plan</button>
       </div>
@@ -953,6 +1151,296 @@
       <!-- Improvised effects rendered here -->
     </div>
   </section>
+
+  <!-- TAB: STATUS & COMBAT TRACKER (Special Tab) -->
+  <section id="tab-tracker" class="tab-content">
+    <div id="statusTrackerModal" class="status-tracker-box status-tracker-tab-pane">
+      <div class="tracker-resize-handle tracker-resize-handle-top" id="trackerResizeTop" style="display: none;"></div>
+      <div class="tracker-header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 10px 16px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="margin: 0; font-size: calc(var(--font-size-labels) * 1.15); color: var(--accent-primary); display: flex; align-items: center; gap: 8px;">⏱ Status &amp; Combat Tracker</h2>
+          <span class="badge" id="lblTrackerHeroName" style="font-size: var(--font-size-tags); font-weight: 600;">Hero</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-secondary" id="btnTrackerReturnToSheet" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Return to previous sheet view">⬅ Return to Sheet</button>
+          <button type="button" class="btn btn-secondary" id="btnResetTrackerSize" style="display: none;" title="Reset Tracker Size">↺ Reset Size</button>
+          <button class="info-popup-close" id="modalStatusTrackerClose" style="display: none;" title="Close Tracker">✕</button>
+        </div>
+      </div>
+
+      <!-- Sticky Top Active Conditions Summary Bar -->
+      <div class="tracker-summary-bar" id="trackerSummaryBar" style="background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-height: 42px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1;" id="boxActiveConditionsChips">
+          <span style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Active Conditions:</span>
+          <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600;">Normal / Unhindered</span>
+        </div>
+        <button type="button" class="btn btn-secondary" id="btnClearAllConditions" style="font-size: var(--font-size-minor-controls); padding: 2px 8px; height: 26px;" title="Reset all conditions to normal">↺ Clear All Conditions</button>
+      </div>
+
+      <!-- Tracker Body: 2-Column Responsive Grid -->
+      <div class="info-popup-body tracker-body" style="padding: 16px; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; white-space: normal;">
+        
+        <!-- Left Column: Initiative, General Dice Roller, Custom Points, Fades -->
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          
+          <!-- Card 1: Initiative Tracker -->
+          <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+              <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">⚡ Initiative Roller</strong>
+              <span class="secondary-text" id="lblTrackerInitMod" style="font-size: var(--font-size-secondary); font-weight: 600;">Mod: +0</span>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" id="btnRollInitiative" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls);">🎲 Roll Initiative</button>
+              
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Result:</span>
+                <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
+                  <button type="button" class="modifier-stepper-btn" id="btnStepInitDown" style="width: 28px; height: 28px;">−</button>
+                  <input type="number" id="numInitiativeResult" style="width: 50px; height: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-controls); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-main); margin: 0 2px;" placeholder="—">
+                  <button type="button" class="modifier-stepper-btn" id="btnStepInitUp" style="width: 28px; height: 28px;">+</button>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-secondary" id="btnClearInit" style="font-size: var(--font-size-minor-controls); padding: 2px 8px; height: 28px;" title="Reset Initiative">Clear</button>
+            </div>
+            <div id="lblInitiativeRollBreakdown" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 6px; min-height: 16px;"></div>
+          </div>
+
+          <!-- Card 2: General d20 Roller -->
+          <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+              <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">🎲 General d20 Roller</strong>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label style="font-size: var(--font-size-secondary); font-weight: 600; color: var(--text-muted);">Adj:</label>
+                <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
+                  <button type="button" class="modifier-stepper-btn" id="btnStepD20AdjDown" style="width: 28px; height: 28px;">−</button>
+                  <input type="number" id="numD20Adj" value="0" style="width: 44px; height: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-controls); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-main); margin: 0 2px;">
+                  <button type="button" class="modifier-stepper-btn" id="btnStepD20AdjUp" style="width: 28px; height: 28px;">+</button>
+                </div>
+                <button type="button" class="btn btn-secondary" id="btnClearD20Adj" style="font-size: var(--font-size-minor-controls); padding: 1px 8px; height: 28px;" title="Reset adjustment to 0">Clear Adj</button>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary" id="btnRollD20" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls);">🎲 Roll</button>
+              <input type="text" id="txtTrackerDiceNotation" placeholder="Notation: 1d20+5, 2d6+3, +4..." style="width: 200px; height: 32px; font-size: var(--font-size-secondary); background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;" title="Enter custom dice expression e.g. 1d20+5, 2d6+3, or +4">
+              <div id="lblD20RollResult" style="font-size: var(--font-size-labels); font-weight: bold; color: var(--accent-primary);"></div>
+            </div>
+            <div id="lblD20RollBreakdown" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 4px; min-height: 16px;"></div>
+          </div>
+
+          <!-- Card 3: Custom Counters Tracker -->
+          <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+              <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">🔋 Custom Counters</strong>
+              <button type="button" class="btn btn-secondary" id="btnAddCustomTracker" style="font-size: var(--font-size-minor-controls); padding: 2px 8px; height: 24px;">+ Add Counter</button>
+            </div>
+            <p class="secondary-text" style="font-size: var(--font-size-secondary); margin-top: 0; margin-bottom: 8px;">Track Mecha Energy, Ammo, charges, or custom counters.</p>
+            <div id="listCustomTrackers" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Card 4: Fades Tracker -->
+          <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+              <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">⏳ Fades Tracker</strong>
+              <button type="button" class="btn btn-secondary" id="btnAdvanceAllFades" style="font-size: var(--font-size-minor-controls); padding: 2px 8px; height: 24px;" title="Advance all active fades by 1 round">⏱ Advance Round</button>
+            </div>
+            <div id="listFadesTrackers" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Detected powers with Fades or Boost -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column: Conditions Pane -->
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          
+          <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; height: 100%; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+              <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">❤️ Conditions &amp; Damage Track</strong>
+            </div>
+
+            <div id="trackerConditionsScrollContainer" class="tracker-conditions-container" style="overflow-y: auto; overflow-x: hidden; max-height: 720px; padding-right: 4px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;">
+              
+              <!-- Damage Track Section -->
+              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
+                <div style="font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary); margin-bottom: 8px;">💥 Damage Track (Toughness Saves)</div>
+                
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <div>
+                      <strong style="font-size: var(--font-size-labels); display: block;">Bruised</strong>
+                      <span class="secondary-text" style="font-size: var(--font-size-fine-print);">-1 save vs non-lethal</span>
+                    </div>
+                    <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
+                      <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Bruised', -1)">−</button>
+                      <span id="valBruisedCount" style="min-width: 24px; text-align: center; font-weight: bold; font-size: var(--font-size-controls);">0</span>
+                      <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Bruised', 1)">+</button>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <div>
+                      <strong style="font-size: var(--font-size-labels); display: block;">Injured</strong>
+                      <span class="secondary-text" style="font-size: var(--font-size-fine-print);">-1 save vs lethal</span>
+                    </div>
+                    <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
+                      <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Injured', -1)">−</button>
+                      <span id="valInjuredCount" style="min-width: 24px; text-align: center; font-weight: bold; font-size: var(--font-size-controls);">0</span>
+                      <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Injured', 1)">+</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Dazed" onchange="toggleConditionDirect('Dazed', this.checked)"> <strong>Dazed</strong> (Std action only)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Staggered" onchange="toggleConditionDirect('Staggered', this.checked)"> <strong>Staggered</strong> (Half speed &amp; Dazed)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Disabled" onchange="toggleConditionDirect('Disabled', this.checked)"> <strong>Disabled</strong> (-5 all checks, 1/2 speed)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Unconscious" onchange="toggleConditionDirect('Unconscious', this.checked)"> <strong>Unconscious</strong> (Helpless)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Dying" onchange="toggleConditionDirect('Dying', this.checked)"> <strong>Dying</strong> (Fort save each round)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Dead" onchange="toggleConditionDirect('Dead', this.checked)"> <strong>Dead</strong></label>
+                </div>
+              </div>
+
+              <!-- Sensory, Movement & Tactical Conditions -->
+              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
+                <div style="font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary); margin-bottom: 8px;">🎯 Tactical &amp; Impairment Conditions</div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Blind" onchange="toggleConditionDirect('Blind', this.checked)"> <strong>Blind</strong> (-4 Search/Str/Dex)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Deaf" onchange="toggleConditionDirect('Deaf', this.checked)"> <strong>Deaf</strong> (-4 Init, no auditory)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Entangled" onchange="toggleConditionDirect('Entangled', this.checked)"> <strong>Entangled</strong> (-2 Atk, -4 Dex, 1/2 spd)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Exhausted" onchange="toggleConditionDirect('Exhausted', this.checked)"> <strong>Exhausted</strong> (-6 Str/Dex, 1/2 spd)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Fascinated" onchange="toggleConditionDirect('Fascinated', this.checked)"> <strong>Fascinated</strong> (No actions)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Fatigued" onchange="toggleConditionDirect('Fatigued', this.checked)"> <strong>Fatigued</strong> (-2 Str/Dex, no all-out)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Flat-Footed" onchange="toggleConditionDirect('Flat-Footed', this.checked)"> <strong>Flat-Footed</strong> (No Dodge bonus)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Helpless" onchange="toggleConditionDirect('Helpless', this.checked)"> <strong>Helpless</strong> (Def 5 or 0 melee)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Hindered" onchange="toggleConditionDirect('Hindered', this.checked)"> <strong>Hindered</strong> (Move 1/2 speed)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Immobile" onchange="toggleConditionDirect('Immobile', this.checked)"> <strong>Immobile</strong> (Speed effectively 0)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Nauseated" onchange="toggleConditionDirect('Nauseated', this.checked)"> <strong>Nauseated</strong> (Move action only)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Panicked" onchange="toggleConditionDirect('Panicked', this.checked)"> <strong>Panicked</strong> (-2 checks, must flee)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Paralyzed" onchange="toggleConditionDirect('Paralyzed', this.checked)"> <strong>Paralyzed</strong> (Helpless, Str/Dex 0)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Pinned" onchange="toggleConditionDirect('Pinned', this.checked)"> <strong>Pinned</strong> (Helpless in grapple)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Prone" onchange="toggleConditionDirect('Prone', this.checked)"> <strong>Prone</strong> (-4 melee, +4 ranged def)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Shaken" onchange="toggleConditionDirect('Shaken', this.checked)"> <strong>Shaken</strong> (-2 checks &amp; saves)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Stunned" onchange="toggleConditionDirect('Stunned', this.checked)"> <strong>Stunned</strong> (No actions, -2 def)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Vulnerable" onchange="toggleConditionDirect('Vulnerable', this.checked)"> <strong>Vulnerable</strong> (No Dodge bonus)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Defenseless" onchange="toggleConditionDirect('Defenseless', this.checked)"> <strong>Defenseless</strong> (Active Def is 0)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Compelled" onchange="toggleConditionDirect('Compelled', this.checked)"> <strong>Compelled</strong> (Chosen action)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Controlled" onchange="toggleConditionDirect('Controlled', this.checked)"> <strong>Controlled</strong> (Dictated actions)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Unaware" onchange="toggleConditionDirect('Unaware', this.checked)"> <strong>Unaware</strong> (Auto-fail awareness)</label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+      <div class="tracker-resize-handle tracker-resize-handle-bottom" id="trackerResizeBottom" style="display: none;"></div>
+    </div>
+  </section>
+
+  <!-- TAB: GM CAMPAIGN HUB & MASTER TRACKER (Special Tab) -->
+  <section id="tab-gm" class="tab-content">
+    <div class="gm-tab-container" style="display: flex; flex-direction: column; gap: 16px; max-width: 1280px; margin: 0 auto; padding: 12px 0;">
+      
+      <!-- GM Header Bar -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 16px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="margin: 0; font-size: calc(var(--font-size-labels) * 1.15); color: var(--accent-primary); display: flex; align-items: center; gap: 8px;">
+            👑 GM Campaign Hub &amp; Master Character Tracker
+          </h2>
+          <span class="badge" id="lblGMHostStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600;">GM Mode Active</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-secondary" id="btnGMReturnToSheet" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Return to previous sheet view">⬅ Return to Sheet</button>
+        </div>
+      </div>
+
+      <!-- Campaign Selector & Backup Actions Bar -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <label style="font-weight: 600; font-size: var(--font-size-secondary);">Active Campaign:</label>
+          <select id="selGMCampaigns" style="height: 30px; font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; min-width: 180px;">
+            <!-- Options populated dynamically -->
+          </select>
+          <button type="button" class="btn btn-secondary" id="btnGMNewCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);">+ New Campaign</button>
+          <div style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 8px; height: 30px; box-sizing: border-box;">
+            <span style="font-size: var(--font-size-fine-print); color: var(--text-muted);">Join Code:</span>
+            <code id="lblGMActiveCampCode" style="font-weight: bold; color: var(--accent-primary); font-size: var(--font-size-secondary);">campaign-1</code>
+          </div>
+          <button type="button" class="btn btn-secondary" id="btnGMCopyPlayerLink" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);" title="Copy campaign invite link or code for players">📋 Copy Player Link / Code</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" id="btnGMExportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);" title="Export campaign as JSON backup">📥 Backup (.json)</button>
+          <button type="button" class="btn btn-secondary" id="btnGMImportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);" title="Restore campaign from JSON">📤 Restore (.json)</button>
+          <input type="file" id="fileGMImportCampaign" accept=".json" style="display: none;">
+          <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls); color: #ef4444;" title="Delete current campaign">🗑 Delete</button>
+        </div>
+      </div>
+
+      <!-- Pending Join Requests Banner -->
+      <div id="gmJoinRequestsBox" style="display: none; background: rgba(2, 132, 199, 0.1); border: 1px solid #0284c7; border-radius: 6px; padding: 10px 16px;">
+        <div style="font-weight: 600; font-size: var(--font-size-secondary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+          👥 Pending Player Join Requests:
+        </div>
+        <div id="gmJoinRequestsList" style="display: flex; flex-direction: column; gap: 6px;">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Master Character Tracker (GM's Main Tool) -->
+      <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">
+              🛡️ Master Character Tracker (Party &amp; NPCs)
+            </strong>
+            <span class="secondary-text" style="font-size: var(--font-size-fine-print);">(Live conditions, health, and forced modes)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" id="btnGMAttachNPC" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls);">+ Attach Character as NPC</button>
+            <input type="file" id="fileGMAttachNPC" accept=".mm2e,.por,.json" style="display: none;">
+          </div>
+        </div>
+
+        <!-- Master Table of Characters -->
+        <div style="overflow-x: auto;">
+          <table class="data-table" id="tableGMMasterRoster" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+            <thead>
+              <tr>
+                <th style="width: 180px; text-align: left;">Character</th>
+                <th style="width: 110px; text-align: center;">PL / Def / Tough</th>
+                <th style="width: 140px; text-align: center;">Damage (Bruised / Injured)</th>
+                <th style="text-align: left;">Active Conditions</th>
+                <th style="width: 90px; text-align: center;">Hero Points</th>
+                <th style="width: 160px; text-align: center;">Modes &amp; Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyGMMasterRoster">
+              <!-- Dynamically populated rows for PCs and NPCs -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Check / Dice Roll Result Modal Overlay -->
+  <div class="modal-overlay" id="diceRollModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="max-width: 420px;">
+      <div class="info-popup-header">
+        <h3 id="diceRollModalTitle">🎲 Check Result</h3>
+        <button class="info-popup-close" onclick="document.getElementById('diceRollModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" id="diceRollModalBody" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; white-space: normal;"></div>
+    </div>
+  </div>
 
   <!-- Power Points Breakdown Modal Overlay -->
   <div class="modal-overlay" id="ppBreakdownModal">
@@ -967,7 +1455,7 @@
             <span style="font-weight: 600; font-size: var(--font-size-labels); display: block;">Total Budget Allocation</span>
             <span style="font-size: var(--font-size-secondary); color: var(--text-muted);">Power Level <span id="lblModalPL">10</span></span>
           </div>
-          <span class="badge" id="lblModalTotalPP" style="font-size: 15px; padding: 4px 10px; font-weight: bold;">0 / 150 PP</span>
+          <span class="badge" id="lblModalTotalPP" style="font-size: var(--font-size-tags); padding: 4px 10px; font-weight: bold;">0 / 150 PP</span>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -1019,8 +1507,19 @@
     </div>
   </div>
 
+  <!-- Trait / Feat Adjustments Modal Overlay -->
+  <div class="modal-overlay" id="traitAdjustmentsModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="max-width: 480px;">
+      <div class="info-popup-header">
+        <h3 id="modalAdjustmentsTitle">⚡ Adjusting Effects</h3>
+        <button class="info-popup-close" id="modalAdjustmentsClose" onclick="document.getElementById('traitAdjustmentsModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" id="modalAdjustmentsBody"></div>
+    </div>
+  </div>
+
   <!-- Companion / Alternate Form Creation Modal Overlay -->
-  <div class="modal-overlay" id="companionCreateModal">
+  <div class="modal-overlay" id="companionCreateModal" onclick="if(event.target===this)this.classList.remove('active')">
     <div class="info-popup-box" style="max-width: 500px;">
       <div class="info-popup-header">
         <h3 id="companionModalTitle">Add Companion / Alternate Form</h3>
@@ -1047,11 +1546,17 @@
         <div style="display: flex; gap: 14px;">
           <div style="flex: 1;">
             <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Power Level (PL):</label>
-            <input type="number" id="numCompanionPL" min="1" max="20" value="8" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
+            <input type="number" id="numCompanionPL" min="1" max="20" value="10" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
           </div>
           <div style="flex: 1;">
-            <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;" id="lblCompanionBudgetTitle">Points Budget (PP / MP):</label>
-            <input type="number" id="numCompanionBudget" min="1" max="500" value="50" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
+              <label style="font-weight: 600; font-size: var(--font-size-labels); white-space: nowrap;" id="lblCompanionBudgetTitle">Points Budget (PP / MP):</label>
+              <label style="display: inline-flex; align-items: center; gap: 4px; font-weight: normal; font-size: var(--font-size-secondary); cursor: pointer; user-select: none; white-space: nowrap;">
+                <input type="checkbox" id="chkOverrideCompanionPL" style="cursor: pointer;">
+                Override PL
+              </label>
+            </div>
+            <input type="number" id="numCompanionBudget" min="1" max="500" value="150" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
           </div>
         </div>
 
@@ -1232,18 +1737,22 @@
   <div id="print-layout" class="print-only"></div>
 
   <!-- Data and Model Files -->
-  <script src="data_feats.js?v=10"></script>
+  <script src="data_feats.js?v=11"></script>
   <script src="data_skills.js?v=10"></script>
-  <script src="data_powers_effects.js?v=21"></script>
-  <script src="data_powers_profiles.js?v=7"></script>
-  <script src="data_powers_modifiers.js?v=11"></script>
+  <script src="data_powers_effects.js?v=24"></script>
+  <script src="data_powers_profiles.js?v=8"></script>
+  <script src="data_powers_modifiers.js?v=13"></script>
   <script src="data_measurements.js?v=8"></script>
   <script src="data_equipment.js?v=6"></script>
-  <script src="character_model.js?v=13"></script>
-  <script src="por_importer.js?v=12"></script>
-  <script src="print.js?v=9"></script>
+  <script src="character_model.js?v=22"></script>
+  <script src="por_importer.js?v=17"></script>
+  <script src="print.js?v=10"></script>
+  <script src="peerjs.min.js"></script>
+  <script src="dice_notation.js?v=1"></script>
+  <script src="campaign_manager.js?v=1"></script>
+  <script src="session_network.js?v=1"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=64"></script>
+  <script src="app.js?v=89"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>

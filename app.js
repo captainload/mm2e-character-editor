@@ -1443,6 +1443,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.checkScreenResolution();
   window.addEventListener("resize", window.checkScreenResolution);
 
+  window.isCharacterLoading = true;
   buildAbilitiesUI();
   buildSkillsUI();
   buildAdvantagesUI();
@@ -1467,6 +1468,10 @@ document.addEventListener("DOMContentLoaded", () => {
   buildEquipmentUI();
   FileManager.init();
   refreshUI();
+  window.isCharacterLoading = false;
+  if (typeof FileManager !== 'undefined' && FileManager.clearDirty) {
+    FileManager.clearDirty();
+  }
 });
 
 let previousActiveTab = "tab-basics";
@@ -1844,6 +1849,8 @@ function setupOptionsModal() {
 
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
+    const fileMenu = document.getElementById("fileDropdownMenu");
+    if (fileMenu) fileMenu.style.display = "none";
     modal.classList.toggle("show");
   });
 
@@ -2802,6 +2809,7 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onForcedMode", (info) => {
       updateSilentModeUI();
+      syncGMRosterUI();
     });
   }
 
@@ -2997,8 +3005,15 @@ function setupSessionAndGMHub() {
   if (btnSilentToggle) {
     btnSilentToggle.addEventListener("click", () => {
       if (typeof SessionNetwork !== 'undefined') {
-        SessionNetwork.toggleSilentMode();
+        const nextSilent = SessionNetwork.toggleSilentMode();
+        if (typeof CampaignManager !== 'undefined') {
+          CampaignManager.setPlayerForcedMode("local_hero", "silent", nextSilent);
+          if (char && char.name) {
+            CampaignManager.setPlayerForcedMode(char.name, "silent", nextSilent);
+          }
+        }
         updateSilentModeUI();
+        syncGMRosterUI();
       }
     });
   }
@@ -3007,7 +3022,14 @@ function setupSessionAndGMHub() {
     btnSilentDisable.addEventListener("click", () => {
       if (typeof SessionNetwork !== 'undefined') {
         SessionNetwork.toggleSilentMode(false);
+        if (typeof CampaignManager !== 'undefined') {
+          CampaignManager.setPlayerForcedMode("local_hero", "silent", false);
+          if (char && char.name) {
+            CampaignManager.setPlayerForcedMode(char.name, "silent", false);
+          }
+        }
         updateSilentModeUI();
+        syncGMRosterUI();
       }
     });
   }
@@ -3276,7 +3298,7 @@ function setupSessionAndGMHub() {
         injured: char.trackerState?.conditions?.Injured || 0,
         conditions: char.trackerState?.conditions || {},
         heroPoints: char.heroPoints || 1,
-        isSilent: CampaignManager.isCharacterSilent(char.name)
+        isSilent: (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char.name)))
       });
     }
 
@@ -3467,13 +3489,17 @@ function setupSessionAndGMHub() {
 
   window.gmTogglePlayerSilent = function(charId, checked) {
     if (typeof CampaignManager === 'undefined') return;
-    CampaignManager.setPlayerForcedMode(charId, "silent", checked);
     if (charId === "local_hero") {
+      CampaignManager.setPlayerForcedMode("local_hero", "silent", checked);
+      if (char && char.name) {
+        CampaignManager.setPlayerForcedMode(char.name, "silent", checked);
+      }
       if (typeof SessionNetwork !== 'undefined') {
         SessionNetwork.toggleSilentMode(checked);
         updateSilentModeUI();
       }
     } else {
+      CampaignManager.setPlayerForcedMode(charId, "silent", checked);
       if (typeof SessionNetwork !== 'undefined') {
         SessionNetwork.sendGMForceMode("silent", charId, checked);
       }
@@ -4017,12 +4043,15 @@ function buildAbilitiesUI() {
   }
 
   document.getElementById("heroNameInput").addEventListener("input", (e) => {
-    char.name = e.target.value;
+    char.name = e.target.value.slice(0, 45);
     syncActiveCompanionIfActive();
     refreshUI();
   });
   document.getElementById("playerNameInput").addEventListener("input", (e) => {
-    char.playerName = e.target.value;
+    char.playerName = e.target.value.slice(0, 45);
+    if (!window.isCharacterLoading && typeof FileManager !== 'undefined' && FileManager.markDirty) {
+      FileManager.markDirty();
+    }
   });
   document.getElementById("heroPLInput").addEventListener("input", (e) => {
     char.powerLevel = parseInt(e.target.value) || 10;
@@ -11344,6 +11373,9 @@ function populateUIFromCharacter() {
   if (chkMechaAI) chkMechaAI.checked = !!char.hasAI;
 
   if (document.getElementById("bgIdentity")) document.getElementById("bgIdentity").value = char.identity || "";
+  if (document.getElementById("bgTitles")) document.getElementById("bgTitles").value = char.titles || "";
+  if (document.getElementById("bgSex")) document.getElementById("bgSex").value = char.sex || "";
+  if (document.getElementById("bgAppearance")) document.getElementById("bgAppearance").value = char.appearance || "";
   if (document.getElementById("bgMotivation")) document.getElementById("bgMotivation").value = char.motivation || "";
   if (document.getElementById("bgComplications")) document.getElementById("bgComplications").value = char.complications || "";
   if (document.getElementById("bgHistory")) document.getElementById("bgHistory").value = char.history || "";
@@ -11376,6 +11408,7 @@ function populateUIFromCharacter() {
 
 function applyLoadedCharacter(loaded) {
   if (!loaded) return;
+  window.isCharacterLoading = true;
   char.deserialize(loaded);
   window.activePowerContext = 'powers';
 
@@ -11388,9 +11421,17 @@ function applyLoadedCharacter(loaded) {
   }
 
   populateUIFromCharacter();
+  window.isCharacterLoading = false;
+  if (typeof FileManager !== 'undefined' && FileManager.clearDirty) {
+    FileManager.clearDirty();
+  }
 }
 
 function refreshUI() {
+  if (!window.isCharacterLoading && typeof FileManager !== 'undefined' && FileManager.markDirty) {
+    FileManager.markDirty();
+  }
+
   if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
 
   const lblName = document.getElementById("lblHeroName");
@@ -12057,14 +12098,26 @@ function showToast(message, type = "info", durationMs = 3500) {
 
 function setupBackgroundHandlers() {
   const bgId = document.getElementById("bgIdentity");
+  const bgTitles = document.getElementById("bgTitles");
+  const bgSex = document.getElementById("bgSex");
+  const bgAppearance = document.getElementById("bgAppearance");
   const bgMot = document.getElementById("bgMotivation");
   const bgComp = document.getElementById("bgComplications");
   const bgHist = document.getElementById("bgHistory");
 
-  if (bgId) bgId.addEventListener("input", (e) => { char.identity = e.target.value; });
-  if (bgMot) bgMot.addEventListener("input", (e) => { char.motivation = e.target.value; });
-  if (bgComp) bgComp.addEventListener("input", (e) => { char.complications = e.target.value; });
-  if (bgHist) bgHist.addEventListener("input", (e) => { char.history = e.target.value; });
+  const notifyDirty = () => {
+    if (!window.isCharacterLoading && typeof FileManager !== 'undefined' && FileManager.markDirty) {
+      FileManager.markDirty();
+    }
+  };
+
+  if (bgId) bgId.addEventListener("input", (e) => { char.identity = e.target.value.slice(0, 45); notifyDirty(); });
+  if (bgTitles) bgTitles.addEventListener("input", (e) => { char.titles = e.target.value.slice(0, 45); notifyDirty(); });
+  if (bgSex) bgSex.addEventListener("input", (e) => { char.sex = e.target.value.slice(0, 45); notifyDirty(); });
+  if (bgAppearance) bgAppearance.addEventListener("input", (e) => { char.appearance = e.target.value; notifyDirty(); });
+  if (bgMot) bgMot.addEventListener("input", (e) => { char.motivation = e.target.value; notifyDirty(); });
+  if (bgComp) bgComp.addEventListener("input", (e) => { char.complications = e.target.value; notifyDirty(); });
+  if (bgHist) bgHist.addEventListener("input", (e) => { char.history = e.target.value; notifyDirty(); });
 }
 
 /* ==========================================================================
@@ -12159,6 +12212,21 @@ const FileManager = {
   currentFileName: null,
   activeDirectoryHandle: null,
   activeDirectoryName: null,
+  isDirty: false,
+
+  markDirty: function() {
+    if (!this.isDirty) {
+      this.isDirty = true;
+      this.updateFileStatusUI();
+    }
+  },
+
+  clearDirty: function() {
+    if (this.isDirty) {
+      this.isDirty = false;
+      this.updateFileStatusUI();
+    }
+  },
 
   init: async function() {
     const saved = await FolderStore.getSavedFolder();
@@ -12197,13 +12265,30 @@ const FileManager = {
 
   updateFileStatusUI: function() {
     const badge = document.getElementById("lblCurrentFile");
+    const indicator = document.getElementById("lblUnsavedIndicator");
+    const nameText = document.getElementById("lblCurrentFileNameText");
     if (!badge) return;
-    if (this.currentFileName) {
-      badge.textContent = `[${this.currentFileName}]`;
-      badge.title = `Active File: ${this.currentFileName}`;
+
+    let displayFile = this.currentFileName;
+    if (displayFile && displayFile.length > 45) {
+      displayFile = displayFile.slice(0, 45);
+    }
+    const baseText = displayFile ? `[${displayFile}]` : `[Unsaved Character]`;
+
+    if (nameText) {
+      nameText.textContent = baseText;
     } else {
-      badge.textContent = `[Unsaved Character]`;
-      badge.title = `Unsaved Character`;
+      badge.textContent = baseText;
+    }
+
+    if (this.isDirty) {
+      if (indicator) indicator.style.display = "inline-block";
+      badge.classList.add("has-unsaved");
+      badge.title = `${displayFile || 'Unsaved Character'} (Unsaved changes)`;
+    } else {
+      if (indicator) indicator.style.display = "none";
+      badge.classList.remove("has-unsaved");
+      badge.title = displayFile ? `Active File: ${displayFile}` : `Unsaved Character`;
     }
   },
 
@@ -12232,8 +12317,9 @@ const FileManager = {
   saveHeroAs: async function() {
     if (typeof syncActiveCompanionIfActive === 'function') syncActiveCompanionIfActive();
     const heroToSave = window.primaryHero || char;
-    const safeHeroName = heroToSave.name ? heroToSave.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : "hero";
-    const defaultFileName = `${safeHeroName}.mm2e`;
+    let safeHeroName = heroToSave.name ? heroToSave.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : "hero";
+    if (safeHeroName.length > 40) safeHeroName = safeHeroName.slice(0, 40);
+    const defaultFileName = `${safeHeroName}.mm2e`.slice(0, 45);
     const payload = JSON.stringify(heroToSave.serialize(), null, 2);
 
     if (window.showSaveFilePicker) {
@@ -12245,12 +12331,12 @@ const FileManager = {
         await writable.close();
 
         this.currentFileHandle = handle;
-        this.currentFileName = handle.name;
+        this.currentFileName = handle.name ? handle.name.slice(0, 45) : defaultFileName;
         // Last used save location becomes the starting point for further loads and saves
         if (!this.activeDirectoryName) {
           this.activeDirectoryHandle = handle;
         }
-        this.updateFileStatusUI();
+        this.clearDirty();
         showToast(`Saved "${handle.name}" successfully!`, "success");
         return true;
       } catch (err) {
@@ -12264,7 +12350,7 @@ const FileManager = {
     // Fallback download
     this.fallbackDownload(payload, defaultFileName);
     this.currentFileName = defaultFileName;
-    this.updateFileStatusUI();
+    this.clearDirty();
 
     const isFF = typeof navigator !== 'undefined' && (/firefox/i.test(navigator.userAgent) || !window.showSaveFilePicker);
     if (isFF) {
@@ -12288,7 +12374,7 @@ const FileManager = {
       const writable = await this.currentFileHandle.createWritable();
       await writable.write(payload);
       await writable.close();
-      this.updateFileStatusUI();
+      this.clearDirty();
       showToast(`Saved "${this.currentFileName}" successfully!`, "success");
       return true;
     } catch (err) {
@@ -12316,12 +12402,12 @@ const FileManager = {
         }
         applyLoadedCharacter(parsed);
         this.currentFileHandle = handle;
-        this.currentFileName = handle.name;
+        this.currentFileName = handle.name ? handle.name.slice(0, 45) : "hero.mm2e";
         // Last used location becomes the default starting point for further operations
         if (!this.activeDirectoryName) {
           this.activeDirectoryHandle = handle;
         }
-        this.updateFileStatusUI();
+        this.clearDirty();
         showToast(`Loaded "${handle.name}" successfully!`, "success");
         return true;
       } catch (err) {
@@ -12432,6 +12518,7 @@ const FileManager = {
       : `Create a new hero? Current file "${this.currentFileName}" will be closed.`;
 
     if (confirm(msg)) {
+      window.isCharacterLoading = true;
       if (window.primaryHero) {
         char = window.primaryHero;
         window.char = char;
@@ -12443,8 +12530,9 @@ const FileManager = {
       if (btnAudit) btnAudit.style.display = "none";
       this.currentFileHandle = null;
       this.currentFileName = null;
-      this.updateFileStatusUI();
       populateUIFromCharacter();
+      window.isCharacterLoading = false;
+      this.clearDirty();
       if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
       showToast("New hero sheet created.", "info");
     }
@@ -12478,6 +12566,30 @@ function setupFileHandlers() {
   const fileInput = document.getElementById("fileLoadHero");
   const btnSetFolder = document.getElementById("btnSetCustomFolder");
   const btnResetFolder = document.getElementById("btnResetFolder");
+
+  const btnFileMenu = document.getElementById("btnFileMenu");
+  const fileDropdown = document.getElementById("fileDropdownMenu");
+
+  if (btnFileMenu && fileDropdown) {
+    btnFileMenu.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opts = document.getElementById("optionsModal");
+      if (opts) opts.classList.remove("show");
+      const isVisible = fileDropdown.style.display === "flex";
+      fileDropdown.style.display = isVisible ? "none" : "flex";
+    });
+
+    fileDropdown.addEventListener("click", (e) => {
+      if (e.target.closest(".file-menu-item")) {
+        fileDropdown.style.display = "none";
+      }
+      e.stopPropagation();
+    });
+
+    document.addEventListener("click", () => {
+      fileDropdown.style.display = "none";
+    });
+  }
 
   if (btnNew) btnNew.addEventListener("click", () => FileManager.newHero());
   if (btnSave) btnSave.addEventListener("click", () => FileManager.saveHero());
@@ -12515,8 +12627,8 @@ function setupFileHandlers() {
           const btnAudit = document.getElementById("btnOpenImportAudit");
           if (btnAudit) btnAudit.style.display = "none";
           FileManager.currentFileHandle = null;
-          FileManager.currentFileName = file.name;
-          FileManager.updateFileStatusUI();
+          FileManager.currentFileName = file.name ? file.name.slice(0, 45) : "hero.mm2e";
+          FileManager.clearDirty();
           showToast(`Loaded "${file.name}" successfully!`, "success");
         } catch (err) {
           console.error("File load error:", err);

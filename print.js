@@ -236,6 +236,7 @@ function generatePrintSheet() {
         Array.from(allSkillsToCheck).sort().forEach(skName => {
             let sR = parseInt(char.skills[skName]) || 0;
             let enhSkill = (char.enhancedTraits && char.enhancedTraits.skills && char.enhancedTraits.skills[skName]) || 0;
+            if (sR > 0 || enhSkill > 0) {
                 let baseKey = skName.includes(" (") ? skName.split(" (")[0].trim() : skName.trim();
                 let abKey = abMap[skName] || abMap[baseKey] || 'INT';
                 let abMod = char.getAbilityRank ? (char.getAbilityRank(abKey) || 0) : (parseInt(char.abilities[abKey]) || 0);
@@ -392,13 +393,16 @@ function generatePrintSheet() {
         }
     }
 
-    let hasBg = char.history || char.identity || char.motivation || char.complications;
+    let hasBg = char.history || char.identity || char.titles || char.sex || char.appearance || char.motivation || char.complications;
     if (hasBg) {
         hasExtraContent = true;
         html += `<div class="print-avoid-break" style="margin-top: 16px;">`;
         html += `<div class="print-box-title" style="margin: 0 0 8px 0;">Background & Notes</div>`;
         html += `<div class="print-box" style="font-size: 13px; white-space: pre-wrap;">`;
         if (char.identity) html += `<strong>Identity:</strong> ${char.identity}\n`;
+        if (char.titles) html += `<strong>Titles:</strong> ${char.titles}\n`;
+        if (char.sex) html += `<strong>Sex:</strong> ${char.sex}\n`;
+        if (char.appearance) html += `<strong>Appearance:</strong> ${char.appearance}\n`;
         if (char.motivation) html += `<strong>Motivation:</strong> ${char.motivation}\n`;
         if (char.complications) html += `<strong>Complications:</strong> ${char.complications}\n`;
         if (char.history) html += `<strong>History:</strong> ${char.history}\n`;
@@ -452,5 +456,12 @@ function buildPrintHeader() {
     return html;
 }
 
-// Hook into native browser printing
-window.addEventListener('beforeprint', generatePrintSheet);
+if (typeof window !== 'undefined') {
+    window.generatePrintSheet = generatePrintSheet;
+    if (typeof window.addEventListener === 'function') {
+        window.addEventListener('beforeprint', generatePrintSheet);
+    }
+}
+if (typeof module !== 'undefined') {
+    module.exports = { generatePrintSheet, buildPrintHeader };
+}

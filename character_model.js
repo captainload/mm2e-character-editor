@@ -43,6 +43,9 @@ class CharacterModel {
 
     // Background & Identity
     this.identity = "";
+    this.titles = "";
+    this.sex = "";
+    this.appearance = "";
     this.motivation = "";
     this.complications = "";
     this.history = "";
@@ -97,6 +100,9 @@ class CharacterModel {
     this.companions = [];
 
     this.identity = "";
+    this.titles = "";
+    this.sex = "";
+    this.appearance = "";
     this.motivation = "";
     this.complications = "";
     this.history = "";
@@ -149,6 +155,9 @@ class CharacterModel {
         installations: JSON.parse(JSON.stringify(this.installations || [])),
         companions: JSON.parse(JSON.stringify(this.companions || [])),
         identity: this.identity || "",
+        titles: this.titles || "",
+        sex: this.sex || "",
+        appearance: this.appearance || "",
         motivation: this.motivation || "",
         complications: this.complications || "",
         history: this.history || "",
@@ -168,8 +177,8 @@ class CharacterModel {
     if (!raw) return;
     const data = (raw.format === "MM2E_CHARACTER" && raw.character) ? raw.character : raw;
 
-    this.name = (data.name && data.name !== "New Hero") ? data.name : "";
-    this.playerName = data.playerName || "";
+    this.name = ((data.name && data.name !== "New Hero") ? data.name : "").slice(0, 45);
+    this.playerName = (data.playerName || "").slice(0, 45);
     this.powerLevel = typeof data.powerLevel === "number" ? data.powerLevel : (data.pl || 10);
     this.totalPointsAllowed = typeof data.totalPointsAllowed === "number" ? data.totalPointsAllowed : (this.powerLevel * 15);
     this.heroPoints = typeof data.heroPoints === "number" ? data.heroPoints : 1;
@@ -274,7 +283,10 @@ class CharacterModel {
     this.companions = Array.isArray(data.companions) ? JSON.parse(JSON.stringify(data.companions)) : [];
 
     // Background & Identity
-    this.identity = data.identity || (data.background?.identity || "");
+    this.identity = (data.identity || (data.background?.identity || "")).slice(0, 45);
+    this.titles = (data.titles || (data.background?.titles || "")).slice(0, 45);
+    this.sex = (data.sex || (data.background?.sex || "")).slice(0, 45);
+    this.appearance = data.appearance || (data.background?.appearance || "");
     this.motivation = data.motivation || (data.background?.motivation || "");
     this.complications = data.complications || (data.background?.complications || "");
     this.history = data.history || (data.background?.history || "");

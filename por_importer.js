@@ -924,7 +924,7 @@
 
     if (typeof FileManager !== 'undefined') {
       FileManager.currentFileHandle = null;
-      FileManager.currentFileName = fileName;
+      FileManager.currentFileName = (fileName || "").slice(0, 45);
       FileManager.updateFileStatusUI();
     }
 
@@ -932,6 +932,9 @@
       refreshAllUI();
     } else if (typeof refreshUI === 'function') {
       refreshUI();
+    }
+    if (typeof FileManager !== 'undefined' && FileManager.clearDirty) {
+      FileManager.clearDirty();
     }
 
     // Store audit report globally

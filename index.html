@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=30">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -74,22 +74,45 @@
   <div id="persistentHeader" class="persistent-header">
     <!-- Top App Header -->
     <header class="top-header">
-      <h1>M&M 2nd Edition Hero Builder</h1>
+      <h1>Mutants & Masterminds 2nd Edition Hero Builder</h1>
       
       <div class="header-actions">
-        <span class="file-status-badge" id="lblCurrentFile" title="Current Character File">[Unsaved Character]</span>
-        <button class="btn btn-secondary" id="btnNewHero">New</button>
-        <button class="btn" id="btnSaveHero">Save</button>
-        <button class="btn btn-secondary" id="btnSaveAsHero">Save As...</button>
-        <button class="btn btn-secondary" id="btnLoadHero">Load</button>
-        <input type="file" id="fileLoadHero" accept=".mm2e,.json,.por" style="display: none;">
+        <span class="file-status-badge" id="lblCurrentFile" title="Current Character File">
+          <span id="lblUnsavedIndicator" class="unsaved-indicator" style="display: none;">●</span><span id="lblCurrentFileNameText">[Unsaved Character]</span>
+        </span>
         <button class="btn btn-secondary" id="btnOpenImportAudit" style="display: none; align-items: center; gap: 4px;" title="View Hero Lab Import Audit Report">📋 Audit</button>
-        <button class="btn btn-secondary" onclick="window.print()">Print</button>
+        <input type="file" id="fileLoadHero" accept=".mm2e,.json,.por" style="display: none;">
         
         <!-- Theme/Options Toggle with dots handled dynamically in JS -->
         <button class="btn btn-secondary" id="btnToggleOptions" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           ⚙ Options
         </button>
+
+        <!-- File Menu Dropdown at far right -->
+        <div style="position: relative; display: inline-block;">
+          <button class="btn btn-secondary" id="btnFileMenu" style="display: flex; align-items: center; gap: 6px;" title="File Operations">
+            📁 File ▾
+          </button>
+          <div class="file-dropdown-menu" id="fileDropdownMenu" style="display: none;">
+            <button type="button" class="file-menu-item" id="btnNewHero">
+              <span class="file-menu-icon">📄</span><span class="file-menu-label">New Hero</span>
+            </button>
+            <button type="button" class="file-menu-item" id="btnLoadHero">
+              <span class="file-menu-icon">📂</span><span class="file-menu-label">Load Hero...</span>
+            </button>
+            <div class="file-menu-divider"></div>
+            <button type="button" class="file-menu-item" id="btnSaveHero">
+              <span class="file-menu-icon">💾</span><span class="file-menu-label">Save</span>
+            </button>
+            <button type="button" class="file-menu-item" id="btnSaveAsHero">
+              <span class="file-menu-icon">💾</span><span class="file-menu-label">Save As...</span>
+            </button>
+            <div class="file-menu-divider"></div>
+            <button type="button" class="file-menu-item" id="btnPrintHero" onclick="window.print()">
+              <span class="file-menu-icon">🖨️</span><span class="file-menu-label">Print Sheet</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Options Drop-Down Window / Modal -->
@@ -348,11 +371,11 @@
         <div class="hero-details-single-row">
           <div class="hero-detail-item">
             <label>Name:</label>
-            <input type="text" id="heroNameInput" value="" placeholder="New Hero" style="width: 200px;">
+            <input type="text" id="heroNameInput" value="" placeholder="New Hero" maxlength="45" style="width: 200px;">
           </div>
           <div class="hero-detail-item">
             <label>Player:</label>
-            <input type="text" id="playerNameInput" placeholder="Player Name" style="width: 150px;">
+            <input type="text" id="playerNameInput" placeholder="Player Name" maxlength="45" style="width: 150px;">
           </div>
           <div class="hero-detail-item">
             <label>PL:</label>
@@ -788,9 +811,21 @@
       <div class="panel-body grid-2">
         <div class="form-group">
           <label>Real Name / Identity</label>
-          <input type="text" id="bgIdentity" placeholder="Secret Identity">
+          <input type="text" id="bgIdentity" placeholder="Secret Identity" maxlength="45">
         </div>
         <div class="form-group">
+          <label>Titles</label>
+          <input type="text" id="bgTitles" placeholder="Titles / Epithets / Aliases" maxlength="45">
+        </div>
+        <div class="form-group">
+          <label>Sex</label>
+          <input type="text" id="bgSex" placeholder="Sex / Gender" maxlength="45">
+        </div>
+        <div class="form-group">
+          <label>Appearance</label>
+          <input type="text" id="bgAppearance" placeholder="Physical appearance, build, eye/hair color" maxlength="100">
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
           <label>Motivation</label>
           <input type="text" id="bgMotivation" placeholder="e.g. Justice, Responsibility, Thrills">
         </div>
@@ -1540,7 +1575,7 @@
 
         <div>
           <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 4px;">Companion / Form Name:</label>
-          <input type="text" id="txtCompanionName" placeholder="e.g. Sparrow, Fire Elemental, Werewolf Form, Titan-01" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
+          <input type="text" id="txtCompanionName" placeholder="e.g. Sparrow, Fire Elemental, Werewolf Form, Titan-01" maxlength="45" style="width: 100%; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;">
         </div>
 
         <div style="display: flex; gap: 14px;">

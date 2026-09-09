@@ -1759,4 +1759,82 @@ button.row-title-btn.row-title,
   font-weight: bold;
 }
 
+/* Unsaved Changes Indicator */
+@keyframes pulse-unsaved-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.25; transform: scale(1.2); }
+}
+
+.unsaved-indicator {
+  display: inline-block;
+  color: #ef4444;
+  margin-right: 4px;
+  font-size: 13px;
+  line-height: 1;
+  animation: pulse-unsaved-dot 1.2s infinite ease-in-out;
+  vertical-align: middle;
+}
+
+.file-status-badge.has-unsaved {
+  border-color: #f59e0b;
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.35);
+}
+
+/* File Dropdown Menu */
+.file-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-main);
+  font-size: var(--font-size-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s, color 0.15s;
+  box-sizing: border-box;
+}
+
+.file-menu-item:hover {
+  background: var(--bg-panel);
+  color: var(--accent-primary);
+}
+
+.file-menu-icon {
+  font-size: 16px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.file-menu-label {
+  flex: 1;
+}
+
+.file-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+
 

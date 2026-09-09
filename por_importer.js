@@ -2388,7 +2388,12 @@
       "conPanic": "Panicked",
       "conShaken": "Shaken",
       "conFascin": "Fascinated",
-      "conSlowed": "Hindered"
+      "conSlowed": "Hindered",
+      "conSick": "Sickened",
+      "conFright": "Shaken",
+      "conInvis": "Invisible",
+      "conStable": "Stable",
+      "conTotDef": "Total Defense"
     };
 
     const pickRegex = /<pick [^>]*thing="(con[A-Za-z0-9_]+)"[^>]*>([\s\S]*?)<\/pick>/g;

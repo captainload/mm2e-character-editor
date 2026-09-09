@@ -2730,6 +2730,25 @@ function setupSessionAndGMHub() {
   const txtQuickDice = document.getElementById("txtSessionQuickDice");
   const btnQuickRoll = document.getElementById("btnSessionQuickRoll");
   const btnClearFeed = document.getElementById("btnSessionClearLog");
+  const sessionTabContainer = document.getElementById("sessionTabContainer");
+  const gmUnifiedSection = document.getElementById("gmUnifiedSection");
+  const sessionLogSection = document.getElementById("sessionLogSection");
+
+  function updateSessionDockMode(isPoppedOut) {
+    if (sessionTabContainer) {
+      if (isPoppedOut) {
+        sessionTabContainer.classList.remove("session-docked");
+        sessionTabContainer.classList.add("session-popped-out");
+      } else {
+        sessionTabContainer.classList.remove("session-popped-out");
+        sessionTabContainer.classList.add("session-docked");
+      }
+    }
+    if (boxPoppedOut) {
+      boxPoppedOut.style.display = isPoppedOut ? "flex" : "none";
+    }
+  }
+  window.updateSessionDockMode = updateSessionDockMode;
 
   // DOM Elements - GM Tab
   const btnOpenGM = document.getElementById("btnOpenGM");
@@ -3112,7 +3131,7 @@ function setupSessionAndGMHub() {
       const bounds = getSavedPopoutBounds();
       const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
       poppedOutWindow = window.open("log_window.html", "MM2CG_SessionLog", features);
-      if (boxPoppedOut) boxPoppedOut.style.display = "block";
+      updateSessionDockMode(true);
     });
   }
 
@@ -3122,9 +3141,22 @@ function setupSessionAndGMHub() {
         savePopoutBoundsFromRef(poppedOutWindow);
         try { poppedOutWindow.close(); } catch (e) {}
       }
-      if (boxPoppedOut) boxPoppedOut.style.display = "none";
+      updateSessionDockMode(false);
     });
   }
+
+  // Handle popout redocking message from log_window or window closing
+  if (typeof SessionNetwork !== 'undefined') {
+    SessionNetwork.addEventListener('onPopoutDocked', () => {
+      updateSessionDockMode(false);
+    });
+  }
+
+  window.addEventListener('focus', () => {
+    if (poppedOutWindow && poppedOutWindow.closed) {
+      updateSessionDockMode(false);
+    }
+  });
 
   if (txtSearch) {
     txtSearch.addEventListener("input", (e) => {
@@ -3186,24 +3218,30 @@ function setupSessionAndGMHub() {
 
   // 3. GM Hub UI & Master Character Tracker
   function openGMTab() {
-    const gmContent = document.getElementById("tab-gm");
+    const sessionContent = document.getElementById("tab-session");
+    const gmUnifiedSec = document.getElementById("gmUnifiedSection");
     const btnBack = document.getElementById("btnBackFromTables");
     const btnTables = document.getElementById("btnOpenTables");
     const btnTracker = document.getElementById("btnOpenTracker");
 
-    if (gmContent && gmContent.classList.contains("active")) {
+    // If already in Session tab and GM mode is active, clicking GM button can return to previous view
+    if (sessionContent && sessionContent.classList.contains("active") && btnOpenGM && btnOpenGM.classList.contains("btn-primary")) {
       if (btnBack) btnBack.click();
       return;
     }
 
     const currentActiveBtn = document.querySelector(".tab-btn.active");
-    if (currentActiveBtn && currentActiveBtn.dataset.tab) {
+    if (currentActiveBtn && currentActiveBtn.dataset.tab && currentActiveBtn.dataset.tab !== "tab-session") {
       previousActiveTab = currentActiveBtn.dataset.tab;
     }
 
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
-    if (gmContent) gmContent.classList.add("active");
+    
+    const sessionBtn = document.querySelector('.tab-btn[data-tab="tab-session"]');
+    if (sessionBtn) sessionBtn.classList.add("active");
+    if (sessionContent) sessionContent.classList.add("active");
+    if (gmUnifiedSec) gmUnifiedSec.style.display = "flex";
 
     const trackerContent = document.getElementById("tab-tracker");
     if (trackerContent) trackerContent.classList.remove("active");
@@ -3396,17 +3434,61 @@ function setupSessionAndGMHub() {
       });
     });
 
-    const standardConditions = [
-      "Dazed", "Stunned", "Staggered", "Unconscious",
-      "Fatigued", "Exhausted", "Disabled", "Paralyzed",
-      "Blind", "Deaf", "Prone", "Bound"
-    ];
-
     let rowsHtml = roster.map(item => {
-      const condPills = standardConditions.map(c => {
-        const isActive = !!item.conditions[c];
-        return `<span class="gm-cond-pill ${isActive ? 'active' : ''}" onclick="window.gmToggleCondition('${item.id}', ${item.isNPC}, '${c}')">${c}</span>`;
-      }).join('');
+      const activeCondKeys = Object.keys(item.conditions || {}).filter(k => {
+        return !!item.conditions[k] && k !== 'Bruised' && k !== 'Injured';
+      });
+
+      const pillsHtml = activeCondKeys.length > 0
+        ? activeCondKeys.map(c => `
+            <span class="gm-active-cond-pill" onclick="window.gmToggleCondition('${item.id}', ${item.isNPC}, '${c}')" title="Click to remove ${c}">
+              ${c} <span class="cond-remove-x">✕</span>
+            </span>
+          `).join('')
+        : `<span class="gm-cond-normal">Normal</span>`;
+
+      const condPickerHtml = `
+        <select class="gm-add-cond-select" onchange="window.gmAddConditionSelect('${item.id}', ${item.isNPC}, this)" title="Add condition to ${item.characterName}">
+          <option value="" selected disabled>+ Condition</option>
+          <optgroup label="Damage &amp; Fatigue">
+            <option value="Dazed">Dazed</option>
+            <option value="Staggered">Staggered</option>
+            <option value="Disabled">Disabled</option>
+            <option value="Unconscious">Unconscious</option>
+            <option value="Fatigued">Fatigued</option>
+            <option value="Exhausted">Exhausted</option>
+            <option value="Dying">Dying</option>
+            <option value="Dead">Dead</option>
+          </optgroup>
+          <optgroup label="Tactical &amp; Impairment">
+            <option value="Stunned">Stunned</option>
+            <option value="Paralyzed">Paralyzed</option>
+            <option value="Blind">Blind</option>
+            <option value="Deaf">Deaf</option>
+            <option value="Prone">Prone</option>
+            <option value="Bound">Bound</option>
+            <option value="Entangled">Entangled</option>
+            <option value="Flat-Footed">Flat-Footed</option>
+            <option value="Helpless">Helpless</option>
+            <option value="Nauseated">Nauseated</option>
+            <option value="Panicked">Panicked</option>
+            <option value="Pinned">Pinned</option>
+            <option value="Shaken">Shaken</option>
+            <option value="Sickened">Sickened</option>
+            <option value="Slowed">Slowed</option>
+            <option value="Fascinated">Fascinated</option>
+          </optgroup>
+          <optgroup label="Combat States">
+            <option value="Stable">Stable</option>
+            <option value="Total Defense">Total Defense</option>
+            <option value="Invisible">Invisible</option>
+          </optgroup>
+        </select>
+      `;
+
+      const clearAllHtml = activeCondKeys.length > 0
+        ? `<button type="button" class="gm-cond-clear-btn" onclick="window.gmClearAllConditions('${item.id}', ${item.isNPC})" title="Clear all conditions for ${item.characterName}">↺</button>`
+        : '';
 
       return `
         <tr style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(220, 38, 38, 0.05)' : 'transparent'};">
@@ -3468,7 +3550,11 @@ function setupSessionAndGMHub() {
             </div>
           </td>
           <td style="padding: 6px;">
-            ${condPills}
+            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+              ${pillsHtml}
+              ${condPickerHtml}
+              ${clearAllHtml}
+            </div>
           </td>
           <td style="text-align: center; font-weight: bold; font-size: 14px; color: #0284c7;">
             ${item.isNPC ? '—' : item.heroPoints}
@@ -3558,19 +3644,27 @@ function setupSessionAndGMHub() {
     }
   };
 
-  window.gmToggleCondition = function(charId, isNpc, condName) {
+  window.gmSetCondition = function(charId, isNpc, condName, val) {
     if (typeof CampaignManager === 'undefined') return;
     if (isNpc) {
       const camp = CampaignManager.getActiveCampaign();
       const npc = (camp?.npcs || []).find(n => n.id === charId);
       if (npc) {
         const conds = { ...(npc.conditions || {}) };
-        conds[condName] = !conds[condName];
+        if (val) conds[condName] = true;
+        else delete conds[condName];
         CampaignManager.updateNPCConditions(charId, npc.currentBruises, conds, npc.currentInjured);
         syncGMRosterUI();
       }
     } else if (charId === "local_hero") {
-      toggleTrackerCondition(condName);
+      if (typeof toggleConditionDirect === 'function') {
+        toggleConditionDirect(condName, !!val);
+      } else if (char) {
+        if (!char.trackerState) char.trackerState = { conditions: {} };
+        if (!char.trackerState.conditions) char.trackerState.conditions = {};
+        if (val) char.trackerState.conditions[condName] = true;
+        else delete char.trackerState.conditions[condName];
+      }
       syncGMRosterUI();
     } else {
       // Remote player
@@ -3578,7 +3672,8 @@ function setupSessionAndGMHub() {
       const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
       if (player) {
         const conds = { ...(player.conditions || {}) };
-        conds[condName] = !conds[condName];
+        if (val) conds[condName] = true;
+        else delete conds[condName];
         CampaignManager.updatePlayerConditions(charId, player.currentBruises, conds, player.heroPoints, player.currentInjured);
         if (typeof SessionNetwork !== 'undefined') {
           SessionNetwork.sendGMStatusOverride(charId, {
@@ -3586,6 +3681,65 @@ function setupSessionAndGMHub() {
             bruises: player.currentBruises,
             injured: player.currentInjured,
             conditions: conds,
+            heroPoints: player.heroPoints
+          });
+        }
+        syncGMRosterUI();
+      }
+    }
+  };
+
+  window.gmToggleCondition = function(charId, isNpc, condName) {
+    let currentlyActive = false;
+    if (isNpc) {
+      const camp = typeof CampaignManager !== 'undefined' ? CampaignManager.getActiveCampaign() : null;
+      const npc = (camp?.npcs || []).find(n => n.id === charId);
+      currentlyActive = !!npc?.conditions?.[condName];
+    } else if (charId === "local_hero") {
+      currentlyActive = !!char?.trackerState?.conditions?.[condName];
+    } else {
+      const camp = typeof CampaignManager !== 'undefined' ? CampaignManager.getActiveCampaign() : null;
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+      currentlyActive = !!player?.conditions?.[condName];
+    }
+    window.gmSetCondition(charId, isNpc, condName, !currentlyActive);
+  };
+
+  window.gmAddConditionSelect = function(charId, isNpc, selectElem) {
+    if (!selectElem || !selectElem.value) return;
+    const condName = selectElem.value;
+    selectElem.value = "";
+    window.gmSetCondition(charId, isNpc, condName, true);
+  };
+
+  window.gmClearAllConditions = function(charId, isNpc) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (isNpc) {
+      const camp = CampaignManager.getActiveCampaign();
+      const npc = (camp?.npcs || []).find(n => n.id === charId);
+      if (npc) {
+        CampaignManager.updateNPCConditions(charId, npc.currentBruises, {}, npc.currentInjured);
+        syncGMRosterUI();
+      }
+    } else if (charId === "local_hero") {
+      if (char && char.trackerState && char.trackerState.conditions) {
+        const b = char.trackerState.conditions.Bruised || 0;
+        const inj = char.trackerState.conditions.Injured || 0;
+        char.trackerState.conditions = { Bruised: b, Injured: inj };
+        if (typeof updateTrackerConditionsSummary === 'function') updateTrackerConditionsSummary();
+      }
+      syncGMRosterUI();
+    } else {
+      const camp = CampaignManager.getActiveCampaign();
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+      if (player) {
+        CampaignManager.updatePlayerConditions(charId, player.currentBruises, {}, player.heroPoints, player.currentInjured);
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendGMStatusOverride(charId, {
+            characterName: player.characterName,
+            bruises: player.currentBruises,
+            injured: player.currentInjured,
+            conditions: {},
             heroPoints: player.heroPoints
           });
         }

@@ -40,7 +40,8 @@
     onRequestCharacterSheet: [],
     onCharacterSheetData: [],
     onGMPushCharacter: [],
-    onGMTransfer: []
+    onGMTransfer: [],
+    onPopoutDocked: []
   };
 
   function initBroadcastChannel() {
@@ -106,6 +107,10 @@
           setStatus('disconnected', packet.reason || 'Declined by GM');
           disconnect();
         }
+        break;
+
+      case 'POPOUT_DOCKED':
+        emit('onPopoutDocked', packet);
         break;
 
       case 'ROLL':

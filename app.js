@@ -3418,40 +3418,50 @@ function setupSessionAndGMHub() {
                 ${item.isNPC ? `
                   <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}')">💾 Export NPC (.mm2e)</button>
                   <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}')">👁️ Load into Editor</button>
+                  <div class="gm-char-menu-divider"></div>
+                  <button type="button" class="gm-char-menu-item danger" onclick="window.gmRemoveNPC('${item.id}')">✕ Remove / Close NPC</button>
+                  <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
+                ` : (item.isLocal ? `
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('local_hero')">📜 Version History (${item.sheetHistoryCount || 0})</button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('local_hero')">💾 Export Sheet (.mm2e)</button>
+                  <div class="gm-char-menu-divider"></div>
+                  <button type="button" class="gm-char-menu-item danger" onclick="window.gmCloseLocalHero()">✕ Close Character</button>
+                  <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
                 ` : `
                   <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}')">📜 Version History (${item.sheetHistoryCount || 0})</button>
                   <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}')">💾 Export Sheet (.mm2e)</button>
-                  ${item.isLocal ? '' : `
-                    <button type="button" class="gm-char-menu-item" onclick="window.gmRequestSheet('${item.id}')">🔄 Request Fresh Sheet</button>
-                    ${!item.isGM ? `
-                      <div class="gm-char-menu-divider"></div>
-                      <button type="button" class="gm-char-menu-item danger" onclick="window.gmTransferGMClick('${item.id}', '${item.playerName.replace(/'/g, "\\'")}', '${item.characterName.replace(/'/g, "\\'")}')">👑 Transfer GM Status</button>
-                    ` : ''}
-                  `}
-                `}
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmRequestSheet('${item.id}')">🔄 Request Fresh Sheet</button>
+                  ${!item.isGM ? `
+                    <div class="gm-char-menu-divider"></div>
+                    <button type="button" class="gm-char-menu-item danger" onclick="window.gmTransferGMClick('${item.id}', '${item.playerName.replace(/'/g, "\\'")}', '${item.characterName.replace(/'/g, "\\'")}')">👑 Transfer GM Status</button>
+                  ` : ''}
+                  <div class="gm-char-menu-divider"></div>
+                  <button type="button" class="gm-char-menu-item danger" onclick="window.gmRemovePlayer('${item.id}')">✕ Remove from Campaign</button>
+                  <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
+                `)}
               </div>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-              ${item.isNPC ? '<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #ef4444;">NPC</span>' : '<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7;">PC</span>'}
-              ${item.playerName} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold;">👑 GM</span>' : ''}
+            <div style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
+              ${item.isNPC ? '<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #ef4444; font-size: 12px;">NPC</span>' : '<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7; font-size: 12px;">PC</span>'}
+              ${item.playerName} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: 12px;">👑 GM</span>' : ''}
             </div>
           </td>
-          <td style="text-align: center; font-size: 12px;">
+          <td style="text-align: center; font-size: 14px;">
             PL ${item.powerLevel}<br>
-            <span style="color: var(--text-muted);">Def ${item.defense} / Tgh ${item.toughness}</span>
+            <span style="color: var(--text-muted); font-size: 13px;">Def ${item.defense} / Tgh ${item.toughness}</span>
           </td>
           <td style="text-align: center; padding: 6px;">
             <div style="display: inline-flex; flex-direction: column; gap: 3px; align-items: center;">
               <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Bruised (Non-Lethal, -1 to saves)">
-                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Bruised:</span>
+                <span style="font-size: 13px; min-width: 48px; text-align: right; color: var(--text-muted);">Bruised:</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', -1)">−</button>
-                <span style="min-width: 20px; text-align: center; font-weight: bold; font-size: 12px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
+                <span style="min-width: 22px; text-align: center; font-weight: bold; font-size: 14px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', 1)">+</button>
               </div>
               <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Injured (Lethal, -1 to saves)">
-                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Injured:</span>
+                <span style="font-size: 13px; min-width: 48px; text-align: right; color: var(--text-muted);">Injured:</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', -1)">−</button>
-                <span style="min-width: 20px; text-align: center; font-weight: bold; font-size: 12px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
+                <span style="min-width: 22px; text-align: center; font-weight: bold; font-size: 14px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', 1)">+</button>
               </div>
             </div>
@@ -3459,20 +3469,21 @@ function setupSessionAndGMHub() {
           <td style="padding: 6px;">
             ${condPills}
           </td>
-          <td style="text-align: center; font-weight: bold; color: #0284c7;">
+          <td style="text-align: center; font-weight: bold; font-size: 14px; color: #0284c7;">
             ${item.isNPC ? '—' : item.heroPoints}
           </td>
-          <td style="text-align: center; padding: 6px;">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
-              <label style="font-size: 11px; display: inline-flex; align-items: center; gap: 3px; cursor: pointer; color: #f59e0b;" title="Force Silent Mode on this character">
-                <input type="checkbox" ${item.isSilent ? 'checked' : ''} onchange="window.gmTogglePlayerSilent('${item.id}', this.checked)">
-                🔇 Silent
-              </label>
+          <td style="text-align: center; padding: 4px;">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+              <button type="button" class="btn" style="padding: 2px 6px; font-size: 12px; height: 24px; min-width: 62px; background: ${item.isSilent ? 'rgba(245, 158, 11, 0.2)' : 'var(--bg-card)'}; color: ${item.isSilent ? '#f59e0b' : 'var(--text-muted)'}; border: 1px solid ${item.isSilent ? '#f59e0b' : 'var(--border-color)'}; font-weight: 600; cursor: pointer;" onclick="window.gmTogglePlayerSilentBtn('${item.id}')" title="${item.isSilent ? 'Silent Mode ON: Rolls are not broadcast. Click to disable.' : 'Silent Mode OFF: Rolls are broadcast. Click to enable.'}">
+                ${item.isSilent ? '🔇 Silent' : '📡 On'}
+              </button>
               ${item.isNPC ? `
-                <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 11px;" onclick="window.gmQuickRollNPC('${item.id}')" title="Quick Roll 1d20 for this NPC">🎲</button>
-                <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 11px;" onclick="window.gmRemoveNPC('${item.id}')" title="Remove NPC">✕</button>
+                <div style="display: flex; gap: 4px;">
+                  <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 12px; height: 22px;" onclick="window.gmQuickRollNPC('${item.id}')" title="Quick Roll 1d20 for this NPC">🎲</button>
+                  <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 12px; height: 22px;" onclick="window.gmRemoveNPC('${item.id}')" title="Remove NPC">✕</button>
+                </div>
               ` : (item.isLocal ? '' : `
-                <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 11px;" onclick="window.gmRemovePlayer('${item.id}')" title="Remove Player">✕</button>
+                <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 12px; height: 22px;" onclick="window.gmRemovePlayer('${item.id}')" title="Remove Player">✕</button>
               `)}
             </div>
           </td>
@@ -3578,6 +3589,19 @@ function setupSessionAndGMHub() {
       }
     }
     syncGMRosterUI();
+  };
+
+  window.gmTogglePlayerSilentBtn = function(charId) {
+    if (typeof CampaignManager === 'undefined') return;
+    let isCurrentlySilent = false;
+    if (charId === "local_hero") {
+      isCurrentlySilent = (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char?.name)));
+    } else {
+      const camp = CampaignManager.getActiveCampaign();
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+      isCurrentlySilent = CampaignManager.isCharacterSilent(charId) || (player && CampaignManager.isCharacterSilent(player.characterName));
+    }
+    window.gmTogglePlayerSilent(charId, !isCurrentlySilent);
   };
 
   window.gmQuickRollNPC = function(npcId) {
@@ -3799,6 +3823,37 @@ function setupSessionAndGMHub() {
       document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
     }
   });
+
+  window.gmCloseAllCharMenus = function() {
+    document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
+  };
+
+  window.gmCloseLocalHero = function() {
+    window.gmCloseAllCharMenus();
+    const heroName = (char && char.name) ? char.name : "current character";
+    if (confirm(`Close "${heroName}" and clear from editor?`)) {
+      window.isCharacterLoading = true;
+      if (window.primaryHero) {
+        char = window.primaryHero;
+        window.char = char;
+        window.primaryHero = null;
+        window.activeCompanionId = null;
+      }
+      char.reset();
+      const btnAudit = document.getElementById("btnOpenImportAudit");
+      if (btnAudit) btnAudit.style.display = "none";
+      if (typeof FileManager !== 'undefined') {
+        FileManager.currentFileHandle = null;
+        FileManager.currentFileName = null;
+        if (FileManager.clearDirty) FileManager.clearDirty();
+      }
+      populateUIFromCharacter();
+      window.isCharacterLoading = false;
+      if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
+      syncGMRosterUI();
+      if (typeof showToast === 'function') showToast(`Closed "${heroName}" from editor.`, "info");
+    }
+  };
 
   function downloadCharJson(jsonString, filename) {
     const blob = new Blob([jsonString], { type: "application/json" });

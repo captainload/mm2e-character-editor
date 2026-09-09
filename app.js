@@ -2126,6 +2126,7 @@ function setupStatusTracker() {
         `;
       }
     }
+    window.updateTrackerConditionsSummary = updateTrackerConditionsSummary;
 
     function renderCustomTrackers() {
       ensureTrackerState();
@@ -3401,7 +3402,7 @@ function setupSessionAndGMHub() {
       "Blind", "Deaf", "Prone", "Bound"
     ];
 
-    tableGMRoster.innerHTML = roster.map(item => {
+    let rowsHtml = roster.map(item => {
       const condPills = standardConditions.map(c => {
         const isActive = !!item.conditions[c];
         return `<span class="gm-cond-pill ${isActive ? 'active' : ''}" onclick="window.gmToggleCondition('${item.id}', ${item.isNPC}, '${c}')">${c}</span>`;
@@ -3490,6 +3491,28 @@ function setupSessionAndGMHub() {
         </tr>
       `;
     }).join('');
+
+    const MIN_ROSTER_ROWS = 6;
+    if (roster.length < MIN_ROSTER_ROWS) {
+      const needed = MIN_ROSTER_ROWS - roster.length;
+      for (let i = 0; i < needed; i++) {
+        const isFirstEmpty = (roster.length === 0 && i === 0);
+        rowsHtml += `
+          <tr class="gm-roster-empty-row" style="border-bottom: 1px dashed var(--border-color); height: 46px; opacity: 0.35;">
+            <td style="padding: 8px; font-style: italic; color: var(--text-muted); font-size: 13px;">
+              ${isFirstEmpty ? 'No characters in campaign' : '—'}
+            </td>
+            <td style="text-align: center; color: var(--text-muted); font-size: 13px;">—</td>
+            <td style="text-align: center; color: var(--text-muted); font-size: 13px;">—</td>
+            <td style="padding: 6px; color: var(--text-muted); font-size: 13px;">—</td>
+            <td style="text-align: center; color: var(--text-muted); font-size: 14px;">—</td>
+            <td style="text-align: center; color: var(--text-muted); font-size: 12px;">—</td>
+          </tr>
+        `;
+      }
+    }
+
+    tableGMRoster.innerHTML = rowsHtml;
   }
 
   // Master Roster Actions
@@ -3813,7 +3836,28 @@ function setupSessionAndGMHub() {
 
     const targetMenu = document.getElementById(menuId);
     if (targetMenu) {
-      targetMenu.style.display = targetMenu.style.display === "none" ? "flex" : "none";
+      const willOpen = targetMenu.style.display === "none" || !targetMenu.style.display;
+      if (willOpen) {
+        targetMenu.style.display = "flex";
+        // Check if menu bottom would be truncated by table container or viewport
+        const rect = targetMenu.getBoundingClientRect();
+        const container = targetMenu.closest(".gm-tracker-table-container") || targetMenu.closest("#tab-gm");
+        const containerBottom = container ? container.getBoundingClientRect().bottom : window.innerHeight;
+
+        if (rect.bottom > containerBottom || rect.bottom > (window.innerHeight - 10)) {
+          targetMenu.style.top = "auto";
+          targetMenu.style.bottom = "100%";
+          targetMenu.style.marginTop = "0";
+          targetMenu.style.marginBottom = "4px";
+        } else {
+          targetMenu.style.top = "100%";
+          targetMenu.style.bottom = "auto";
+          targetMenu.style.marginTop = "4px";
+          targetMenu.style.marginBottom = "0";
+        }
+      } else {
+        targetMenu.style.display = "none";
+      }
     }
   };
 
@@ -11938,6 +11982,12 @@ function populateUIFromCharacter() {
   buildPowersUI();
   buildEquipmentUI();
   refreshUI();
+  if (typeof window.updateTrackerConditionsSummary === 'function') {
+    window.updateTrackerConditionsSummary();
+  }
+  if (typeof syncGMRosterUI === 'function') {
+    syncGMRosterUI();
+  }
 }
 
 function applyLoadedCharacter(loaded) {

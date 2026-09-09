@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=33">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -1445,7 +1445,7 @@
         </div>
 
         <!-- Master Table of Characters -->
-        <div style="overflow-x: auto;">
+        <div class="gm-tracker-table-container" style="overflow-x: auto; min-height: 330px;">
           <table class="data-table" id="tableGMMasterRoster" style="width: 100%; border-collapse: collapse; min-width: 800px;">
             <thead>
               <tr>
@@ -1848,20 +1848,20 @@
   <script src="data_measurements.js?v=8"></script>
   <script src="data_equipment.js?v=6"></script>
   <script src="character_model.js?v=23"></script>
-  <script src="por_importer.js?v=18"></script>
+  <script src="por_importer.js?v=19"></script>
   <script src="print.js?v=10"></script>
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=2"></script>
-  <script src="campaign_manager.js?v=3"></script>
+  <script src="campaign_manager.js?v=4"></script>
   <script src="session_network.js?v=3"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=92"></script>
+  <script src="app.js?v=93"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=38').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=39').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

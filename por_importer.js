@@ -811,6 +811,8 @@
       installations: [],
       libraryPlans: [],
       preservedNotes: [],
+      heroPointsImported: null,
+      conditionsImported: null,
       unconvertibleTraits: [],
       unmappedDataPoints: [],
       heroLabValidationAlerts: [],
@@ -899,6 +901,7 @@
         const leadXmlStr = await leadXmlFile.async("string");
         if (leadXmlStr) {
           ingestHeroLabLibrary(leadXmlStr, primaryData, audit);
+          ingestHeroLabInPlayState(leadXmlStr, primaryData, audit);
         }
       }
     } catch (libErr) {
@@ -1012,7 +1015,9 @@
       identity: "",
       motivation: "",
       complications: "",
-      history: ""
+      history: "",
+      heroPoints: 1,
+      trackerState: { conditions: {}, customPoints: [], fadeStates: {} }
     };
 
     // 1. Personal & Background Information
@@ -2331,6 +2336,98 @@
   }
 
   // ==========================================================================
+  // INGEST HERO LAB IN-PLAY STATE (Hero Points & Active Conditions)
+  // ==========================================================================
+  function ingestHeroLabInPlayState(leadXmlStr, primaryData, audit) {
+    if (!leadXmlStr || !primaryData) return;
+
+    if (!primaryData.trackerState) {
+      primaryData.trackerState = { conditions: {}, customPoints: [], fadeStates: {} };
+    }
+    if (!primaryData.trackerState.conditions) {
+      primaryData.trackerState.conditions = {};
+    }
+
+    // 1. Ingest Hero Points from usagepool
+    const hpMatch = leadXmlStr.match(/<usagepool [^>]*id="HeroPoints"[^>]*quantity="([^"]+)"/i) ||
+                    leadXmlStr.match(/<usagepool [^>]*quantity="([^"]+)"[^>]*id="HeroPoints"/i);
+    if (hpMatch) {
+      const qty = parseFloat(hpMatch[1]);
+      if (!isNaN(qty)) {
+        const parsedHP = Math.max(0, Math.round(qty));
+        primaryData.heroPoints = parsedHP;
+        if (audit) {
+          audit.heroPointsImported = parsedHP;
+          recordUnmappedDataPoint(audit, "In-Play Tracker", "Hero Points", "Hero Points", parsedHP, "Imported", `Imported ${parsedHP} Hero Points from Hero Lab In-Play tracker.`);
+        }
+      }
+    }
+
+    // 2. Ingest Active Conditions from condition picks
+    const HL_CONDITION_MAP = {
+      "conBruised": "Bruised",
+      "conInjured": "Injured",
+      "conStagger": "Staggered",
+      "conDisable": "Disabled",
+      "conUncons": "Unconscious",
+      "conDying": "Dying",
+      "conDead": "Dead",
+      "conFatigue": "Fatigued",
+      "conExhaust": "Exhausted",
+      "conParalyz": "Paralyzed",
+      "conBlinded": "Blind",
+      "conDeaf": "Deaf",
+      "conProne": "Prone",
+      "conPinned": "Pinned",
+      "conEntang": "Entangled",
+      "conDazed": "Dazed",
+      "conStunned": "Stunned",
+      "conHelpls": "Helpless",
+      "conFlatft": "Flat-Footed",
+      "conNausea": "Nauseated",
+      "conPanic": "Panicked",
+      "conShaken": "Shaken",
+      "conFascin": "Fascinated",
+      "conSlowed": "Hindered"
+    };
+
+    const pickRegex = /<pick [^>]*thing="(con[A-Za-z0-9_]+)"[^>]*>([\s\S]*?)<\/pick>/g;
+    let pMatch;
+    const importedConds = {};
+    while ((pMatch = pickRegex.exec(leadXmlStr)) !== null) {
+      const thing = pMatch[1];
+      const inner = pMatch[2];
+      const mapped = HL_CONDITION_MAP[thing];
+      if (!mapped) continue;
+
+      const isOnMatch = inner.match(/<field [^>]*id="adjIsOn"[^>]*user="([^"]+)"/i) ||
+                        inner.match(/<field [^>]*id="adjIsOn"[^>]*value="([^"]+)"/i);
+      const countMatch = inner.match(/<field [^>]*id="(?:adjUser|adjCount)"[^>]*user="([^"]+)"/i) ||
+                         inner.match(/<field [^>]*id="(?:adjUser|adjCount)"[^>]*value="([^"]+)"/i);
+
+      const isOnVal = isOnMatch ? parseFloat(isOnMatch[1]) : 0;
+      const countVal = countMatch ? parseFloat(countMatch[1]) : 0;
+
+      if (isOnVal > 0 || countVal > 0) {
+        if (mapped === "Bruised" || mapped === "Injured") {
+          const count = Math.max(1, Math.round(countVal > 0 ? countVal : isOnVal));
+          primaryData.trackerState.conditions[mapped] = count;
+          importedConds[mapped] = count;
+        } else {
+          primaryData.trackerState.conditions[mapped] = true;
+          importedConds[mapped] = true;
+        }
+      }
+    }
+
+    if (audit && Object.keys(importedConds).length > 0) {
+      audit.conditionsImported = { ...importedConds };
+      const condSummary = Object.entries(importedConds).map(([k, v]) => typeof v === 'number' ? `${k} ×${v}` : k).join(", ");
+      recordUnmappedDataPoint(audit, "In-Play Tracker", "Active Conditions", condSummary, "", "Imported", "Active in-play conditions imported from Hero Lab.");
+    }
+  }
+
+  // ==========================================================================
   // PARSE MODIFIERS HELPER (Extras, Flaws, Power Feats, Drawbacks)
   // ==========================================================================
   function parseModifiersFromNode(pNode, audit, effectLabel) {
@@ -3566,6 +3663,30 @@
         </div>
       ` : ""}
 
+      <!-- In-Play Hero Points & Active Conditions -->
+      ${(audit.heroPointsImported !== null || (audit.conditionsImported && Object.keys(audit.conditionsImported).length > 0)) ? `
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
+          <h4 style="margin: 0 0 8px 0; color: #0284c7; display: flex; align-items: center; gap: 6px;">
+            🛡️ In-Play Status &amp; Conditions (Hero Lab In-Play Tab)
+          </h4>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: var(--font-size-secondary);">
+            <div style="padding: 6px 10px; background: rgba(2, 132, 199, 0.05); border-radius: 4px; display: flex; justify-content: space-between;">
+              <span><strong>Hero Points:</strong> ${audit.heroPointsImported !== null ? audit.heroPointsImported : 1} available</span>
+              <span class="audit-badge audit-info">In-Play Pool</span>
+            </div>
+            ${audit.conditionsImported && Object.keys(audit.conditionsImported).length > 0 ? `
+              <div style="padding: 6px 10px; background: rgba(245, 158, 11, 0.08); border-radius: 4px;">
+                <strong>Active Conditions:</strong> ${Object.entries(audit.conditionsImported).map(([k, v]) => typeof v === 'number' ? `${k} ×${v}` : k).join(", ")}
+              </div>
+            ` : `
+              <div style="padding: 6px 10px; background: rgba(16, 185, 129, 0.05); border-radius: 4px; color: var(--text-muted);">
+                Active Conditions: Normal / Unhindered
+              </div>
+            `}
+          </div>
+        </div>
+      ` : ""}
+
       <!-- Preserved Custom Notes & Specs -->
       ${audit.preservedNotes.length > 0 ? `
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
@@ -3658,6 +3779,18 @@
       out += `=== ATTACHED ASSETS ===\n`;
       audit.companions.forEach(c => out += `* Companion: ${c.name} (${c.type}, PL ${c.powerLevel})\n`);
       audit.installations.forEach(h => out += `* HQ: ${h.name} (Cost: ${h.cost} PP)\n`);
+      out += `\n`;
+    }
+
+    if (audit.heroPointsImported !== null || (audit.conditionsImported && Object.keys(audit.conditionsImported).length > 0)) {
+      out += `=== IN-PLAY STATUS & CONDITIONS ===\n`;
+      out += `* Hero Points: ${audit.heroPointsImported !== null ? audit.heroPointsImported : 1}\n`;
+      if (audit.conditionsImported && Object.keys(audit.conditionsImported).length > 0) {
+        const condStr = Object.entries(audit.conditionsImported).map(([k, v]) => typeof v === 'number' ? `${k} x${v}` : k).join(", ");
+        out += `* Active Conditions: ${condStr}\n`;
+      } else {
+        out += `* Active Conditions: Normal / Unhindered\n`;
+      }
       out += `\n`;
     }
 

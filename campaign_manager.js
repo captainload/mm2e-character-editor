@@ -154,9 +154,10 @@
       name,
       powerLevel: pl,
       characterData: JSON.parse(JSON.stringify(characterData)),
-      currentBruises: 0,
-      conditions: {},
-      heroPoints: 0,
+      currentBruises: (characterData.trackerState?.conditions?.Bruised) || (characterData.currentBruises) || 0,
+      currentInjured: (characterData.trackerState?.conditions?.Injured) || (characterData.currentInjured) || 0,
+      conditions: characterData.trackerState?.conditions ? { ...characterData.trackerState.conditions } : (characterData.conditions ? { ...characterData.conditions } : {}),
+      heroPoints: typeof characterData.heroPoints === 'number' ? characterData.heroPoints : (typeof characterData.heroPointsInput === 'number' ? characterData.heroPointsInput : 0),
       attachedAt: new Date().toISOString()
     };
 

@@ -1864,6 +1864,11 @@ button.row-title-btn.row-title,
   color: var(--accent-primary);
 }
 
+.gm-tracker-table-container {
+  overflow-x: auto;
+  min-height: 330px;
+}
+
 .gm-char-dropdown-menu {
   position: absolute;
   top: 100%;

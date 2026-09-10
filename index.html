@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=39">
+  <link rel="stylesheet" href="styles.css?v=40">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -872,7 +872,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; flex-wrap: wrap; gap: 6px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
-              🛡️ Party &amp; Character Tracker
+              🛡️ Party Display
             </strong>
             <span class="secondary-text" style="font-size: var(--font-size-fine-print);">(Damage tracks &amp; conditions visible to all • Click character name for actions)</span>
           </div>
@@ -880,6 +880,7 @@
             <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">Offline</span>
             <button type="button" class="btn btn-secondary" id="btnToggleLoginBar" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="User name and campaign login">👤 Login / Room ▾</button>
             <button type="button" class="btn btn-secondary" id="btnToggleSilentMode" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="Mute/unmute local roll output to others">📡 Broadcast: ON</button>
+            <button type="button" class="btn btn-secondary" id="btnPopoutPartyDisplay" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print); display: inline-flex; align-items: center; gap: 4px;" title="Pop out Party Display in separate window">↗ Pop Out</button>
           </div>
         </div>
 
@@ -894,13 +895,19 @@
           <span id="lblSessionConnectMsg" style="font-size: var(--font-size-fine-print); color: var(--text-muted);"></span>
         </div>
 
+        <!-- Party Display Popped-Out Notice -->
+        <div id="boxPoppedOutPartyNotice" style="display: none; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 4px; padding: 6px 12px; margin-bottom: 6px; justify-content: space-between; align-items: center;">
+          <span style="font-size: var(--font-size-fine-print); color: var(--text-muted);">🪟 Party Display popped out in separate window. Health, conditions, and roster remain synchronized.</span>
+          <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplay" style="height: 22px; padding: 0 8px; font-size: var(--font-size-fine-print);">⬅ Re-dock</button>
+        </div>
+
         <!-- Party Tracker Table (NO Hero Points column, NO Modes column, includes Initiative) -->
         <div class="gm-tracker-table-container" id="sessionPartyTableContainer" style="overflow-x: auto; overflow-y: auto; max-height: 240px; transition: max-height 0.2s;">
           <table class="data-table" id="tableSessionPartyRoster" style="width: 100%; border-collapse: collapse; min-width: 680px;">
             <thead>
               <tr>
                 <th style="width: 220px; text-align: left;">Character</th>
-                <th style="width: 85px; text-align: center;">Init</th>
+                <th style="width: 55px; text-align: center;">Init</th>
                 <th style="width: 125px; text-align: center;">PL / Def / Tough</th>
                 <th style="width: 170px; text-align: center;">Damage (Bruised / Injured)</th>
                 <th style="text-align: left;">Active Conditions</th>
@@ -931,17 +938,10 @@
             </div>
           </div>
 
-          <!-- Right: GM Name & Pop-Out -->
+          <!-- Right: GM Name -->
           <div style="display: flex; align-items: center; gap: 10px; font-size: var(--font-size-controls);">
             <span id="lblSessionGMInfo" style="color: var(--accent-primary); font-size: var(--font-size-secondary);" title="Campaign GM Host">👑 GM: <strong>GM</strong></span>
-            <button type="button" class="btn btn-secondary" id="btnPopoutSessionLog" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print); display: inline-flex; align-items: center; gap: 4px;" title="Pop out continuous session log in separate window">↗ Pop Out</button>
           </div>
-        </div>
-
-        <!-- Popped-Out Notice -->
-        <div id="boxPoppedOutNotice" style="display: none; background: var(--bg-card); border-bottom: 1px dashed var(--border-color); padding: 6px 12px; justify-content: space-between; align-items: center;">
-          <span style="font-size: var(--font-size-fine-print); color: var(--text-muted);">🪟 Session Log popped out in separate window. Rolls and chat remain synchronized.</span>
-          <button type="button" class="btn btn-secondary" id="btnRedockSessionLog" style="height: 22px; padding: 0 8px; font-size: var(--font-size-fine-print);">⬅ Re-dock</button>
         </div>
 
         <!-- Continuous Discord/Roll20-Style Single-Line Log Container (auto-scrolls down) -->
@@ -2083,17 +2083,17 @@
   <script src="por_importer.js?v=19"></script>
   <script src="print.js?v=10"></script>
   <script src="peerjs.min.js"></script>
-  <script src="dice_notation.js?v=2"></script>
+  <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=7"></script>
   <script src="session_network.js?v=6"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=99"></script>
+  <script src="app.js?v=100"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=45').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=46').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

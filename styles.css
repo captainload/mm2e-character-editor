@@ -1949,17 +1949,17 @@ button.row-title-btn.row-title,
   flex-shrink: 0;
 }
 
-/* Popped-Out Mode Layout */
-.session-tab-container.session-popped-out #sessionChatSection {
+/* Party Display Popped-Out Mode Layout */
+.session-tab-container.party-popped-out #sessionPartyTableContainer {
   display: none !important;
 }
 
-.session-tab-container.session-popped-out #boxPoppedOutNotice {
+.session-tab-container.party-popped-out #boxPoppedOutPartyNotice {
   display: flex !important;
 }
 
-.session-tab-container.session-popped-out #sessionPartyTableContainer {
-  max-height: 70vh !important;
+.session-tab-container.party-popped-out #btnPopoutPartyDisplay {
+  display: none !important;
 }
 
 /* GM Master Table Status Pill Toggles & Canonical Condition Badges */

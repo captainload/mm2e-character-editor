@@ -758,20 +758,19 @@ window.showDiceRollModal = function(config) {
   modal.classList.add("active");
 
   // Broadcast roll event to Session Log & Multiplayer network
+  const rollEntry = {
+    characterName: char?.name || "Hero",
+    rollType: config.title ? config.title.replace(/^🎲\s*/, '') : "Roll",
+    total: config.total,
+    breakdown: `1d20 (${config.d20}) ${config.mod >= 0 ? '+' + config.mod : config.mod} = ${config.total}`,
+    isNat20: !!config.isNat20,
+    isNat1: !!config.isNat1,
+    result: config.resultOutcome || ""
+  };
   if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
-    const rollEntry = {
-      characterName: char?.name || "Hero",
-      rollType: config.title ? config.title.replace(/^🎲\s*/, '') : "Roll",
-      total: config.total,
-      breakdown: `1d20 (${config.d20}) ${config.mod >= 0 ? '+' + config.mod : config.mod} = ${config.total}`,
-      isNat20: !!config.isNat20,
-      isNat1: !!config.isNat1,
-      result: config.resultOutcome || ""
-    };
     SessionNetwork.sendRoll(rollEntry);
-    if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
-      CampaignManager.addLogEntry(rollEntry);
-    }
+  } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+    CampaignManager.addLogEntry(rollEntry);
   }
 };
 
@@ -2391,9 +2390,11 @@ function setupStatusTracker() {
       if (trackerContent) trackerContent.classList.add("active");
       if (modal) modal.classList.add("active");
 
-      // Deactivate tables if open
+      // Deactivate tables and GM hub if open
       const tablesContent = document.getElementById("tab-tables");
       if (tablesContent) tablesContent.classList.remove("active");
+      const gmContent = document.getElementById("tab-gm");
+      if (gmContent) gmContent.classList.remove("active");
 
       // Style buttons for active tab feedback
       if (btnOpen) {
@@ -2403,6 +2404,11 @@ function setupStatusTracker() {
       if (btnTables) {
         btnTables.classList.remove("btn-primary");
         btnTables.classList.add("btn-secondary");
+      }
+      const btnGM = document.getElementById("btnOpenGM");
+      if (btnGM) {
+        btnGM.classList.remove("btn-primary");
+        btnGM.classList.add("btn-secondary");
       }
 
       // Populate tracker UI
@@ -2540,19 +2546,18 @@ function setupStatusTracker() {
         }
 
         // Broadcast to session log & network
+        const entry = {
+          characterName: char?.name || "Hero",
+          rollType: rollType,
+          total: total,
+          breakdown: breakdown,
+          isNat20: !!isNat20,
+          isNat1: !!isNat1
+        };
         if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
-          const entry = {
-            characterName: char?.name || "Hero",
-            rollType: rollType,
-            total: total,
-            breakdown: breakdown,
-            isNat20: !!isNat20,
-            isNat1: !!isNat1
-          };
           SessionNetwork.sendRoll(entry);
-          if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
-            CampaignManager.addLogEntry(entry);
-          }
+        } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+          CampaignManager.addLogEntry(entry);
         }
       });
     }
@@ -2728,9 +2733,9 @@ function setupSessionAndGMHub() {
   const lblStatus = document.getElementById("lblSessionStatusBadge");
   const lblMsg = document.getElementById("lblSessionConnectMsg");
   const btnSilentToggle = document.getElementById("btnToggleSilentMode");
-  const btnPopout = document.getElementById("btnPopoutSessionLog");
-  const btnRedock = document.getElementById("btnRedockSessionLog");
-  const boxPoppedOut = document.getElementById("boxPoppedOutNotice");
+  const btnPopoutParty = document.getElementById("btnPopoutPartyDisplay");
+  const btnRedockParty = document.getElementById("btnRedockPartyDisplay");
+  const boxPoppedOutParty = document.getElementById("boxPoppedOutPartyNotice");
   const logFeed = document.getElementById("sessionLogFeedContainer");
   const txtSearch = document.getElementById("txtSessionSearch");
   const btnClearSearch = document.getElementById("btnSessionClearSearch");
@@ -2802,21 +2807,30 @@ function setupSessionAndGMHub() {
       .replace(/'/g, '&#039;');
   }
 
-  function updateSessionDockMode(isPoppedOut) {
+  function updatePartyDisplayDockMode(isPoppedOut) {
     if (sessionTabContainer) {
       if (isPoppedOut) {
-        sessionTabContainer.classList.remove("session-docked");
-        sessionTabContainer.classList.add("session-popped-out");
+        sessionTabContainer.classList.add("party-popped-out");
       } else {
-        sessionTabContainer.classList.remove("session-popped-out");
-        sessionTabContainer.classList.add("session-docked");
+        sessionTabContainer.classList.remove("party-popped-out");
       }
     }
-    if (boxPoppedOut) {
-      boxPoppedOut.style.display = isPoppedOut ? "flex" : "none";
+    if (boxPoppedOutParty) {
+      boxPoppedOutParty.style.display = isPoppedOut ? "flex" : "none";
+    }
+    const container = document.getElementById("sessionPartyTableContainer");
+    if (container) {
+      container.style.display = isPoppedOut ? "none" : "";
+    }
+    if (btnPopoutParty) {
+      btnPopoutParty.style.display = isPoppedOut ? "none" : "";
+    }
+    if (!isPoppedOut) {
+      syncPartyRosterUI();
     }
   }
-  window.updateSessionDockMode = updateSessionDockMode;
+  window.updatePartyDisplayDockMode = updatePartyDisplayDockMode;
+  window.updateSessionDockMode = updatePartyDisplayDockMode;
 
   // Toggle user login bar
   if (btnToggleLogin && sessionLoginBar) {
@@ -2842,6 +2856,8 @@ function setupSessionAndGMHub() {
     SessionNetwork.initBroadcastChannel();
 
     SessionNetwork.addEventListener("onRoll", (roll) => {
+      if (!roll) return;
+      if (roll.id && sessionLocalLog.some(x => x.id === roll.id)) return;
       sessionLocalLog.push(roll);
       renderSessionFeed();
       if (typeof CampaignManager !== 'undefined') {
@@ -2850,6 +2866,8 @@ function setupSessionAndGMHub() {
     });
 
     SessionNetwork.addEventListener("onChat", (packet) => {
+      if (!packet) return;
+      if (packet.id && sessionLocalLog.some(x => x.id === packet.id)) return;
       sessionLocalLog.push(packet);
       renderSessionFeed();
       if (typeof CampaignManager !== 'undefined') {
@@ -2858,6 +2876,8 @@ function setupSessionAndGMHub() {
     });
 
     SessionNetwork.addEventListener("onHeroPointSpent", (packet) => {
+      if (!packet) return;
+      if (packet.id && sessionLocalLog.some(x => x.id === packet.id)) return;
       sessionLocalLog.push(packet);
       renderSessionFeed();
       if (typeof CampaignManager !== 'undefined') {
@@ -2871,7 +2891,7 @@ function setupSessionAndGMHub() {
     });
 
     SessionNetwork.addEventListener("onPopoutDocked", () => {
-      if (boxPoppedOut) boxPoppedOut.style.display = "none";
+      if (typeof redockPartyDisplay === 'function') redockPartyDisplay();
     });
 
     SessionNetwork.addEventListener("onGMStatusOverride", (packet) => {
@@ -3328,13 +3348,14 @@ function setupSessionAndGMHub() {
 
       if (typeof SessionNetwork !== 'undefined') {
         SessionNetwork.sendHeroPointSpent(heroName, char.heroPoints, details);
+      } else {
+        if (typeof CampaignManager !== 'undefined') {
+          CampaignManager.addLogEntry(eventPkt);
+        }
+        sessionLocalLog.push(eventPkt);
+        renderSessionFeed();
+        syncPartyRosterUI();
       }
-      if (typeof CampaignManager !== 'undefined') {
-        CampaignManager.addLogEntry(eventPkt);
-      }
-      sessionLocalLog.push(eventPkt);
-      renderSessionFeed();
-      syncPartyRosterUI();
       if (typeof showToast === 'function') showToast(`Expended 1 Hero Point! (${char.heroPoints} remaining)`, "info");
     } else {
       // GM spending on behalf of player or NPC
@@ -3362,11 +3383,12 @@ function setupSessionAndGMHub() {
             conditions: player.conditions,
             heroPoints: hp
           });
+        } else {
+          CampaignManager.addLogEntry(eventPkt);
+          sessionLocalLog.push(eventPkt);
+          renderSessionFeed();
+          syncPartyRosterUI();
         }
-        CampaignManager.addLogEntry(eventPkt);
-        sessionLocalLog.push(eventPkt);
-        renderSessionFeed();
-        syncPartyRosterUI();
       }
     }
   };
@@ -3544,7 +3566,7 @@ function setupSessionAndGMHub() {
         ? `<strong style="font-size: 15px; color: var(--accent-primary); line-height: 1.1;">${item.initiativeRoll}</strong><div style="font-size: var(--font-size-fine-print); color: var(--text-muted);">${initModStr} mod</div>`
         : `<strong style="font-size: 13px;">${initModStr}</strong>`;
       const localRollBtn = item.isLocal
-        ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 6px; font-size: var(--font-size-fine-print); margin-top: 2px; height: 20px; line-height: 1;">🎲 Roll</button>`
+        ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 4px; font-size: 10px; margin-top: 2px; height: 18px; line-height: 1; max-width: 48px; width: 100%;">🎲 Roll</button>`
         : '';
 
       return `
@@ -3595,7 +3617,7 @@ function setupSessionAndGMHub() {
               ${escapeHtml(item.playerName)} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: var(--font-size-fine-print);">👑 GM</span>' : ''}
             </div>
           </td>
-          <td style="text-align: center; vertical-align: middle; padding: 4px 6px;">
+          <td style="width: 55px; text-align: center; vertical-align: middle; padding: 2px 4px;">
             <div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center;">
               ${initRollDisplay}
               ${localRollBtn}
@@ -3643,6 +3665,12 @@ function setupSessionAndGMHub() {
     }
 
     tableRoster.innerHTML = rowsHtml;
+    try {
+      if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
+        const popTable = poppedOutPartyWindow.document.getElementById("tbodySessionPartyRoster");
+        if (popTable) popTable.innerHTML = rowsHtml;
+      }
+    } catch (e) {}
   }
   window.syncPartyRosterUI = syncPartyRosterUI;
   window.syncGMRosterUI = syncPartyRosterUI; // Backwards compatible alias
@@ -3748,12 +3776,12 @@ function setupSessionAndGMHub() {
     });
   }
 
-  let poppedOutWindow = null;
+  let poppedOutPartyWindow = null;
 
-  function getSavedPopoutBounds() {
-    let bounds = { width: 480, height: 850, left: 100, top: 100 };
+  function getSavedPartyDisplayBounds() {
+    let bounds = { width: 840, height: 480, left: 120, top: 120 };
     try {
-      const saved = localStorage.getItem("mm2e_session_log_bounds");
+      const saved = localStorage.getItem("mm2e_party_display_bounds");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
@@ -3762,47 +3790,48 @@ function setupSessionAndGMHub() {
     return bounds;
   }
 
-  function savePopoutBoundsFromRef(win) {
+  function savePartyDisplayBoundsFromRef(win) {
     if (!win) return;
     try {
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 200) {
-        localStorage.setItem("mm2e_session_log_bounds", JSON.stringify({ left, top, width, height }));
+      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
+        localStorage.setItem("mm2e_party_display_bounds", JSON.stringify({ left, top, width, height }));
       }
     } catch (e) {}
   }
 
-  if (btnPopout) {
-    btnPopout.addEventListener("click", () => {
-      const bounds = getSavedPopoutBounds();
-      const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
-      poppedOutWindow = window.open("log_window.html", "MM2CG_SessionLog", features);
-      updateSessionDockMode(true);
-    });
+  function openPartyDisplayPopout() {
+    const bounds = getSavedPartyDisplayBounds();
+    const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
+    poppedOutPartyWindow = window.open("party_window.html", "MM2CG_PartyDisplay", features);
+    updatePartyDisplayDockMode(true);
+  }
+  window.openPartyDisplayPopout = openPartyDisplayPopout;
+
+  function redockPartyDisplay() {
+    if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
+      savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
+      try { poppedOutPartyWindow.close(); } catch (e) {}
+    }
+    poppedOutPartyWindow = null;
+    updatePartyDisplayDockMode(false);
+  }
+  window.redockPartyDisplay = redockPartyDisplay;
+
+  if (btnPopoutParty) {
+    btnPopoutParty.addEventListener("click", openPartyDisplayPopout);
   }
 
-  if (btnRedock) {
-    btnRedock.addEventListener("click", () => {
-      if (poppedOutWindow && !poppedOutWindow.closed) {
-        savePopoutBoundsFromRef(poppedOutWindow);
-        try { poppedOutWindow.close(); } catch (e) {}
-      }
-      updateSessionDockMode(false);
-    });
-  }
-
-  if (typeof SessionNetwork !== 'undefined') {
-    SessionNetwork.addEventListener('onPopoutDocked', () => {
-      updateSessionDockMode(false);
-    });
+  if (btnRedockParty) {
+    btnRedockParty.addEventListener("click", redockPartyDisplay);
   }
 
   window.addEventListener('focus', () => {
-    if (poppedOutWindow && poppedOutWindow.closed) {
-      updateSessionDockMode(false);
+    if (poppedOutPartyWindow && poppedOutPartyWindow.closed) {
+      redockPartyDisplay();
     }
   });
 
@@ -4000,10 +4029,13 @@ function setupSessionAndGMHub() {
         isNat20: !!res.isNat20,
         isNat1: !!res.isNat1
       };
-      if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
-      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
-      sessionLocalLog.push(rollEntry);
-      renderSessionFeed();
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendRoll(rollEntry);
+      } else {
+        if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+        sessionLocalLog.push(rollEntry);
+        renderSessionFeed();
+      }
       chatInput.value = '';
       return;
     }
@@ -4069,10 +4101,13 @@ function setupSessionAndGMHub() {
         isNat20: res.total === 20,
         isNat1: res.total === 1
       };
-      if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
-      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
-      sessionLocalLog.push(rollEntry);
-      renderSessionFeed();
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendRoll(rollEntry);
+      } else {
+        if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+        sessionLocalLog.push(rollEntry);
+        renderSessionFeed();
+      }
     });
   }
 
@@ -4493,10 +4528,13 @@ function setupSessionAndGMHub() {
       isNat1: d20 === 1
     };
 
-    if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
-    CampaignManager.addLogEntry(rollEntry);
-    sessionLocalLog.push(rollEntry);
-    renderSessionFeed();
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.sendRoll(rollEntry);
+    } else {
+      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+      sessionLocalLog.push(rollEntry);
+      renderSessionFeed();
+    }
     if (typeof showToast === 'function') showToast(`Rolled attack for ${enemy.name}: ${total}`, "info");
   };
 
@@ -4777,10 +4815,13 @@ function setupSessionAndGMHub() {
       isNat1
     };
 
-    if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(entry);
-    CampaignManager.addLogEntry(entry);
-    sessionLocalLog.unshift(entry);
-    renderSessionFeed();
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.sendRoll(entry);
+    } else {
+      CampaignManager.addLogEntry(entry);
+      sessionLocalLog.unshift(entry);
+      renderSessionFeed();
+    }
     if (typeof showToast === 'function') showToast(`Rolled attack for ${npc.name}: ${total}`, "info");
   };
 

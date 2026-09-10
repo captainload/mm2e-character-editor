@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MM2CG — Party Display</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      background: var(--bg-app, #18181b);
+      color: var(--text-main, #f4f4f5);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .party-win-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color, #27272a);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .party-win-container {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: auto;
+      margin-top: 8px;
+      border: 1px solid var(--border-color, #27272a);
+      border-radius: 6px;
+      background: var(--bg-panel, #27272a);
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Header Bar -->
+  <div class="party-win-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <strong style="font-size: var(--font-size-labels, 15px); display: flex; align-items: center; gap: 6px; color: var(--accent-primary, #dc2626);">
+        🛡️ Party Display
+      </strong>
+      <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted, #a1a1aa);">
+        (Damage tracks &amp; conditions synchronized)
+      </span>
+      <span class="badge" id="lblPartyWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplayWindow" style="height: 26px; padding: 0 10px; font-size: var(--font-size-fine-print, 12px); font-weight: 600;">
+        ⬅ Re-dock
+      </button>
+    </div>
+  </div>
+
+  <!-- Party Table Container -->
+  <div class="party-win-container">
+    <table class="data-table" id="tableSessionPartyRoster" style="width: 100%; border-collapse: collapse; min-width: 680px;">
+      <thead>
+        <tr>
+          <th style="width: 220px; text-align: left;">Character</th>
+          <th style="width: 55px; text-align: center;">Init</th>
+          <th style="width: 125px; text-align: center;">PL / Def / Tough</th>
+          <th style="width: 170px; text-align: center;">Damage (Bruised / Injured)</th>
+          <th style="text-align: left;">Active Conditions</th>
+        </tr>
+      </thead>
+      <tbody id="tbodySessionPartyRoster">
+        <!-- Dynamically populated party rows -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Scripts -->
+  <script src="dice_notation.js"></script>
+  <script src="campaign_manager.js"></script>
+  <script src="session_network.js"></script>
+  <script>
+    const STORAGE_KEY_BOUNDS = 'mm2e_party_display_bounds';
+
+    // BroadcastChannel synchronization
+    let broadcastChannel = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        broadcastChannel = new BroadcastChannel('MM2CG_Session');
+        broadcastChannel.onmessage = (event) => {
+          const packet = event.data;
+          if (!packet || !packet.type) return;
+          if (packet.type === 'CONDITION_UPDATE' ||
+              packet.type === 'ROLL' ||
+              packet.type === 'HERO_POINT_SPENT' ||
+              packet.type === 'ROSTER_UPDATE' ||
+              packet.type === 'STATE_SYNC' ||
+              packet.type === 'PARTY_DISPLAY_SYNC') {
+            syncPartyFromOpenerOrLocal();
+          }
+        };
+      }
+    } catch (e) {
+      console.warn('BroadcastChannel error in Party Display:', e);
+    }
+
+    // Call opener action or fallback
+    function callOpenerOrLocal(fnName, ...args) {
+      if (window.opener && !window.opener.closed && typeof window.opener[fnName] === 'function') {
+        const res = window.opener[fnName](...args);
+        syncPartyFromOpenerOrLocal();
+        return res;
+      }
+    }
+
+    window.gmToggleCondition = (id, isNpc, cond) => callOpenerOrLocal('gmToggleCondition', id, isNpc, cond);
+    window.gmAddConditionSelect = (id, isNpc, selectElem) => callOpenerOrLocal('gmAddConditionSelect', id, isNpc, selectElem);
+    window.gmClearAllConditions = (id, isNpc) => callOpenerOrLocal('gmClearAllConditions', id, isNpc);
+    window.gmStepDamage = (id, type, delta, isNpc) => callOpenerOrLocal('gmStepDamage', id, type, delta, isNpc);
+    window.sessionSpendHeroPoint = (id) => callOpenerOrLocal('sessionSpendHeroPoint', id);
+    window.rollInitiativeCheck = () => callOpenerOrLocal('rollInitiativeCheck');
+    window.gmTogglePlayerSilentBtn = (id) => callOpenerOrLocal('gmTogglePlayerSilentBtn', id);
+    window.gmPullSheet = (id) => callOpenerOrLocal('gmPullSheet', id);
+    window.gmPushCurrentSheet = (id) => callOpenerOrLocal('gmPushCurrentSheet', id);
+    window.gmLoadNpcToEditor = (id) => callOpenerOrLocal('gmLoadNpcToEditor', id);
+    window.gmExportCharSheet = (id) => callOpenerOrLocal('gmExportCharSheet', id);
+    window.gmOpenCharHistory = (id) => callOpenerOrLocal('gmOpenCharHistory', id);
+
+    // Dropdown menu handling
+    window.gmToggleCharMenu = function(e, id) {
+      e.stopPropagation();
+      const menu = document.getElementById('gmCharMenu_' + id);
+      const isOpen = menu && menu.style.display === 'block';
+      window.gmCloseAllCharMenus();
+      if (menu && !isOpen) menu.style.display = 'block';
+    };
+    window.gmCloseAllCharMenus = function() {
+      document.querySelectorAll('.gm-char-dropdown-menu').forEach(m => m.style.display = 'none');
+    };
+    document.addEventListener('click', window.gmCloseAllCharMenus);
+
+    function syncPartyFromOpenerOrLocal() {
+      const tableRoster = document.getElementById('tbodySessionPartyRoster');
+      if (!tableRoster) return;
+
+      if (window.opener && !window.opener.closed) {
+        if (typeof window.opener.syncPartyRosterUI === 'function') {
+          try {
+            window.opener.syncPartyRosterUI();
+          } catch (e) {}
+        }
+        const openerTbody = window.opener.document ? window.opener.document.getElementById('tbodySessionPartyRoster') : null;
+        if (openerTbody && openerTbody.innerHTML) {
+          tableRoster.innerHTML = openerTbody.innerHTML;
+          return;
+        }
+      }
+
+      // Fallback: If no opener, render from CampaignManager
+      if (typeof CampaignManager !== 'undefined') {
+        const camp = CampaignManager.getActiveCampaign();
+        if (camp) {
+          const npcs = camp.npcs || [];
+          const players = camp.acceptedPlayers || [];
+          if (npcs.length === 0 && players.length === 0) {
+            tableRoster.innerHTML = `
+              <tr style="border-bottom: 1px dashed var(--border-color); height: 44px; opacity: 0.5;">
+                <td colspan="5" style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px; font-style: italic;">
+                  No characters in party.
+                </td>
+              </tr>
+            `;
+          }
+        }
+      }
+    }
+
+    // Initial render and interval sync
+    syncPartyFromOpenerOrLocal();
+    setInterval(syncPartyFromOpenerOrLocal, 2000);
+
+    // --- Bounds Management (Remember size and position) ---
+    function saveWindowBounds() {
+      try {
+        const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+        const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+        const width = window.outerWidth || window.innerWidth;
+        const height = window.outerHeight || window.innerHeight;
+
+        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
+          localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify({ left, top, width, height }));
+        }
+      } catch (e) {}
+    }
+
+    function restoreWindowBounds() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (b.width && b.height && (window.outerWidth !== b.width || window.outerHeight !== b.height)) {
+            try { window.resizeTo(b.width, b.height); } catch (e) {}
+          }
+          if (typeof b.left === 'number' && typeof b.top === 'number' && (window.screenX !== b.left || window.screenY !== b.top)) {
+            try { window.moveTo(b.left, b.top); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }
+
+    restoreWindowBounds();
+
+    window.addEventListener('resize', () => {
+      clearTimeout(window._resTimer);
+      window._resTimer = setTimeout(saveWindowBounds, 250);
+    });
+
+    setInterval(() => {
+      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+      const width = window.outerWidth || window.innerWidth;
+      const height = window.outerHeight || window.innerHeight;
+
+      if (!window._lastBounds ||
+          window._lastBounds.left !== left ||
+          window._lastBounds.top !== top ||
+          window._lastBounds.width !== width ||
+          window._lastBounds.height !== height) {
+        window._lastBounds = { left, top, width, height };
+        saveWindowBounds();
+      }
+    }, 1000);
+
+    // Re-docking logic
+    const btnRedock = document.getElementById('btnRedockPartyDisplayWindow');
+    if (btnRedock) {
+      btnRedock.addEventListener('click', redockWindow);
+    }
+
+    function redockWindow() {
+      saveWindowBounds();
+      if (broadcastChannel) {
+        try { broadcastChannel.postMessage({ type: 'PARTY_DISPLAY_DOCKED' }); } catch (e) {}
+      }
+      if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
+        try { window.opener.redockPartyDisplay(); } catch (e) {}
+      }
+      window.close();
+    }
+
+    window.addEventListener('beforeunload', () => {
+      saveWindowBounds();
+      if (broadcastChannel) {
+        try { broadcastChannel.postMessage({ type: 'PARTY_DISPLAY_DOCKED' }); } catch (e) {}
+      }
+      if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
+        try { window.opener.redockPartyDisplay(); } catch (e) {}
+      }
+    });
+
+    window.addEventListener('unload', saveWindowBounds);
+  </script>
+</body>
+</html>

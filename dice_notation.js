@@ -71,7 +71,13 @@
         total += sign * termTotal;
         rolls.push(...termRolls);
 
-        const rollStr = `[${termRolls.join(', ')}]`;
+        let rollStr;
+        if (count === 1) {
+          rollStr = `1d${sides} (${termRolls[0]})`;
+        } else {
+          rollStr = `${count}d${sides} [${termRolls.join(', ')}]`;
+        }
+
         if (breakdownParts.length === 0) {
           breakdownParts.push(sign === -1 ? `-${rollStr}` : rollStr);
         } else {
@@ -97,13 +103,21 @@
         total: d20,
         rolls: [d20],
         modifier: 0,
-        breakdown: `[${d20}] = ${d20}`,
+        breakdown: `1d${defaultSides}: ${d20}`,
         isNat20: defaultSides === 20 && d20 === 20,
         isNat1: defaultSides === 20 && d20 === 1
       };
     }
 
-    const breakdown = `${breakdownParts.join('')} = ${total}`;
+    // If only a single die was rolled with no other terms or modifiers, present cleanly as "1d20: X"
+    let breakdown;
+    if (breakdownParts.length === 1 && rolls.length === 1) {
+      const sides = cleaned.includes('d') ? (parseInt(cleaned.split('d')[1], 10) || defaultSides) : defaultSides;
+      breakdown = `1d${sides}: ${total}`;
+    } else {
+      breakdown = `${breakdownParts.join('')} = ${total}`;
+    }
+
     return {
       valid: true,
       expression: cleaned,

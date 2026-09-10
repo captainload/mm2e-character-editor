@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=37">
+  <link rel="stylesheet" href="styles.css?v=38">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -331,7 +331,7 @@
         </button>
         <button type="button" class="btn btn-secondary" id="btnOpenTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; box-sizing: border-box;" title="View Reference Tables">📊 Tables</button>
         <button type="button" class="btn btn-secondary" id="btnOpenTracker" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Status &amp; Combat Tracker">⏱ Tracker</button>
-        <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="GM Campaign Hub &amp; Master Tracker">👑 GM</button>
+        <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Campaigns Hub &amp; Master Tracker">🏰 Campaigns</button>
         <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="display: none; height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; align-items: center; gap: 4px; box-sizing: border-box;" title="Return to previous view">⬅ Back</button>
       </div>
     </div>
@@ -890,6 +890,7 @@
           <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtSessionCampaignCode">Room / Code:</label>
           <input type="text" id="txtSessionCampaignCode" placeholder="campaign-1" maxlength="45" style="width: 130px; height: 24px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
           <button type="button" class="btn btn-primary" id="btnSessionConnect" style="height: 24px; padding: 0 10px; font-size: 11px; font-weight: 600;">🔑 Log In</button>
+          <button type="button" class="btn btn-secondary" id="btnSessionOpenProfile" style="height: 24px; padding: 0 8px; font-size: 11px;" title="View your User Identity &amp; Account Key in Campaigns">👤 Profile</button>
           <span id="lblSessionConnectMsg" style="font-size: 11px; color: var(--text-muted);"></span>
         </div>
 
@@ -1409,18 +1410,89 @@
   <section id="tab-gm" class="tab-content" style="max-width: 1360px;">
     <div style="display: flex; flex-direction: column; gap: 10px; max-width: 1360px; margin: 0 auto;">
       
-      <!-- GM Header Bar -->
+      <!-- GM / Campaigns Header Bar -->
       <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 14px; flex-wrap: wrap; gap: 8px;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <h2 style="margin: 0; font-size: var(--font-size-labels); color: var(--accent-primary); display: flex; align-items: center; gap: 8px;">
-            👑 GM Campaign Management &amp; Control Center
+            🏰 Campaigns &amp; GM Management Center
           </h2>
-          <span class="badge" id="lblGMHostStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 12px; padding: 2px 8px;">GM Mode Active</span>
+          <span class="badge" id="lblGMHostStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 12px; padding: 2px 8px;">Campaigns Active</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button type="button" class="btn btn-secondary" id="btnGMReturnToSheet" style="height: 26px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Return to previous sheet view">⬅ Back</button>
         </div>
       </div>
+
+      <!-- SECTION 1: USER IDENTITY & CAMPAIGN ACCESS MANAGEMENT CARD (First section users notice) -->
+      <div class="tracker-card" id="campaignUserManagementCard" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="font-size: var(--font-size-labels); color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+              👤 User Identity &amp; Campaign Access Management
+            </strong>
+            <span class="secondary-text" style="font-size: 11px;">(Your user name &amp; P2P account token • Authorized player whitelist)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="lblLocalAccountStatusBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; font-size: 11px; padding: 2px 8px;">🛡️ P2P Authenticated</span>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; align-items: start;">
+          
+          <!-- Left Side: Your Local User Profile & P2P Token (For All Users: GMs & Players) -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+              <span>🔑 Your User Identity &amp; Account Key</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtLocalAccountUserName">Your User Name:</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="txtLocalAccountUserName" placeholder="Enter your user name" maxlength="45" style="flex: 1; height: 28px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+                <button type="button" class="btn btn-secondary" id="btnSaveLocalAccountUserName" style="height: 28px; padding: 0 10px; font-size: 11px;">Save</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Unique P2P Account Key:</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <code id="lblLocalAccountToken" style="flex: 1; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 8px; font-size: 11px; color: var(--accent-primary); word-break: break-all; user-select: all;">usr_...</code>
+                <button type="button" class="btn btn-secondary" id="btnCopyLocalAccountToken" style="height: 28px; padding: 0 8px; font-size: 11px;" title="Copy account key to clipboard">📋 Copy</button>
+                <button type="button" class="btn btn-secondary" id="btnImportLocalAccountToken" style="height: 28px; padding: 0 8px; font-size: 11px;" title="Import or set your account key for another device">🔑 Import</button>
+              </div>
+              <span style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">
+                This cryptographic token authenticates your user identity across peer-to-peer campaigns without central servers.
+              </span>
+            </div>
+          </div>
+
+          <!-- Right Side: Campaign Authorized Users Whitelist (GM Controls) -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+              <div style="font-weight: 700; font-size: 13px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                <span>👥 Campaign Player Whitelist</span>
+                <span id="lblGMInlineUserCount" class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: 11px;">0 users</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label style="font-size: 11px; color: var(--text-muted);">GM Name:</label>
+                <input type="text" id="txtInlineGMName" placeholder="GM Name" style="width: 100px; height: 24px; font-size: 11px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
+                <button type="button" class="btn btn-secondary" id="btnSaveInlineGMName" style="height: 24px; padding: 0 6px; font-size: 11px;">Save</button>
+              </div>
+            </div>
+
+            <!-- Add User input row -->
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="text" id="txtInlineNewUserName" placeholder="Enter player user name (e.g. Alice, Bob)..." style="flex: 1; height: 26px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+              <button type="button" class="btn btn-primary" id="btnInlineAddNewUser" style="height: 26px; padding: 0 10px; font-size: 11px; font-weight: 600;">+ Authorize User</button>
+            </div>
+
+            <!-- Authorized Users Table Container -->
+            <div id="campaignInlineUsersTableContainer" style="max-height: 155px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel);">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+
 
       <!-- Active Campaign & Backup Controls Bar -->
       <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
@@ -1824,6 +1896,25 @@
     </div>
   </div>
 
+  <!-- Duplicate User Login Alert Modal Overlay -->
+  <div class="modal-overlay" id="gmDuplicateLoginModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 90%; max-width: 540px; border: 2px solid #ef4444; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="background: rgba(239, 68, 68, 0.12); border-bottom: 1px solid rgba(239, 68, 68, 0.3); padding: 10px 16px;">
+        <h3 style="margin: 0; color: #ef4444; display: flex; align-items: center; gap: 8px;">
+          ⚠️ Duplicate User Login Attempt
+        </h3>
+        <button class="info-popup-close" onclick="document.getElementById('gmDuplicateLoginModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" id="gmDuplicateLoginModalBody" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+        <!-- Dynamically populated -->
+      </div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" id="btnRejectDuplicateLogin" style="color: #ef4444;">✕ Reject Duplicate</button>
+        <button type="button" class="btn btn-primary" id="btnAcceptReplaceDuplicateLogin" style="background: #ef4444; border-color: #dc2626;">🔁 Replace Stale Session</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Campaign Authorized Users & Whitelist Modal Overlay -->
   <div class="modal-overlay" id="campaignUsersModal" onclick="if(event.target===this)this.classList.remove('active')">
     <div class="info-popup-box" style="width: 92%; max-width: 780px; max-height: 85vh; display: flex; flex-direction: column;">
@@ -1994,16 +2085,16 @@
   <script src="print.js?v=10"></script>
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=2"></script>
-  <script src="campaign_manager.js?v=6"></script>
-  <script src="session_network.js?v=5"></script>
+  <script src="campaign_manager.js?v=7"></script>
+  <script src="session_network.js?v=6"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=97"></script>
+  <script src="app.js?v=98"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=43').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=44').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

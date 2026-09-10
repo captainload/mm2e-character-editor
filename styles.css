@@ -2210,3 +2210,43 @@ button.row-title-btn.row-title,
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* User Account & Token Badges */
+.token-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: monospace;
+}
+.token-badge.token-bound {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.token-badge.token-unclaimed {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.token-badge.token-mismatch {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.campaign-user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+}
+.campaign-user-row:last-child {
+  border-bottom: none;
+}
+

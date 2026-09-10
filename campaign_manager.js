@@ -219,10 +219,24 @@
 
     const pName = (playerInfo.playerName || '').trim();
     const normalizedPlayerName = pName.toLowerCase();
+    const incomingToken = (playerInfo.userToken || '').trim();
 
     // 1. Check if user is pre-authorized by GM in authorizedUsers whitelist
     const authEntry = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === normalizedPlayerName);
     if (authEntry) {
+      let isTokenMismatch = false;
+
+      // Account Token binding or verification
+      if (!authEntry.userToken && incomingToken) {
+        // Initial binding
+        authEntry.userToken = incomingToken;
+        addFileOperationLog(`Authorized user "${pName}" bound account key (${incomingToken.substring(0, 8)}...) to campaign "${camp.name}".`, 'auth_token_bind');
+      } else if (authEntry.userToken && incomingToken && authEntry.userToken !== incomingToken) {
+        // Token mismatch!
+        isTokenMismatch = true;
+        addFileOperationLog(`AUTHENTICATION ALERT: User "${pName}" attempted login with an unrecognized account key (${incomingToken.substring(0, 8)}...). Expected key (${authEntry.userToken.substring(0, 8)}...).`, 'auth_mismatch');
+      }
+
       authEntry.lastLogin = new Date().toISOString();
       authEntry.lastCharacter = playerInfo.characterName || 'Hero';
 
@@ -233,6 +247,7 @@
           playerName: pName,
           characterName: playerInfo.characterName || 'Hero',
           characterSummary: playerInfo.characterSummary || {},
+          userToken: incomingToken || authEntry.userToken || null,
           approvedAt: new Date().toISOString(),
           forceSilent: false
         };
@@ -241,6 +256,7 @@
         playerRecord.id = playerInfo.id || playerRecord.id;
         playerRecord.characterName = playerInfo.characterName || playerRecord.characterName;
         playerRecord.characterSummary = playerInfo.characterSummary || playerRecord.characterSummary;
+        if (incomingToken) playerRecord.userToken = incomingToken;
       }
 
       camp.pendingRequests = camp.pendingRequests.filter(r => r.id !== playerInfo.id && (r.playerName || '').trim().toLowerCase() !== normalizedPlayerName);
@@ -252,12 +268,12 @@
       });
 
       addFileOperationLog(`Authorized user "${pName}" logged into campaign "${camp.name}" with character "${playerInfo.characterName || 'Hero'}".`, 'user_login');
-      return { status: 'already_accepted' };
+      return { status: 'already_accepted', tokenMismatch: isTokenMismatch, authEntry };
     }
 
     // 2. Check if already accepted previously
     const alreadyAccepted = camp.acceptedPlayers.some(p => p.id === playerInfo.id || (p.playerName && p.playerName.trim().toLowerCase() === normalizedPlayerName && p.characterName === playerInfo.characterName));
-    if (alreadyAccepted) return { status: 'already_accepted' };
+    if (alreadyAccepted) return { status: 'already_accepted', tokenMismatch: false };
 
     // 3. Queue as pending join request
     const existingIdx = camp.pendingRequests.findIndex(r => r.id === playerInfo.id);
@@ -266,6 +282,7 @@
       playerName: playerInfo.playerName || 'Anonymous Player',
       characterName: playerInfo.characterName || 'Hero',
       characterSummary: playerInfo.characterSummary || {},
+      userToken: incomingToken || null,
       requestedAt: new Date().toISOString()
     };
 
@@ -319,6 +336,67 @@
     updateActiveCampaign({ acceptedPlayers: camp.acceptedPlayers });
   }
 
+  // --- Local User Identity & Peer-to-Peer Account ---
+  function generateUniqueToken() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return 'usr_' + crypto.randomUUID().replace(/-/g, '').substring(0, 16);
+    }
+    const randPart = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+    return 'usr_' + randPart;
+  }
+
+  function getUserAccount() {
+    try {
+      if (typeof localStorage === 'undefined') {
+        return { userName: '', userToken: generateUniqueToken(), createdAt: new Date().toISOString() };
+      }
+      const raw = localStorage.getItem('mm2e_user_account');
+      if (raw) {
+        const acc = JSON.parse(raw);
+        if (acc && acc.userToken) {
+          if (!acc.userName) {
+            acc.userName = localStorage.getItem('mm2e_player_name') || '';
+          }
+          return acc;
+        }
+      }
+      // Initialize fresh account
+      const fresh = {
+        userName: localStorage.getItem('mm2e_player_name') || '',
+        userToken: generateUniqueToken(),
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('mm2e_user_account', JSON.stringify(fresh));
+      return fresh;
+    } catch (e) {
+      return { userName: '', userToken: generateUniqueToken(), createdAt: new Date().toISOString() };
+    }
+  }
+
+  function setUserAccount(userName, customToken = null) {
+    try {
+      const current = getUserAccount();
+      const updated = {
+        userName: (userName !== undefined && userName !== null) ? String(userName).trim() : current.userName,
+        userToken: (customToken && customToken.trim()) ? customToken.trim() : (current.userToken || generateUniqueToken()),
+        createdAt: current.createdAt || new Date().toISOString()
+      };
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mm2e_user_account', JSON.stringify(updated));
+        if (updated.userName) {
+          localStorage.setItem('mm2e_player_name', updated.userName);
+        }
+      }
+      if (typeof SessionNetwork !== 'undefined' && SessionNetwork.setPlayerInfo) {
+        SessionNetwork.setPlayerInfo({ playerName: updated.userName, userToken: updated.userToken });
+      }
+      return updated;
+    } catch (e) {
+      console.warn('CampaignManager: setUserAccount error', e);
+      return null;
+    }
+  }
+
   // --- Authorized Campaign Users Management ---
   function getAuthorizedUsers() {
     const camp = getActiveCampaign();
@@ -327,7 +405,7 @@
     return camp.authorizedUsers;
   }
 
-  function addAuthorizedUser(userName, notes = '') {
+  function addAuthorizedUser(userName, notes = '', customToken = null) {
     const camp = getActiveCampaign();
     if (!camp) return { success: false, error: 'No active campaign' };
     if (!userName || !userName.trim()) return { success: false, error: 'User name cannot be empty' };
@@ -341,6 +419,7 @@
     const newUser = {
       id: 'usr_' + Math.random().toString(36).substring(2, 8),
       userName: trimmed,
+      userToken: customToken ? customToken.trim() : null,
       addedAt: new Date().toISOString(),
       notes: notes || '',
       lastLogin: null,
@@ -351,6 +430,20 @@
     updateActiveCampaign({ authorizedUsers: camp.authorizedUsers });
     addFileOperationLog(`Added authorized user "${trimmed}" to campaign "${camp.name}".`, 'user_whitelist');
     return { success: true, user: newUser };
+  }
+
+  function resetAuthorizedUserToken(userName) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.authorizedUsers)) return false;
+    const trimmed = (userName || '').trim().toLowerCase();
+    const user = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === trimmed || u.id === userName);
+    if (user) {
+      user.userToken = null;
+      updateActiveCampaign({ authorizedUsers: camp.authorizedUsers });
+      addFileOperationLog(`Reset Account Token for authorized user "${user.userName}". Player may now bind a new device/browser.`, 'auth_token_reset');
+      return true;
+    }
+    return false;
   }
 
   function removeAuthorizedUser(userName) {
@@ -980,9 +1073,12 @@
     isAutoBackupDirty,
     clearAutoBackupDirty,
     restoreAutoBackup,
+    getUserAccount,
+    setUserAccount,
     getAuthorizedUsers,
     addAuthorizedUser,
     removeAuthorizedUser,
+    resetAuthorizedUserToken,
     isUserAuthorized,
     setGMUserName,
     getGMUserName,

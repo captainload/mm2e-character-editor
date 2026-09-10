@@ -42,6 +42,8 @@
     onCharacterSheetData: [],
     onGMPushCharacter: [],
     onGMTransfer: [],
+    onDuplicateLoginAttempt: [],
+    onTokenMismatch: [],
     onPopoutDocked: []
   };
 
@@ -94,7 +96,42 @@
             const c = clientConns.get(packet.id);
             c._playerName = packet.playerName;
             c._characterName = packet.characterName;
+            c._userToken = packet.userToken;
           }
+
+          // Duplicate login check: check if an existing open connection already has this player's name
+          const incomingPlayerName = (packet.playerName || '').trim().toLowerCase();
+          let duplicateConn = null;
+          let duplicatePeerId = null;
+
+          if (incomingPlayerName) {
+            for (const [peerId, conn] of clientConns.entries()) {
+              if (peerId !== packet.id && conn && conn.open) {
+                const existingName = (conn._playerName || '').trim().toLowerCase();
+                if (existingName === incomingPlayerName) {
+                  duplicateConn = conn;
+                  duplicatePeerId = peerId;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (duplicateConn) {
+            const isSameToken = Boolean(
+              packet.userToken &&
+              duplicateConn._userToken &&
+              packet.userToken === duplicateConn._userToken
+            );
+            emit('onDuplicateLoginAttempt', {
+              incomingPacket: packet,
+              existingPeerId: duplicatePeerId,
+              existingConn: duplicateConn,
+              isSameToken: isSameToken,
+              playerName: packet.playerName
+            });
+          }
+
           emit('onJoinRequest', packet);
         }
         break;
@@ -362,13 +399,25 @@
 
         hostConn.on('open', () => {
           setStatus('waiting_approval', 'Waiting for GM to accept join request...');
+          let userToken = localPlayerInfo.userToken || '';
+          if (!userToken && typeof localStorage !== 'undefined') {
+            try {
+              const accStr = localStorage.getItem('mm2e_user_account');
+              if (accStr) {
+                const acc = JSON.parse(accStr);
+                if (acc && acc.userToken) userToken = acc.userToken;
+              }
+            } catch (e) {}
+          }
+
           // Send join request to GM
           hostConn.send({
             type: 'JOIN_REQUEST',
             id: myId,
             playerName: localPlayerInfo.playerName,
             characterName: localPlayerInfo.characterName,
-            characterSummary: localPlayerInfo.characterSummary
+            characterSummary: localPlayerInfo.characterSummary,
+            userToken: userToken
           });
         });
 
@@ -417,6 +466,20 @@
         reason
       });
       conn.close();
+    }
+  }
+
+  function disconnectClient(playerId, reason = 'Disconnected by GM') {
+    if (role !== 'HOST') return;
+    const conn = clientConns.get(playerId);
+    if (conn) {
+      if (conn.open) {
+        try {
+          conn.send({ type: 'JOIN_REJECT', reason });
+        } catch (e) {}
+      }
+      try { conn.close(); } catch (e) {}
+      clientConns.delete(playerId);
     }
   }
 
@@ -696,6 +759,7 @@
     joinHost,
     acceptJoin,
     rejectJoin,
+    disconnectClient,
     disconnect,
     sendRoll,
     sendConditionUpdate,

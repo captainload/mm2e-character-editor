@@ -2903,12 +2903,74 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onJoinRequest", (req) => {
       if (typeof CampaignManager !== 'undefined') {
-        CampaignManager.addPlayerRequest(req);
+        const res = CampaignManager.addPlayerRequest(req);
         renderGMJoinRequests();
         syncPartyRosterUI();
-        if (typeof showToast === 'function') {
+        if (typeof renderCampaignUsersList === 'function') renderCampaignUsersList();
+        if (res && res.tokenMismatch) {
+          if (typeof showToast === 'function') {
+            showToast(`⚠️ Auth Alert: "${req.playerName}" joined with an unrecognized account key!`, "warning");
+          }
+        } else if (typeof showToast === 'function') {
           showToast(`Incoming join request from ${req.playerName} (${req.characterName})`, "info");
         }
+      }
+    });
+
+    SessionNetwork.addEventListener("onDuplicateLoginAttempt", (evt) => {
+      const modal = document.getElementById("gmDuplicateLoginModal");
+      const body = document.getElementById("gmDuplicateLoginModalBody");
+      const btnReject = document.getElementById("btnRejectDuplicateLogin");
+      const btnReplace = document.getElementById("btnAcceptReplaceDuplicateLogin");
+      if (!modal || !body) {
+        if (confirm(`⚠️ DUPLICATE USER LOGIN: A user claiming to be "${evt.playerName}" is attempting to connect while "${evt.playerName}" is already connected.\n\nDisconnect old session and accept incoming?`)) {
+          SessionNetwork.disconnectClient(evt.existingPeerId, 'Replaced by incoming session');
+          SessionNetwork.acceptJoin(evt.incomingPacket.id, (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null);
+        } else {
+          SessionNetwork.rejectJoin(evt.incomingPacket.id, 'Duplicate user name already connected');
+        }
+        return;
+      }
+
+      body.innerHTML = `
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 12px;">
+          <div style="font-size: 14px; font-weight: bold; color: #ef4444; margin-bottom: 6px;">
+            A user is attempting to connect with an active user name: "${escapeHtml(evt.playerName)}"
+          </div>
+          <div style="font-size: 12px; color: var(--text-main); display: flex; flex-direction: column; gap: 4px;">
+            <div><strong>Incoming Connection ID:</strong> <code>${escapeHtml(evt.incomingPacket.id)}</code></div>
+            <div><strong>Active Existing Connection:</strong> <code>${escapeHtml(evt.existingPeerId)}</code></div>
+            <div>
+              <strong>Account Token Match:</strong>
+              ${evt.isSameToken 
+                ? '<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold;">✓ Identical Account Key (Legitimate reconnect)</span>' 
+                : '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold;">⚠️ Different Account Key (Potential imposter or name collision!)</span>'}
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+          If the player refreshed their page or reconnected from the same account, click <strong>Replace Stale Session</strong>. If this is an unauthorized connection or duplicate tab, click <strong>Reject Duplicate</strong>.
+        </div>
+      `;
+
+      modal.classList.add("active");
+
+      if (btnReject) {
+        btnReject.onclick = () => {
+          SessionNetwork.rejectJoin(evt.incomingPacket.id, 'Duplicate user name connection rejected by GM');
+          modal.classList.remove("active");
+          if (typeof showToast === 'function') showToast(`Rejected duplicate login for "${evt.playerName}".`, "info");
+        };
+      }
+
+      if (btnReplace) {
+        btnReplace.onclick = () => {
+          SessionNetwork.disconnectClient(evt.existingPeerId, 'Stale session replaced by new login');
+          const camp = (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null;
+          SessionNetwork.acceptJoin(evt.incomingPacket.id, camp);
+          modal.classList.remove("active");
+          if (typeof showToast === 'function') showToast(`Replaced stale session for "${evt.playerName}".`, "success");
+        };
       }
     });
 
@@ -4066,6 +4128,8 @@ function setupSessionAndGMHub() {
     renderGMTimeline();
     renderGMPartyNpcList();
     renderGMEncounterEnemyList();
+    renderCampaignUsersList();
+    initUserIdentityAndAccount();
     syncPartyRosterUI();
   }
   window.syncGMUI = syncGMUI;
@@ -4779,24 +4843,34 @@ function setupSessionAndGMHub() {
 
   function renderCampaignUsersList() {
     const modalBody = document.getElementById("campaignUsersModalBody");
+    const inlineContainer = document.getElementById("campaignInlineUsersTableContainer");
     const lblSummary = document.getElementById("lblCampaignUsersSummary");
     const lblGMUserCount = document.getElementById("lblGMUserCount");
-    if (!modalBody || typeof CampaignManager === 'undefined') return;
+    const lblGMInlineUserCount = document.getElementById("lblGMInlineUserCount");
+    if (typeof CampaignManager === 'undefined') return;
 
     const camp = CampaignManager.getActiveCampaign();
     if (!camp) return;
 
     const users = CampaignManager.getAuthorizedUsers();
     if (lblGMUserCount) lblGMUserCount.textContent = users.length;
+    if (lblGMInlineUserCount) lblGMInlineUserCount.textContent = `${users.length} user${users.length === 1 ? '' : 's'}`;
     if (lblSummary) lblSummary.textContent = `${users.length} authorized user${users.length === 1 ? '' : 's'}`;
 
+    const txtInlineGM = document.getElementById("txtInlineGMName");
+    if (txtInlineGM && !txtInlineGM.value) {
+      txtInlineGM.value = CampaignManager.getGMUserName() || "GM";
+    }
+
     if (users.length === 0) {
-      modalBody.innerHTML = `
-        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 24px; font-style: italic;">
+      const emptyHtml = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 18px; font-style: italic;">
           No authorized user names added yet.<br>
-          Enter user names above to allow players to log into this campaign automatically.
+          Enter player user names above to allow them to log into this campaign.
         </div>
       `;
+      if (modalBody) modalBody.innerHTML = emptyHtml;
+      if (inlineContainer) inlineContainer.innerHTML = emptyHtml;
       return;
     }
 
@@ -4808,39 +4882,61 @@ function setupSessionAndGMHub() {
       const isOnline = matchingAccepted && connectedClients.some(c => c.peerId === matchingAccepted.id);
       const isLocalUser = char && char.playerName && char.playerName.toLowerCase() === u.userName.toLowerCase();
 
-      let statusBadge = `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: 11px;">⚪ Awaiting Login</span>`;
+      let statusBadge = `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: 10px;">⚪ Offline</span>`;
       if (isOnline || isLocalUser) {
-        statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px;">🟢 Logged In</span>`;
+        statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 10px;">🟢 Logged In</span>`;
       } else if (matchingAccepted) {
-        statusBadge = `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid #0284c7; font-size: 11px;">🟡 Known (Offline)</span>`;
+        statusBadge = `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid #0284c7; font-size: 10px;">🟡 Known</span>`;
+      }
+
+      // Account Token status badge
+      let tokenBadge = '';
+      if (u.userToken) {
+        const shortTok = escapeHtml(u.userToken.substring(0, 10)) + '...';
+        tokenBadge = `<span class="token-badge token-bound" title="Bound P2P Account Key: ${escapeHtml(u.userToken)}">🛡️ ${shortTok}</span>`;
+      } else {
+        tokenBadge = `<span class="token-badge token-unclaimed" title="Unclaimed: Player's first login will automatically bind their unique account token">⏳ Unclaimed Key</span>`;
       }
 
       const charName = u.lastCharacter || matchingAccepted?.characterName || '—';
-      const addedDate = u.addedAt ? new Date(u.addedAt).toLocaleDateString() : '—';
       const safeUserName = u.userName.replace(/'/g, "\\'");
 
       return `
-        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap;">
-            <span style="font-weight: 700; font-size: 13px; color: var(--accent-primary); min-width: 120px;">
-              👤 ${u.userName}
-            </span>
+        <div class="campaign-user-row" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 6px 10px; border-bottom: 1px solid var(--border-color); gap: 8px; font-size: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;">
+            <strong style="color: var(--accent-primary); font-size: 12px; min-width: 90px;">
+              👤 ${escapeHtml(u.userName)}
+            </strong>
+            ${tokenBadge}
             ${statusBadge}
-            <span style="font-size: 12px; color: var(--text-muted);">
-              Character: <strong style="color: var(--text-main);">${charName}</strong>
+            <span style="font-size: 11px; color: var(--text-muted);">
+              Character: <span style="color: var(--text-main); font-weight: 600;">${escapeHtml(charName)}</span>
             </span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 11px; color: var(--text-muted);" title="Added: ${u.addedAt || ''}">${addedDate}</span>
-            <button type="button" class="btn btn-secondary" style="height: 24px; padding: 0 8px; font-size: 11px; color: #ef4444;" title="Remove this authorized user" onclick="window.gmRemoveAuthorizedUserClick('${safeUserName}')">🗑 Remove</button>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${u.userToken ? `
+              <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" title="Reset Account Key (allows user to re-bind from a new device)" onclick="window.gmResetUserTokenClick('${safeUserName}')">🔄 Reset Key</button>
+            ` : ''}
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" title="Remove this authorized user" onclick="window.gmRemoveAuthorizedUserClick('${safeUserName}')">✕</button>
           </div>
         </div>
       `;
     }).join('');
 
-    modalBody.innerHTML = rowsHtml;
+    if (modalBody) modalBody.innerHTML = rowsHtml;
+    if (inlineContainer) inlineContainer.innerHTML = rowsHtml;
   }
   window.renderCampaignUsersList = renderCampaignUsersList;
+
+  window.gmResetUserTokenClick = function(userName) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (confirm(`Reset the P2P Account Key for "${userName}"?\n\nThis will allow the player to bind their account from a new computer, browser, or device on their next login.`)) {
+      CampaignManager.resetAuthorizedUserToken(userName);
+      renderCampaignUsersList();
+      syncGMUI();
+      if (typeof showToast === 'function') showToast(`Reset account key for "${userName}".`, "info");
+    }
+  };
 
   window.gmRemoveAuthorizedUserClick = function(userName) {
     if (typeof CampaignManager === 'undefined') return;
@@ -4851,6 +4947,133 @@ function setupSessionAndGMHub() {
       if (typeof showToast === 'function') showToast(`Removed user "${userName}".`, "info");
     }
   };
+
+  function initUserIdentityAndAccount() {
+    if (typeof CampaignManager === 'undefined') return;
+    const acc = CampaignManager.getUserAccount();
+
+    const txtLocalUser = document.getElementById("txtLocalAccountUserName");
+    const lblLocalToken = document.getElementById("lblLocalAccountToken");
+    const btnSaveLocalUser = document.getElementById("btnSaveLocalAccountUserName");
+    const btnCopyLocalToken = document.getElementById("btnCopyLocalAccountToken");
+    const btnImportLocalToken = document.getElementById("btnImportLocalAccountToken");
+    const btnSessionProfile = document.getElementById("btnSessionOpenProfile");
+
+    if (txtLocalUser) {
+      txtLocalUser.value = acc.userName || (char && char.playerName) || "";
+    }
+    if (lblLocalToken) {
+      lblLocalToken.textContent = acc.userToken || "usr_none";
+      lblLocalToken.title = `Full Account Key: ${acc.userToken}`;
+    }
+
+    if (btnSaveLocalUser && txtLocalUser) {
+      btnSaveLocalUser.onclick = () => {
+        const val = txtLocalUser.value.trim();
+        if (!val) {
+          if (typeof showToast === 'function') showToast("Please enter a user name.", "warning");
+          txtLocalUser.focus();
+          return;
+        }
+        const updated = CampaignManager.setUserAccount(val);
+        if (typeof char !== 'undefined' && char) {
+          char.playerName = val;
+        }
+        if (txtPlayerName) txtPlayerName.value = val;
+        const mainPlayerInput = document.getElementById("playerNameInput");
+        if (mainPlayerInput) mainPlayerInput.value = val;
+        syncPartyRosterUI();
+        renderCampaignUsersList();
+        if (typeof showToast === 'function') showToast(`User name set to "${val}"!`, "success");
+      };
+    }
+
+    if (btnCopyLocalToken && lblLocalToken) {
+      btnCopyLocalToken.onclick = () => {
+        const token = acc.userToken || "";
+        if (!token) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(token).then(() => {
+            if (typeof showToast === 'function') showToast("Account Key copied to clipboard!", "success");
+          }).catch(() => {
+            prompt("Your P2P Account Key (copy below):", token);
+          });
+        } else {
+          prompt("Your P2P Account Key (copy below):", token);
+        }
+      };
+    }
+
+    if (btnImportLocalToken) {
+      btnImportLocalToken.onclick = () => {
+        const input = prompt("Enter your P2P Account Key (e.g. from another device) or leave blank to generate a new key:", acc.userToken || "");
+        if (input === null) return;
+        const trimmed = input.trim();
+        const updated = CampaignManager.setUserAccount(acc.userName, trimmed || null);
+        if (updated) {
+          acc.userToken = updated.userToken;
+          if (lblLocalToken) {
+            lblLocalToken.textContent = updated.userToken;
+            lblLocalToken.title = `Full Account Key: ${updated.userToken}`;
+          }
+          if (typeof showToast === 'function') showToast("Updated P2P Account Key!", "success");
+        }
+      };
+    }
+
+    if (btnSessionProfile) {
+      btnSessionProfile.onclick = () => {
+        openGMTab();
+        setTimeout(() => {
+          if (txtLocalUser) txtLocalUser.focus();
+        }, 150);
+      };
+    }
+
+    // Inline GM Whitelist Controls
+    const txtInlineNew = document.getElementById("txtInlineNewUserName");
+    const btnInlineNew = document.getElementById("btnInlineAddNewUser");
+    const txtInlineGM = document.getElementById("txtInlineGMName");
+    const btnSaveInlineGM = document.getElementById("btnSaveInlineGMName");
+
+    if (btnInlineNew && txtInlineNew) {
+      const handleInlineAdd = () => {
+        const val = txtInlineNew.value.trim();
+        if (!val) {
+          if (typeof showToast === 'function') showToast("Please enter a user name to authorize.", "warning");
+          txtInlineNew.focus();
+          return;
+        }
+        const res = CampaignManager.addAuthorizedUser(val);
+        if (res.success) {
+          txtInlineNew.value = "";
+          renderCampaignUsersList();
+          syncGMUI();
+          if (typeof showToast === 'function') showToast(`Authorized user "${val}" for this campaign!`, "success");
+          txtInlineNew.focus();
+        } else {
+          if (typeof showToast === 'function') showToast(res.error || "Could not add user.", "error");
+          else alert(res.error);
+        }
+      };
+      btnInlineNew.onclick = handleInlineAdd;
+      txtInlineNew.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleInlineAdd();
+        }
+      };
+    }
+
+    if (btnSaveInlineGM && txtInlineGM) {
+      btnSaveInlineGM.onclick = () => {
+        const gmName = txtInlineGM.value.trim() || "GM";
+        CampaignManager.setGMUserName(gmName);
+        if (typeof showToast === 'function') showToast(`GM user name set to "${gmName}".`, "success");
+        syncGMUI();
+      };
+    }
+  }
 
   if (btnGMManageUsers) {
     btnGMManageUsers.addEventListener("click", () => {
@@ -5463,6 +5686,8 @@ function setupSessionAndGMHub() {
       }
     }
   }
+
+  initUserIdentityAndAccount();
 
   // Auto-connect / invite check from URL query parameter
   if (typeof window !== 'undefined' && window.location) {

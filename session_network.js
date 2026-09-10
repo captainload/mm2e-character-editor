@@ -36,6 +36,7 @@
     onForcedMode: [],
     onStateSync: [],
     onChat: [],
+    onHeroPointSpent: [],
     onRosterUpdate: [],
     onRequestCharacterSheet: [],
     onCharacterSheetData: [],
@@ -89,6 +90,11 @@
     switch (packet.type) {
       case 'JOIN_REQUEST':
         if (role === 'HOST') {
+          if (packet.id && clientConns.has(packet.id)) {
+            const c = clientConns.get(packet.id);
+            c._playerName = packet.playerName;
+            c._characterName = packet.characterName;
+          }
           emit('onJoinRequest', packet);
         }
         break;
@@ -170,7 +176,62 @@
         break;
 
       case 'CHAT':
-        emit('onChat', packet);
+        if (packet.isPrivate) {
+          // GM Host sees ALL private messages regardless of recipient
+          if (role === 'HOST') {
+            emit('onChat', packet);
+            // Forward to recipient client connection if host was the router
+            if (packet.targetPlayerId) {
+              const targetConn = clientConns.get(packet.targetPlayerId);
+              if (targetConn && targetConn.open) {
+                targetConn.send(packet);
+              }
+            } else if (packet.recipient) {
+              const normRecip = (packet.recipient || '').toLowerCase().trim();
+              clientConns.forEach((conn) => {
+                if (conn && conn.open) {
+                  const pName = (conn._playerName || '').toLowerCase().trim();
+                  const cName = (conn._characterName || '').toLowerCase().trim();
+                  if (pName === normRecip || cName === normRecip) {
+                    conn.send(packet);
+                  }
+                }
+              });
+            }
+          } else if (role === 'CLIENT') {
+            const myName = (localPlayerInfo.playerName || '').toLowerCase().trim();
+            const myChar = (localPlayerInfo.characterName || '').toLowerCase().trim();
+            const recip = (packet.recipient || '').toLowerCase().trim();
+            const isForMe = recip === myName || recip === myChar || (packet.targetPlayerId && peerInstance && packet.targetPlayerId === peerInstance.id);
+            const isFromMe = (packet.authorPlayer && packet.authorPlayer.toLowerCase().trim() === myName) || (peerInstance && packet.senderPlayerId === peerInstance.id);
+            if (isForMe || isFromMe) {
+              emit('onChat', packet);
+            }
+          } else {
+            emit('onChat', packet);
+          }
+        } else {
+          // Public Chat: host relays to other connected clients
+          if (role === 'HOST') {
+            clientConns.forEach((conn, pid) => {
+              if (conn && conn.open && pid !== packet.senderPlayerId) {
+                try { conn.send(packet); } catch (e) {}
+              }
+            });
+          }
+          emit('onChat', packet);
+        }
+        break;
+
+      case 'HERO_POINT_SPENT':
+        if (role === 'HOST') {
+          clientConns.forEach((conn, pid) => {
+            if (conn && conn.open && pid !== packet.senderPlayerId) {
+              try { conn.send(packet); } catch (e) {}
+            }
+          });
+        }
+        emit('onHeroPointSpent', packet);
         break;
 
       case 'ROSTER_UPDATE':
@@ -436,15 +497,72 @@
     broadcastPacket(packet, true);
   }
 
-  function sendChat(text) {
+  function sendChat(text, recipient = null, isPrivate = false, targetPlayerId = null) {
     const packet = {
       type: 'CHAT',
+      id: 'chat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       author: localPlayerInfo.characterName ? `${localPlayerInfo.characterName} (${localPlayerInfo.playerName})` : localPlayerInfo.playerName,
-      text,
+      authorPlayer: localPlayerInfo.playerName,
+      authorCharacter: localPlayerInfo.characterName,
+      senderPlayerId: peerInstance?.id || 'local_player',
+      text: String(text || '').trim(),
+      recipient: recipient || null,
+      targetPlayerId: targetPlayerId || null,
+      isPrivate: !!isPrivate,
       timestamp: new Date().toISOString()
     };
-    broadcastPacket(packet, true);
+
+    if (isPrivate) {
+      if (role === 'CLIENT' && hostConn && hostConn.open) {
+        // Send to host, host monitors and forwards to target
+        try { hostConn.send(packet); } catch (e) { console.error('Error sending whisper to host:', e); }
+      } else if (role === 'HOST') {
+        // GM host sending whisper directly to recipient
+        if (targetPlayerId && clientConns.has(targetPlayerId)) {
+          const conn = clientConns.get(targetPlayerId);
+          if (conn && conn.open) {
+            try { conn.send(packet); } catch (e) {}
+          }
+        } else if (recipient) {
+          const normRecip = recipient.toLowerCase().trim();
+          clientConns.forEach(conn => {
+            if (conn && conn.open) {
+              const pName = (conn._playerName || '').toLowerCase().trim();
+              const cName = (conn._characterName || '').toLowerCase().trim();
+              if (pName === normRecip || cName === normRecip) {
+                try { conn.send(packet); } catch (e) {}
+              }
+            }
+          });
+        }
+      }
+      // Broadcast via local channel for local pop-out
+      if (broadcastChannel) {
+        try { broadcastChannel.postMessage(packet); } catch (e) {}
+      }
+    } else {
+      broadcastPacket(packet, true);
+    }
+
     emit('onChat', packet);
+    return packet;
+  }
+
+  function sendHeroPointSpent(characterName, remainingHP = 0, details = '') {
+    const packet = {
+      type: 'HERO_POINT_SPENT',
+      id: 'hp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      characterName: characterName || localPlayerInfo.characterName || 'Hero',
+      playerName: localPlayerInfo.playerName || 'Player',
+      senderPlayerId: peerInstance?.id || 'local_player',
+      remainingHP: Math.max(0, Number(remainingHP) || 0),
+      details: details || '',
+      timestamp: new Date().toISOString()
+    };
+
+    broadcastPacket(packet, true);
+    emit('onHeroPointSpent', packet);
+    return packet;
   }
 
   function sendStateSync(state) {
@@ -585,6 +703,7 @@
     sendGMStatusOverride,
     sendLocalBroadcast,
     sendChat,
+    sendHeroPointSpent,
     sendStateSync,
     requestCharacterSheets,
     sendCharacterSheetData,

@@ -67,6 +67,9 @@
       if (!camp.gmUserName) camp.gmUserName = 'GM';
       if (!Array.isArray(camp.authorizedUsers)) camp.authorizedUsers = [];
       if (!Array.isArray(camp.fileOperationsLog)) camp.fileOperationsLog = [];
+      if (!Array.isArray(camp.timeline)) camp.timeline = [];
+      if (camp.autoBackupCharacters === undefined) camp.autoBackupCharacters = true;
+      if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
     }
     return camp;
   }
@@ -95,9 +98,12 @@
       gmPlayerId: creatorPlayerId || 'local_player',
       gmUserName: gmUserName || 'GM',
       npcs: [],
+      encounterEnemies: [],
       acceptedPlayers: [],
       authorizedUsers: [],
       pendingRequests: [],
+      timeline: [],
+      autoBackupCharacters: true,
       forcedModes: {
         forceSilentParty: false,
         forceSilentPlayers: {}
@@ -629,6 +635,260 @@
     }
   }
 
+  // --- Campaign Save Point Timeline & Character Extraction ---
+  function createSnapshot(label = null, customState = null) {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    if (!Array.isArray(camp.timeline)) camp.timeline = [];
+
+    const snapId = 'snap_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const timeStr = new Date().toISOString();
+    const snapLabel = (label && label.trim()) ? label.trim() : `Save Point - ${new Date().toLocaleTimeString()}`;
+
+    const snapshotData = customState ? JSON.parse(JSON.stringify(customState)) : {
+      acceptedPlayers: JSON.parse(JSON.stringify(camp.acceptedPlayers || [])),
+      npcs: JSON.parse(JSON.stringify(camp.npcs || [])),
+      encounterEnemies: JSON.parse(JSON.stringify(camp.encounterEnemies || [])),
+      combatState: JSON.parse(JSON.stringify(camp.combatState || {})),
+      forcedModes: JSON.parse(JSON.stringify(camp.forcedModes || {})),
+      sessionLogLength: (camp.sessionLog || []).length
+    };
+
+    const snapshot = {
+      id: snapId,
+      timestamp: timeStr,
+      label: snapLabel,
+      state: snapshotData,
+      characterCount: (snapshotData.acceptedPlayers?.length || 0) + (snapshotData.npcs?.length || 0) + (snapshotData.encounterEnemies?.length || 0)
+    };
+
+    camp.timeline.unshift(snapshot);
+    if (camp.timeline.length > 50) {
+      camp.timeline = camp.timeline.slice(0, 50);
+    }
+
+    updateActiveCampaign({ timeline: camp.timeline });
+    addFileOperationLog(`Created Save Point "${snapLabel}" (${snapshot.characterCount} characters tracked).`, 'save_point');
+    return snapshot;
+  }
+
+  function rollbackToSnapshot(snapshotId) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.timeline)) return { success: false, error: 'No active campaign or timeline' };
+
+    const snap = camp.timeline.find(s => s.id === snapshotId);
+    if (!snap || !snap.state) return { success: false, error: 'Snapshot not found' };
+
+    // Auto-create a pre-rollback checkpoint so changes since last save point are never lost
+    const preRollbackId = 'snap_pre_' + Date.now();
+    camp.timeline.unshift({
+      id: preRollbackId,
+      timestamp: new Date().toISOString(),
+      label: `Pre-Rollback Safety Checkpoint (before "${snap.label}")`,
+      state: {
+        acceptedPlayers: JSON.parse(JSON.stringify(camp.acceptedPlayers || [])),
+        npcs: JSON.parse(JSON.stringify(camp.npcs || [])),
+        encounterEnemies: JSON.parse(JSON.stringify(camp.encounterEnemies || [])),
+        combatState: JSON.parse(JSON.stringify(camp.combatState || {})),
+        forcedModes: JSON.parse(JSON.stringify(camp.forcedModes || {})),
+        sessionLogLength: (camp.sessionLog || []).length
+      },
+      characterCount: (camp.acceptedPlayers?.length || 0) + (camp.npcs?.length || 0) + (camp.encounterEnemies?.length || 0)
+    });
+
+    camp.acceptedPlayers = JSON.parse(JSON.stringify(snap.state.acceptedPlayers || []));
+    camp.npcs = JSON.parse(JSON.stringify(snap.state.npcs || []));
+    camp.encounterEnemies = JSON.parse(JSON.stringify(snap.state.encounterEnemies || []));
+    if (snap.state.combatState) camp.combatState = JSON.parse(JSON.stringify(snap.state.combatState));
+    if (snap.state.forcedModes) camp.forcedModes = JSON.parse(JSON.stringify(snap.state.forcedModes));
+
+    updateActiveCampaign({
+      acceptedPlayers: camp.acceptedPlayers,
+      npcs: camp.npcs,
+      encounterEnemies: camp.encounterEnemies,
+      combatState: camp.combatState,
+      forcedModes: camp.forcedModes,
+      timeline: camp.timeline
+    });
+
+    addFileOperationLog(`Rolled back campaign state to Save Point "${snap.label}" (created ${new Date(snap.timestamp).toLocaleString()}).`, 'rollback');
+    return { success: true, snapshot: snap };
+  }
+
+  function getSnapshotTimeline() {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.timeline)) return [];
+    return [...camp.timeline];
+  }
+
+  function deleteSnapshot(snapshotId) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.timeline)) return false;
+    const initialLen = camp.timeline.length;
+    camp.timeline = camp.timeline.filter(s => s.id !== snapshotId);
+    if (camp.timeline.length !== initialLen) {
+      updateActiveCampaign({ timeline: camp.timeline });
+      addFileOperationLog(`Deleted Save Point snapshot from timeline.`, 'timeline_delete');
+      return true;
+    }
+    return false;
+  }
+
+  function extractCharacterFromSnapshot(snapshotId, charIdOrName) {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+
+    let sourceObj = null;
+    let snapLabel = 'Current State';
+
+    if (snapshotId) {
+      const snap = (camp.timeline || []).find(s => s.id === snapshotId);
+      if (snap && snap.state) {
+        sourceObj = snap.state;
+        snapLabel = snap.label;
+      }
+    } else {
+      sourceObj = camp;
+    }
+
+    if (!sourceObj) return null;
+
+    const normalizedTarget = (charIdOrName || '').toLowerCase().trim();
+
+    // 1. Search acceptedPlayers
+    const player = (sourceObj.acceptedPlayers || []).find(p =>
+      (p.id && p.id.toLowerCase() === normalizedTarget) ||
+      (p.characterName && p.characterName.toLowerCase() === normalizedTarget) ||
+      (p.playerName && p.playerName.toLowerCase() === normalizedTarget)
+    );
+
+    if (player) {
+      let sheetData = player.characterSheet;
+      if (!sheetData && Array.isArray(player.sheetHistory) && player.sheetHistory.length > 0) {
+        sheetData = player.sheetHistory[player.sheetHistory.length - 1].sheet;
+      }
+      return {
+        id: player.id,
+        characterName: player.characterName || 'Hero',
+        playerName: player.playerName,
+        powerLevel: player.characterSummary?.powerLevel || (sheetData?.character?.powerLevel) || 10,
+        sheet: sheetData || null,
+        isNPC: false,
+        isEnemy: false,
+        source: snapLabel,
+        rawRecord: player
+      };
+    }
+
+    // 2. Search npcs
+    const npc = (sourceObj.npcs || []).find(n =>
+      (n.id && n.id.toLowerCase() === normalizedTarget) ||
+      (n.name && n.name.toLowerCase() === normalizedTarget)
+    );
+
+    if (npc) {
+      return {
+        id: npc.id,
+        characterName: npc.name || 'NPC',
+        playerName: 'GM (Party NPC)',
+        powerLevel: npc.powerLevel || (npc.characterData?.powerLevel) || 10,
+        sheet: npc.characterData ? { format: 'MM2E_CHARACTER', version: '1.0', character: npc.characterData } : null,
+        isNPC: true,
+        isEnemy: false,
+        source: snapLabel,
+        rawRecord: npc
+      };
+    }
+
+    // 3. Search encounterEnemies
+    const enemy = (sourceObj.encounterEnemies || []).find(e =>
+      (e.id && e.id.toLowerCase() === normalizedTarget) ||
+      (e.name && e.name.toLowerCase() === normalizedTarget)
+    );
+
+    if (enemy) {
+      return {
+        id: enemy.id,
+        characterName: enemy.name || 'Adversary',
+        playerName: 'GM (Enemy)',
+        powerLevel: enemy.powerLevel || (enemy.characterData?.powerLevel) || 10,
+        sheet: enemy.characterData ? { format: 'MM2E_CHARACTER', version: '1.0', character: enemy.characterData } : null,
+        isNPC: true,
+        isEnemy: true,
+        source: snapLabel,
+        rawRecord: enemy
+      };
+    }
+
+    return null;
+  }
+
+  function setAutoBackupCharacters(enabled) {
+    const camp = getActiveCampaign();
+    if (!camp) return;
+    camp.autoBackupCharacters = !!enabled;
+    updateActiveCampaign({ autoBackupCharacters: !!enabled });
+    addFileOperationLog(`Character auto-backup set to ${!!enabled ? 'Enabled' : 'Disabled'}.`, 'config');
+  }
+
+  function isAutoBackupCharactersEnabled() {
+    const camp = getActiveCampaign();
+    if (!camp) return true;
+    return camp.autoBackupCharacters !== false;
+  }
+
+  // --- Encounter Enemies / Adversaries Management ---
+  function addEncounterEnemy(characterData, customName = null, customPL = null) {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+
+    const name = customName || characterData?.name || 'Encounter Adversary';
+    const pl = customPL !== null ? customPL : (characterData?.powerLevel || 10);
+
+    const enemy = {
+      id: 'enemy_' + Math.random().toString(36).substring(2, 9),
+      name,
+      powerLevel: pl,
+      characterData: characterData ? JSON.parse(JSON.stringify(characterData)) : {},
+      currentBruises: (characterData?.trackerState?.conditions?.Bruised) || (characterData?.currentBruises) || 0,
+      currentInjured: (characterData?.trackerState?.conditions?.Injured) || (characterData?.currentInjured) || 0,
+      conditions: characterData?.trackerState?.conditions ? { ...characterData.trackerState.conditions } : (characterData?.conditions ? { ...characterData.conditions } : {}),
+      heroPoints: 0,
+      attachedAt: new Date().toISOString()
+    };
+
+    if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
+    camp.encounterEnemies.push(enemy);
+    updateActiveCampaign({ encounterEnemies: camp.encounterEnemies });
+    addFileOperationLog(`Added encounter adversary "${name}" (PL ${pl}) to campaign.`, 'encounter');
+    return enemy;
+  }
+
+  function removeEncounterEnemy(enemyId) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.encounterEnemies)) return;
+    const filtered = camp.encounterEnemies.filter(e => e.id !== enemyId);
+    updateActiveCampaign({ encounterEnemies: filtered });
+    addFileOperationLog(`Removed encounter adversary from campaign.`, 'encounter');
+  }
+
+  function updateEncounterEnemyConditions(enemyId, bruises, conditions, injured) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.encounterEnemies)) return;
+    const enemy = camp.encounterEnemies.find(e => e.id === enemyId);
+    if (enemy) {
+      if (bruises !== undefined) enemy.currentBruises = Math.max(0, Number(bruises) || 0);
+      if (injured !== undefined) enemy.currentInjured = Math.max(0, Number(injured) || 0);
+      if (conditions !== undefined) enemy.conditions = { ...conditions };
+      updateActiveCampaign({ encounterEnemies: camp.encounterEnemies });
+    }
+  }
+
+  function getEncounterEnemies() {
+    const camp = getActiveCampaign();
+    return camp && Array.isArray(camp.encounterEnemies) ? [...camp.encounterEnemies] : [];
+  }
+
   // --- Export & Import ---
   function exportCampaign(id = null) {
     const data = getStorageData();
@@ -641,7 +901,7 @@
 
     return JSON.stringify({
       format: 'MM2E_CAMPAIGN',
-      version: '1.0',
+      version: '1.1',
       exportedAt: new Date().toISOString(),
       campaign: camp
     }, null, 2);
@@ -663,6 +923,9 @@
       if (!campData.gmUserName) campData.gmUserName = 'GM';
       if (!Array.isArray(campData.authorizedUsers)) campData.authorizedUsers = [];
       if (!Array.isArray(campData.fileOperationsLog)) campData.fileOperationsLog = [];
+      if (!Array.isArray(campData.timeline)) campData.timeline = [];
+      if (campData.autoBackupCharacters === undefined) campData.autoBackupCharacters = true;
+      if (!Array.isArray(campData.encounterEnemies)) campData.encounterEnemies = [];
 
       campData.fileOperationsLog.push({
         id: 'flog_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -722,6 +985,17 @@
     removeAuthorizedUser,
     isUserAuthorized,
     setGMUserName,
-    getGMUserName
+    getGMUserName,
+    createSnapshot,
+    rollbackToSnapshot,
+    getSnapshotTimeline,
+    deleteSnapshot,
+    extractCharacterFromSnapshot,
+    setAutoBackupCharacters,
+    isAutoBackupCharactersEnabled,
+    addEncounterEnemy,
+    removeEncounterEnemy,
+    updateEncounterEnemyConditions,
+    getEncounterEnemies
   };
 }));

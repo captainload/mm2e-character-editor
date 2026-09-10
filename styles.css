@@ -1693,84 +1693,219 @@ button.row-title-btn.row-title,
   font-weight: 600;
 }
 
-.roll-card {
-  background: var(--bg-panel);
+/* Single-Line Discord / Roll20-Style Session Log Rows */
+.session-log-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  transition: background-color 0.1s;
+}
+
+.session-log-line:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-time {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-author {
+  font-weight: 700;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.log-author:hover {
+  text-decoration: underline;
+}
+
+.log-content {
+  flex: 1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.log-math {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  background: var(--bg-card);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+}
+
+.log-result-hit {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.log-result-miss, .log-result-fail {
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.log-nat20 {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-left: 3px solid #10b981;
+}
+
+.log-nat1 {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-left: 3px solid #ef4444;
+}
+
+.log-type-whisper {
+  background: rgba(168, 85, 247, 0.08) !important;
+  border-left: 3px solid #a855f7;
+  font-style: italic;
+}
+
+.log-whisper-badge {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid #a855f7;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.log-type-hp {
+  background: rgba(2, 132, 199, 0.08) !important;
+  border-left: 3px solid #0284c7;
+}
+
+.log-hp-badge {
+  background: rgba(2, 132, 199, 0.2);
+  color: #38bdf8;
+  border: 1px solid #0284c7;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.log-silent-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Silenced Character Styling */
+.char-silenced {
+  opacity: 0.6;
+}
+
+.char-silenced .gm-char-name-btn {
+  color: var(--text-muted) !important;
+  text-decoration: line-through;
+}
+
+.char-mute-icon {
+  color: #f59e0b;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+/* @ Mention Autocomplete Popover */
+.mention-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 12px;
+  width: 280px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  padding: 8px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  transition: transform 0.1s;
 }
 
-.roll-card.nat20 {
-  border-color: #10b981 !important;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+.mention-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-panel);
 }
 
-.roll-card.nat1 {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+.mention-list {
+  display: flex;
+  flex-direction: column;
 }
 
-.roll-card.silent {
-  border-style: dashed;
-  background: rgba(39, 39, 42, 0.45);
-}
-
-.roll-header {
+.mention-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--font-size-secondary);
+  transition: background 0.1s;
+  color: var(--text-main);
 }
 
-.roll-math {
-  font-family: monospace;
-  font-size: 14px;
-  font-weight: bold;
-  color: var(--accent-primary);
+.mention-item:hover, .mention-item.active {
+  background: var(--accent-primary);
+  color: #fff !important;
 }
 
-.roll-result {
-  font-size: var(--font-size-secondary);
-  font-weight: 600;
+.mention-item.active span {
+  color: #fff !important;
 }
 
-/* Unified Session & GM Tab Layout */
-.session-tab-container.session-docked:not(.gm-pane-hidden) .gm-tracker-table-container {
-  max-height: 40vh;
-  min-height: 240px;
-  overflow-y: auto;
+/* GM Timeline Card */
+.gm-timeline-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 10px;
+  gap: 8px;
+  transition: border-color 0.15s;
 }
 
-.session-tab-container.session-docked:not(.gm-pane-hidden) #sessionLogFeedContainer {
-  max-height: 34vh;
-  min-height: 180px;
-  overflow-y: auto;
+.gm-timeline-item:hover {
+  border-color: var(--accent-primary);
 }
 
-.session-tab-container.gm-pane-hidden #sessionLogFeedContainer {
-  max-height: 65vh !important;
-  min-height: 320px;
-  overflow-y: auto;
-}
-
-.session-tab-container.session-popped-out .gm-tracker-table-container {
-  max-height: 72vh;
-  min-height: 460px;
-  overflow-y: auto;
-}
-
-.session-tab-container.session-popped-out #sessionLogFeedContainer,
-.session-tab-container.session-popped-out #sessionSearchFilterRow,
-.session-tab-container.session-popped-out #sessionQuickDiceTray {
+/* Popped-Out Mode Layout */
+.session-tab-container.session-popped-out #sessionChatSection {
   display: none !important;
 }
 
 .session-tab-container.session-popped-out #boxPoppedOutNotice {
   display: flex !important;
+}
+
+.session-tab-container.session-popped-out #sessionPartyTableContainer {
+  max-height: 70vh !important;
 }
 
 /* GM Master Table Status Pill Toggles & Canonical Condition Badges */

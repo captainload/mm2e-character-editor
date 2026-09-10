@@ -2715,47 +2715,35 @@ function setupSessionAndGMHub() {
     }
   }
 
-  // DOM Elements - Session Tab
+  // DOM Elements - Session Tab (Discord / Roll20-Style Tabletop Client)
   const btnConnect = document.getElementById("btnSessionConnect");
   const txtPlayerName = document.getElementById("txtSessionPlayerName");
   const txtCampCode = document.getElementById("txtSessionCampaignCode");
   const lblStatus = document.getElementById("lblSessionStatusBadge");
   const lblMsg = document.getElementById("lblSessionConnectMsg");
   const btnSilentToggle = document.getElementById("btnToggleSilentMode");
-  const btnSilentDisable = document.getElementById("btnDisableSilentMode");
-  const boxSilentBanner = document.getElementById("boxSilentBanner");
   const btnPopout = document.getElementById("btnPopoutSessionLog");
   const btnRedock = document.getElementById("btnRedockSessionLog");
   const boxPoppedOut = document.getElementById("boxPoppedOutNotice");
   const logFeed = document.getElementById("sessionLogFeedContainer");
-  const partyHud = document.getElementById("sessionPartyBadgesContainer");
   const txtSearch = document.getElementById("txtSessionSearch");
   const btnClearSearch = document.getElementById("btnSessionClearSearch");
   const filterChips = document.querySelectorAll("#sessionFilterChips .filter-chip");
-  const txtQuickDice = document.getElementById("txtSessionQuickDice");
-  const btnQuickRoll = document.getElementById("btnSessionQuickRoll");
   const btnClearFeed = document.getElementById("btnSessionClearLog");
   const sessionTabContainer = document.getElementById("sessionTabContainer");
-  const gmUnifiedSection = document.getElementById("gmUnifiedSection");
-  const sessionLogSection = document.getElementById("sessionLogSection");
+  const tableSessionPartyRoster = document.getElementById("tbodySessionPartyRoster");
+  const txtChatInput = document.getElementById("txtSessionChatInput");
+  const btnSendChat = document.getElementById("btnSessionSendChat");
+  const btnDiceShortcut = document.getElementById("btnSessionDiceShortcut");
+  const popoverMention = document.getElementById("chatMentionPopover");
+  const listMention = document.getElementById("chatMentionList");
+  const lblLiveClock = document.getElementById("lblSessionLiveClock");
+  const lblGMInfo = document.getElementById("lblSessionGMInfo");
+  const lblPlayerInfo = document.getElementById("lblSessionPlayerInfo");
+  const btnToggleLogin = document.getElementById("btnToggleLoginBar");
+  const sessionLoginBar = document.getElementById("sessionLoginBar");
 
-  function updateSessionDockMode(isPoppedOut) {
-    if (sessionTabContainer) {
-      if (isPoppedOut) {
-        sessionTabContainer.classList.remove("session-docked");
-        sessionTabContainer.classList.add("session-popped-out");
-      } else {
-        sessionTabContainer.classList.remove("session-popped-out");
-        sessionTabContainer.classList.add("session-docked");
-      }
-    }
-    if (boxPoppedOut) {
-      boxPoppedOut.style.display = isPoppedOut ? "flex" : "none";
-    }
-  }
-  window.updateSessionDockMode = updateSessionDockMode;
-
-  // DOM Elements - GM Tab
+  // DOM Elements - Dedicated GM Tab
   const btnOpenGM = document.getElementById("btnOpenGM");
   const btnGMReturn = document.getElementById("btnGMReturnToSheet");
   const selGMCamps = document.getElementById("selGMCampaigns");
@@ -2773,30 +2761,120 @@ function setupSessionAndGMHub() {
   const fileGMImport = document.getElementById("fileGMImportCampaign");
   const btnGMDelete = document.getElementById("btnGMDeleteCampaign");
   const btnGMAttachNPC = document.getElementById("btnGMAttachNPC");
-  const tableGMRoster = document.getElementById("tbodyGMMasterRoster");
+  const btnGMAttachNPCFile = document.getElementById("btnGMAttachNPCFile");
+  const fileGMAttachNPC = document.getElementById("fileGMAttachNPC");
   const boxJoinReqs = document.getElementById("gmJoinRequestsBox");
   const listJoinReqs = document.getElementById("gmJoinRequestsList");
+  const btnGMCreateSavePoint = document.getElementById("btnGMCreateSavePoint");
+  const chkGMAutoBackupChars = document.getElementById("chkGMAutoBackupChars");
+  const btnGMExtractCharacter = document.getElementById("btnGMExtractCharacter");
+  const gmTimelineContainer = document.getElementById("gmTimelineContainer");
+  const gmPartyNpcList = document.getElementById("gmPartyNpcList");
+  const gmEncounterEnemyList = document.getElementById("gmEncounterEnemyList");
+  const btnGMAddEnemy = document.getElementById("btnGMAddEnemy");
+  const btnGMAddEnemyFile = document.getElementById("btnGMAddEnemyFile");
+  const fileGMAddEnemy = document.getElementById("fileGMAddEnemy");
+  const modalExtraction = document.getElementById("charExtractionModal");
+  const bodyExtraction = document.getElementById("charExtractionModalBody");
+  const modalPushAccept = document.getElementById("gmPushAcceptModal");
+  const bodyPushAccept = document.getElementById("gmPushAcceptModalBody");
+  const btnAcceptPush = document.getElementById("btnAcceptPushSheet");
+  const btnRejectPush = document.getElementById("btnRejectPushSheet");
 
-  // Local state for Session tab filtering
+  // Local state for Session feed
   let sessionSearchQuery = "";
   let sessionCurrentFilter = "all";
   const sessionLocalLog = [];
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function updateSessionDockMode(isPoppedOut) {
+    if (sessionTabContainer) {
+      if (isPoppedOut) {
+        sessionTabContainer.classList.remove("session-docked");
+        sessionTabContainer.classList.add("session-popped-out");
+      } else {
+        sessionTabContainer.classList.remove("session-popped-out");
+        sessionTabContainer.classList.add("session-docked");
+      }
+    }
+    if (boxPoppedOut) {
+      boxPoppedOut.style.display = isPoppedOut ? "flex" : "none";
+    }
+  }
+  window.updateSessionDockMode = updateSessionDockMode;
+
+  // Toggle user login bar
+  if (btnToggleLogin && sessionLoginBar) {
+    btnToggleLogin.addEventListener("click", () => {
+      const isHidden = sessionLoginBar.style.display === "none";
+      sessionLoginBar.style.display = isHidden ? "flex" : "none";
+      btnToggleLogin.textContent = isHidden ? "👤 Login / Room ▴" : "👤 Login / Room ▾";
+    });
+  }
+
+  // Live Clock & Top Status Bar
+  function initLiveClock() {
+    function tick() {
+      if (lblLiveClock) {
+        const now = new Date();
+        const dStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const tStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        lblLiveClock.textContent = `${dStr} • ${tStr}`;
+      }
+      if (lblGMInfo && typeof CampaignManager !== 'undefined') {
+        const gmName = CampaignManager.getGMUserName() || 'GM';
+        lblGMInfo.innerHTML = `👑 GM: <strong>${escapeHtml(gmName)}</strong>`;
+      }
+      if (lblPlayerInfo) {
+        const pName = char?.playerName || localStorage.getItem("mm2e_player_name") || 'Player';
+        lblPlayerInfo.innerHTML = `👤 You: <strong>${escapeHtml(pName)}</strong>`;
+      }
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+  initLiveClock();
 
   // 1. Initialize Network Listeners
   if (typeof SessionNetwork !== 'undefined') {
     SessionNetwork.initBroadcastChannel();
 
     SessionNetwork.addEventListener("onRoll", (roll) => {
-      sessionLocalLog.unshift(roll);
+      sessionLocalLog.push(roll);
       renderSessionFeed();
       if (typeof CampaignManager !== 'undefined') {
         CampaignManager.addLogEntry(roll);
       }
     });
 
+    SessionNetwork.addEventListener("onChat", (packet) => {
+      sessionLocalLog.push(packet);
+      renderSessionFeed();
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.addLogEntry(packet);
+      }
+    });
+
+    SessionNetwork.addEventListener("onHeroPointSpent", (packet) => {
+      sessionLocalLog.push(packet);
+      renderSessionFeed();
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.addLogEntry(packet);
+      }
+      syncPartyRosterUI();
+    });
+
     SessionNetwork.addEventListener("onConditionUpdate", (update) => {
-      syncPartyHudUI();
-      if (typeof syncGMRosterUI === 'function') syncGMRosterUI();
+      syncPartyRosterUI();
     });
 
     SessionNetwork.addEventListener("onPopoutDocked", () => {
@@ -2818,8 +2896,7 @@ function setupSessionAndGMHub() {
         }
 
         if (typeof updateTrackerConditionsSummary === 'function') updateTrackerConditionsSummary();
-        syncPartyHudUI();
-        if (typeof syncGMRosterUI === 'function') syncGMRosterUI();
+        syncPartyRosterUI();
         if (typeof showToast === 'function') showToast("GM updated your status/conditions.", "info");
       }
     });
@@ -2828,6 +2905,7 @@ function setupSessionAndGMHub() {
       if (typeof CampaignManager !== 'undefined') {
         CampaignManager.addPlayerRequest(req);
         renderGMJoinRequests();
+        syncPartyRosterUI();
         if (typeof showToast === 'function') {
           showToast(`Incoming join request from ${req.playerName} (${req.characterName})`, "info");
         }
@@ -2840,7 +2918,7 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onForcedMode", (info) => {
       updateSilentModeUI();
-      syncGMRosterUI();
+      syncPartyRosterUI();
     });
 
     SessionNetwork.addEventListener("onRequestCharacterSheet", () => {
@@ -2854,7 +2932,7 @@ function setupSessionAndGMHub() {
     SessionNetwork.addEventListener("onCharacterSheetData", (packet) => {
       if (typeof CampaignManager !== 'undefined') {
         CampaignManager.ingestCharacterSheet(packet.playerId, packet.sheet, packet.playerName, packet.characterName);
-        syncGMRosterUI();
+        syncPartyRosterUI();
         if (typeof showToast === 'function') {
           showToast(`Received character sheet for "${packet.characterName}" (${packet.playerName})!`, "success");
         }
@@ -2863,16 +2941,7 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onGMPushCharacter", (packet) => {
       if (packet.sheet) {
-        const timeStr = packet.versionTimestamp ? new Date(packet.versionTimestamp).toLocaleTimeString() : "";
-        const verStr = packet.version ? `v${packet.version}` : "";
-        const msg = `⚠️ GM Pushed Character Sheet Update\n\n` +
-          `The GM has pushed a character sheet revision for "${packet.characterName || 'your character'}" (${verStr} saved at ${timeStr}).\n\n` +
-          `Would you like to restore and load this sheet now? (This will update your editor)`;
-
-        if (confirm(msg)) {
-          applyLoadedCharacter(packet.sheet);
-          if (typeof showToast === 'function') showToast("Character sheet restored from GM revision!", "success");
-        }
+        showGMPushAcceptModal(packet);
       }
     });
 
@@ -2885,8 +2954,50 @@ function setupSessionAndGMHub() {
           if (typeof showToast === 'function') showToast("GM status was transferred to another player.", "info");
         }
         syncGMUI();
+        syncPartyRosterUI();
       }
     });
+  }
+
+  // Interactive GM Push Character Sheet Modal Handshake
+  function showGMPushAcceptModal(packet) {
+    const modal = document.getElementById("gmPushAcceptModal");
+    const body = document.getElementById("gmPushAcceptModalBody");
+    const btnAccept = document.getElementById("btnAcceptPushSheet");
+    const btnReject = document.getElementById("btnRejectPushSheet");
+    if (!modal || !body) {
+      if (confirm(`The GM has pushed a character sheet revision for "${packet.characterName}". Accept and make active?`)) {
+        applyLoadedCharacter(packet.sheet);
+      }
+      return;
+    }
+
+    const timeStr = packet.versionTimestamp ? new Date(packet.versionTimestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+    body.innerHTML = `
+      <div>The GM has reviewed and pushed a character sheet revision for:</div>
+      <div style="background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 6px;">
+        <strong style="font-size: 15px; color: var(--accent-primary);">${escapeHtml(packet.characterName || 'Hero')}</strong><br>
+        <span style="font-size: 12px; color: var(--text-muted);">Revision timestamp: ${timeStr}</span>
+      </div>
+      <div>Would you like to accept this sheet revision and make it your active editor character?</div>
+    `;
+
+    modal.classList.add("active");
+
+    if (btnAccept) {
+      btnAccept.onclick = () => {
+        applyLoadedCharacter(packet.sheet);
+        modal.classList.remove("active");
+        if (typeof showToast === 'function') showToast("Accepted and loaded GM character update!", "success");
+      };
+    }
+
+    if (btnReject) {
+      btnReject.onclick = () => {
+        modal.classList.remove("active");
+        if (typeof showToast === 'function') showToast("Kept current sheet.", "info");
+      };
+    }
   }
 
   // 2. Session UI Helpers
@@ -2895,9 +3006,6 @@ function setupSessionAndGMHub() {
     if (btnSilentToggle) {
       btnSilentToggle.textContent = isSilent ? "🔇 Silent: ON" : "📡 Broadcast: ON";
       btnSilentToggle.style.color = isSilent ? "#f59e0b" : "";
-    }
-    if (boxSilentBanner) {
-      boxSilentBanner.style.display = isSilent ? "flex" : "none";
     }
   }
 
@@ -2944,527 +3052,290 @@ function setupSessionAndGMHub() {
     }
   }
 
+  // --- Search Engine Expression Parser ---
+  function parseSearchExpression(query) {
+    const raw = String(query || '').trim();
+    if (!raw) return { phrases: [], excludes: [], tags: {}, terms: [] };
+
+    const phrases = [];
+    const excludes = [];
+    const tags = {};
+    const terms = [];
+
+    // 1. Extract quoted phrases: "foo bar" or -"foo bar"
+    const working = raw.replace(/(-?)"([^"]+)"/g, (match, neg, phrase) => {
+      if (neg === '-') {
+        excludes.push(phrase.toLowerCase().trim());
+      } else {
+        phrases.push(phrase.toLowerCase().trim());
+      }
+      return ' ';
+    });
+
+    // 2. Tokenize remaining words
+    const tokens = working.split(/\s+/).filter(Boolean);
+    tokens.forEach(tok => {
+      if (tok.startsWith('-') && tok.length > 1) {
+        excludes.push(tok.substring(1).toLowerCase());
+      } else if (tok.includes(':')) {
+        const idx = tok.indexOf(':');
+        const key = tok.substring(0, idx).toLowerCase();
+        const val = tok.substring(idx + 1).toLowerCase();
+        if (key && val) {
+          tags[key] = val;
+        } else {
+          terms.push(tok.toLowerCase());
+        }
+      } else {
+        terms.push(tok.toLowerCase());
+      }
+    });
+
+    return { phrases, excludes, tags, terms };
+  }
+
+  function matchesSearchExpression(item, expr) {
+    const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '';
+    const authorStr = `${item.characterName || ''} ${item.playerName || ''} ${item.author || ''}`.toLowerCase();
+    const typeStr = `${item.rollType || item.type || ''}`.toLowerCase();
+    const textStr = `${item.text || item.details || item.breakdown || item.expression || item.result || ''}`.toLowerCase();
+    const fullHaystack = `${timeStr} ${authorStr} ${typeStr} ${textStr}`.toLowerCase();
+
+    // Check tags
+    if (expr.tags.from && !authorStr.includes(expr.tags.from)) return false;
+    if (expr.tags.author && !authorStr.includes(expr.tags.author)) return false;
+    if (expr.tags.type) {
+      const tagT = expr.tags.type;
+      if (tagT === 'attack' && !typeStr.includes('attack')) return false;
+      if (tagT === 'save' && !typeStr.includes('save') && !typeStr.includes('toughness')) return false;
+      if (tagT === 'check' && !typeStr.includes('check')) return false;
+      if (tagT === 'chat' && item.type !== 'CHAT') return false;
+      if (tagT === 'whisper' && (!item.isPrivate || item.type !== 'CHAT')) return false;
+      if (tagT === 'hp' && item.type !== 'HERO_POINT_SPENT') return false;
+    }
+
+    // Check excludes
+    for (const ex of expr.excludes) {
+      if (fullHaystack.includes(ex)) return false;
+    }
+
+    // Check phrases
+    for (const phr of expr.phrases) {
+      if (!fullHaystack.includes(phr)) return false;
+    }
+
+    // Check plain terms
+    for (const tm of expr.terms) {
+      if (!fullHaystack.includes(tm)) return false;
+    }
+
+    return true;
+  }
+
+  window.parseSearchExpression = parseSearchExpression;
+  window.matchesSearchExpression = matchesSearchExpression;
+  window.formatLogLine = formatLogLine;
+
+  // Format single-line Discord/Roll20-style entry
+  function formatLogLine(item) {
+    const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    const isLocalGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
+
+    // 1. HERO POINT SPENT
+    if (item.type === 'HERO_POINT_SPENT') {
+      const charName = item.characterName || 'Hero';
+      const rem = item.remainingHP !== undefined ? ` (Remaining: ${item.remainingHP})` : '';
+      const det = item.details ? ` — ${escapeHtml(item.details)}` : '';
+      return `
+        <div class="session-log-line log-type-hp">
+          <span class="log-time">[${time}]</span>
+          <span class="badge log-hp-badge">⭐ Hero Point</span>
+          <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(charName)}')">${escapeHtml(charName)}:</span>
+          <span class="log-content">expended a Hero Point!${rem}${det}</span>
+        </div>
+      `;
+    }
+
+    // 2. CHAT & WHISPERS
+    if (item.type === 'CHAT') {
+      const author = item.author || item.authorCharacter || item.authorPlayer || 'User';
+      const isWhisper = !!item.isPrivate;
+      const recip = item.recipient || 'Someone';
+
+      if (isWhisper) {
+        const isMonitor = isLocalGM && item.authorPlayer !== 'GM' && recip.toLowerCase() !== 'gm';
+        const prefix = isMonitor
+          ? `🔒 <span class="badge log-whisper-badge">[GM Monitor]</span> (Whisper from ${escapeHtml(author)} to ${escapeHtml(recip)}):`
+          : `🔒 <span class="badge log-whisper-badge">Whisper</span> (${escapeHtml(author)} ➔ ${escapeHtml(recip)}):`;
+
+        return `
+          <div class="session-log-line log-type-whisper">
+            <span class="log-time">[${time}]</span>
+            <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${prefix}</span>
+            <span class="log-content">${escapeHtml(item.text)}</span>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="session-log-line">
+          <span class="log-time">[${time}]</span>
+          <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${escapeHtml(author)}:</span>
+          <span class="log-content">${escapeHtml(item.text)}</span>
+        </div>
+      `;
+    }
+
+    // 3. DICE ROLLS & MECHANICS (Attacks, Checks, Saves)
+    const author = item.characterName || 'Hero';
+    const subPlayer = item.playerName ? ` (${item.playerName})` : '';
+    const natClass = item.isNat20 ? 'log-nat20' : (item.isNat1 ? 'log-nat1' : '');
+    const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold; font-size: 10px;">★ Nat 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold; font-size: 10px;">⚠️ Nat 1</span>` : '');
+    const silentBadge = item.isSilent ? `<span class="badge log-silent-badge">🔇 Silent</span>` : '';
+
+    let resultHtml = '';
+    if (item.result) {
+      const isHit = item.result.toLowerCase().includes('hit') || item.result.toLowerCase().includes('success');
+      const isFail = item.result.toLowerCase().includes('fail') || item.result.toLowerCase().includes('miss');
+      const resClass = isHit ? 'log-result-hit' : (isFail ? 'log-result-fail' : '');
+      resultHtml = ` — <span class="${resClass}">${escapeHtml(item.result)}</span>`;
+    }
+
+    const mathSnippet = item.breakdown ? `<span class="log-math">${escapeHtml(item.breakdown)}</span>` : `<span class="log-math">${item.total}</span>`;
+    const rollLabel = item.rollType ? `<strong>${escapeHtml(item.rollType)}:</strong>` : '';
+
+    return `
+      <div class="session-log-line ${natClass}">
+        <span class="log-time">[${time}]</span>
+        ${silentBadge}
+        ${natBadge}
+        <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${escapeHtml(author)}${escapeHtml(subPlayer)}:</span>
+        <span class="log-content">
+          ${rollLabel} ${mathSnippet}${resultHtml}
+        </span>
+      </div>
+    `;
+  }
+
   function renderSessionFeed() {
     if (!logFeed) return;
     const items = sessionLocalLog;
     if (items.length === 0) {
-      logFeed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 32px; font-style: italic;">No rolls or events recorded yet in this session.</div>`;
+      logFeed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 32px; font-style: italic;">No rolls or events recorded yet in this session. Type below or roll from your sheet!</div>`;
       return;
     }
 
-    const q = sessionSearchQuery.toLowerCase().trim();
+    const parsedExpr = parseSearchExpression(sessionSearchQuery);
+
     const filtered = items.filter(item => {
       if (sessionCurrentFilter === "attack" && !item.rollType?.toLowerCase().includes("attack")) return false;
       if (sessionCurrentFilter === "save" && !item.rollType?.toLowerCase().includes("save") && !item.rollType?.toLowerCase().includes("toughness")) return false;
-      if (sessionCurrentFilter === "check" && !item.rollType?.toLowerCase().includes("check")) return false;
-      if (sessionCurrentFilter === "nat20" && !item.isNat20) return false;
-      if (sessionCurrentFilter === "failed" && !item.result?.toLowerCase().includes("fail")) return false;
-      if (sessionCurrentFilter === "silent" && !item.isSilent) return false;
+      if (sessionCurrentFilter === "chat" && item.type !== "CHAT") return false;
+      if (sessionCurrentFilter === "whisper" && (!item.isPrivate || item.type !== "CHAT")) return false;
 
-      if (!q) return true;
-      const target = `${item.characterName || ''} ${item.playerName || ''} ${item.rollType || ''} ${item.expression || ''} ${item.result || ''} ${item.breakdown || ''}`.toLowerCase();
-      return target.includes(q);
+      return matchesSearchExpression(item, parsedExpr);
     });
 
     if (filtered.length === 0) {
-      logFeed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary); margin-top: 32px; font-style: italic;">No rolls match current search / filter.</div>`;
+      logFeed.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 32px; font-style: italic;">No rolls or messages match current search / filter.</div>`;
       return;
     }
 
-    logFeed.innerHTML = filtered.map(item => {
-      const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-      const natClass = item.isNat20 ? "nat20" : (item.isNat1 ? "nat1" : "");
-      const silentClass = item.isSilent ? "silent" : "";
-      const silentBadge = item.isSilent ? `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px;">🔇 Silent</span>` : "";
-      const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 10px;">★ Natural 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; font-size: 10px;">⚠️ Natural 1</span>` : "");
+    logFeed.innerHTML = filtered.map(formatLogLine).join('');
 
-      return `
-        <div class="roll-card ${natClass} ${silentClass}">
-          <div class="roll-header">
-            <div>
-              <strong>${item.characterName || 'Hero'}</strong>
-              <span style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">(${item.playerName || 'Player'})</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              ${silentBadge}
-              ${natBadge}
-              <span style="color: var(--text-muted); font-size: 11px;">${time}</span>
-            </div>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px;">
-            <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">${item.rollType || 'Roll'}</span>
-            <span class="roll-math">${item.breakdown || item.total}</span>
-          </div>
-          ${item.result ? `<div class="roll-result" style="color: ${item.result.toLowerCase().includes('fail') ? '#ef4444' : '#10b981'};">${item.result}</div>` : ''}
-        </div>
-      `;
-    }).join('');
+    // Auto-scroll to bottom of continuous feed
+    logFeed.scrollTop = logFeed.scrollHeight;
   }
 
-  function syncPartyHudUI() {
-    if (!partyHud) return;
-    const camp = typeof CampaignManager !== 'undefined' ? CampaignManager.getActiveCampaign() : null;
-    const heroes = [];
+  // --- Spend Hero Point Handling ---
+  window.sessionSpendHeroPoint = function(charId, details = '') {
+    if (charId === 'local_hero' || !charId) {
+      const currentHP = (typeof char !== 'undefined' && char) ? (char.heroPoints || 0) : 0;
+      if (currentHP <= 0) {
+        if (typeof showToast === 'function') showToast("No Hero Points remaining to spend!", "warning");
+        else alert("No Hero Points remaining to spend!");
+        return;
+      }
+      char.heroPoints = Math.max(0, currentHP - 1);
+      const hpInput = document.getElementById("heroPointsInput");
+      if (hpInput) hpInput.value = char.heroPoints;
 
-    // Current local hero
-    if (char && char.name) {
-      heroes.push({
-        name: char.name,
-        bruises: char.trackerState?.conditions?.Bruised || 0,
-        heroPoints: char.heroPoints || 1
-      });
-    }
+      const heroName = char.name || 'Hero';
+      const eventPkt = {
+        type: 'HERO_POINT_SPENT',
+        id: 'hp_' + Date.now(),
+        characterName: heroName,
+        playerName: char.playerName || localStorage.getItem("mm2e_player_name") || "Player",
+        remainingHP: char.heroPoints,
+        details: details || 'Hero Point spent',
+        timestamp: new Date().toISOString()
+      };
 
-    // Connected players in campaign
-    if (camp && Array.isArray(camp.acceptedPlayers)) {
-      camp.acceptedPlayers.forEach(p => {
-        if (!heroes.some(h => h.name === p.characterName)) {
-          heroes.push({
-            name: p.characterName,
-            bruises: 0,
-            heroPoints: 1
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendHeroPointSpent(heroName, char.heroPoints, details);
+      }
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.addLogEntry(eventPkt);
+      }
+      sessionLocalLog.push(eventPkt);
+      renderSessionFeed();
+      syncPartyRosterUI();
+      if (typeof showToast === 'function') showToast(`Expended 1 Hero Point! (${char.heroPoints} remaining)`, "info");
+    } else {
+      // GM spending on behalf of player or NPC
+      if (typeof CampaignManager === 'undefined') return;
+      const camp = CampaignManager.getActiveCampaign();
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
+      if (player) {
+        const hp = Math.max(0, (player.heroPoints !== undefined ? player.heroPoints : 1) - 1);
+        CampaignManager.updatePlayerConditions(charId, player.currentBruises, player.conditions, hp, player.currentInjured);
+        const eventPkt = {
+          type: 'HERO_POINT_SPENT',
+          id: 'hp_' + Date.now(),
+          characterName: player.characterName,
+          playerName: player.playerName,
+          remainingHP: hp,
+          details: details || 'Hero Point spent by GM',
+          timestamp: new Date().toISOString()
+        };
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendHeroPointSpent(player.characterName, hp, details);
+          SessionNetwork.sendGMStatusOverride(charId, {
+            characterName: player.characterName,
+            bruises: player.currentBruises,
+            injured: player.currentInjured,
+            conditions: player.conditions,
+            heroPoints: hp
           });
         }
-      });
-    }
-
-    partyHud.innerHTML = heroes.map(h => `
-      <span class="badge" style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 6px;">
-        <strong>${h.name}</strong>
-        <span style="color: ${h.bruises > 0 ? '#ef4444' : 'var(--text-muted)'}; font-weight: bold;">(Bruised: ${h.bruises})</span>
-        <span style="color: #0284c7; font-weight: 600;">HP: ${h.heroPoints}</span>
-      </span>
-    `).join('');
-  }
-
-  function syncSessionUI() {
-    if (txtPlayerName && !txtPlayerName.value) {
-      txtPlayerName.value = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
-    }
-    if (txtCampCode && !txtCampCode.value) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlCamp = urlParams.get("campaign") || urlParams.get("room");
-      txtCampCode.value = urlCamp || localStorage.getItem("mm2e_last_campaign_code") || "";
-    }
-
-    updateSilentModeUI();
-    updateSessionConnectionUI();
-    syncPartyHudUI();
-    renderSessionFeed();
-  }
-  window.syncSessionUI = syncSessionUI;
-
-  // Session Event Listeners
-  if (btnConnect) {
-    btnConnect.addEventListener("click", () => {
-      const status = typeof SessionNetwork !== 'undefined' ? SessionNetwork.getStatus().status : "disconnected";
-      if (status === "connected" || status === "connecting" || status === "waiting_approval") {
-        SessionNetwork.disconnect();
-        return;
-      }
-
-      const pName = txtPlayerName?.value?.trim() || "";
-      if (!pName) {
-        if (typeof showToast === 'function') {
-          showToast("Please enter your user name to log into the campaign.", "warning");
-        } else {
-          alert("Please enter your user name to log into the campaign.");
-        }
-        if (txtPlayerName) txtPlayerName.focus();
-        return;
-      }
-
-      const cCode = txtCampCode?.value?.trim() || "default";
-      localStorage.setItem("mm2e_player_name", pName);
-      localStorage.setItem("mm2e_last_campaign_code", cCode);
-      if (typeof char !== 'undefined' && char) {
-        char.playerName = pName;
-      }
-      const pInput = document.getElementById("playerNameInput");
-      if (pInput && pInput.value !== pName) {
-        pInput.value = pName;
-      }
-
-      SessionNetwork.joinHost(cCode, {
-        playerName: pName,
-        characterName: char?.name || "Hero",
-        characterSummary: {
-          powerLevel: char?.powerLevel || 10,
-          defense: char?.combat?.DEF || 0
-        }
-      });
-    });
-  }
-
-  // Bi-directional user name sync from Session Tab input to Character Sheet & Storage
-  if (txtPlayerName) {
-    txtPlayerName.addEventListener("input", (e) => {
-      const val = e.target.value.slice(0, 45);
-      localStorage.setItem("mm2e_player_name", val);
-      if (typeof char !== 'undefined' && char) {
-        char.playerName = val;
-      }
-      const pInput = document.getElementById("playerNameInput");
-      if (pInput && pInput.value !== val) {
-        pInput.value = val;
-      }
-      if (typeof syncGMRosterUI === 'function') {
-        syncGMRosterUI();
-      }
-    });
-  }
-
-  if (btnSilentToggle) {
-    btnSilentToggle.addEventListener("click", () => {
-      if (typeof SessionNetwork !== 'undefined') {
-        const nextSilent = SessionNetwork.toggleSilentMode();
-        if (typeof CampaignManager !== 'undefined') {
-          CampaignManager.setPlayerForcedMode("local_hero", "silent", nextSilent);
-          if (char && char.name) {
-            CampaignManager.setPlayerForcedMode(char.name, "silent", nextSilent);
-          }
-        }
-        updateSilentModeUI();
-        syncGMRosterUI();
-      }
-    });
-  }
-
-  if (btnSilentDisable) {
-    btnSilentDisable.addEventListener("click", () => {
-      if (typeof SessionNetwork !== 'undefined') {
-        SessionNetwork.toggleSilentMode(false);
-        if (typeof CampaignManager !== 'undefined') {
-          CampaignManager.setPlayerForcedMode("local_hero", "silent", false);
-          if (char && char.name) {
-            CampaignManager.setPlayerForcedMode(char.name, "silent", false);
-          }
-        }
-        updateSilentModeUI();
-        syncGMRosterUI();
-      }
-    });
-  }
-
-  let poppedOutWindow = null;
-
-  function getSavedPopoutBounds() {
-    let bounds = { width: 480, height: 850, left: 100, top: 100 };
-    try {
-      const saved = localStorage.getItem("mm2e_session_log_bounds");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
-      }
-    } catch (e) {}
-    return bounds;
-  }
-
-  function savePopoutBoundsFromRef(win) {
-    if (!win) return;
-    try {
-      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
-      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
-      const width = win.outerWidth || win.innerWidth;
-      const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 200) {
-        localStorage.setItem("mm2e_session_log_bounds", JSON.stringify({ left, top, width, height }));
-      }
-    } catch (e) {}
-  }
-
-  if (btnPopout) {
-    btnPopout.addEventListener("click", () => {
-      const bounds = getSavedPopoutBounds();
-      const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
-      poppedOutWindow = window.open("log_window.html", "MM2CG_SessionLog", features);
-      updateSessionDockMode(true);
-    });
-  }
-
-  if (btnRedock) {
-    btnRedock.addEventListener("click", () => {
-      if (poppedOutWindow && !poppedOutWindow.closed) {
-        savePopoutBoundsFromRef(poppedOutWindow);
-        try { poppedOutWindow.close(); } catch (e) {}
-      }
-      updateSessionDockMode(false);
-    });
-  }
-
-  // Handle popout redocking message from log_window or window closing
-  if (typeof SessionNetwork !== 'undefined') {
-    SessionNetwork.addEventListener('onPopoutDocked', () => {
-      updateSessionDockMode(false);
-    });
-  }
-
-  window.addEventListener('focus', () => {
-    if (poppedOutWindow && poppedOutWindow.closed) {
-      updateSessionDockMode(false);
-    }
-  });
-
-  if (txtSearch) {
-    txtSearch.addEventListener("input", (e) => {
-      sessionSearchQuery = e.target.value;
-      renderSessionFeed();
-    });
-  }
-
-  if (btnClearSearch) {
-    btnClearSearch.addEventListener("click", () => {
-      if (txtSearch) txtSearch.value = "";
-      sessionSearchQuery = "";
-      renderSessionFeed();
-    });
-  }
-
-  filterChips.forEach(btn => {
-    btn.addEventListener("click", () => {
-      filterChips.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      sessionCurrentFilter = btn.dataset.filter || "all";
-      renderSessionFeed();
-    });
-  });
-
-  if (btnQuickRoll) {
-    btnQuickRoll.addEventListener("click", () => {
-      const expr = txtQuickDice?.value?.trim() || "1d20";
-      const res = typeof DiceNotation !== 'undefined' ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: "1d20" };
-      const rollEntry = {
-        characterName: char?.name || "Hero",
-        rollType: `Dice (${res.expression || expr})`,
-        total: res.total,
-        breakdown: res.breakdown,
-        isNat20: res.isNat20,
-        isNat1: res.isNat1
-      };
-      if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
-      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
-      sessionLocalLog.unshift(rollEntry);
-      renderSessionFeed();
-    });
-  }
-
-  if (txtQuickDice) {
-    txtQuickDice.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && btnQuickRoll) {
-        btnQuickRoll.click();
-      }
-    });
-  }
-
-  if (btnClearFeed) {
-    btnClearFeed.addEventListener("click", () => {
-      sessionLocalLog.length = 0;
-      renderSessionFeed();
-    });
-  }
-
-  // 3. GM Hub UI & Master Character Tracker
-  function setGMPaneOpen(isOpen) {
-    const gmUnifiedSec = document.getElementById("gmUnifiedSection");
-    const sessionContainer = document.getElementById("sessionTabContainer");
-    const btnGM = document.getElementById("btnOpenGM");
-
-    if (isOpen) {
-      if (gmUnifiedSec) gmUnifiedSec.style.display = "flex";
-      if (sessionContainer) sessionContainer.classList.remove("gm-pane-hidden");
-      if (btnGM) {
-        btnGM.classList.add("btn-primary");
-        btnGM.classList.remove("btn-secondary");
-        btnGM.title = "GM Campaign Hub (Click to hide GM tracker pane)";
-      }
-      syncGMUI();
-    } else {
-      if (gmUnifiedSec) gmUnifiedSec.style.display = "none";
-      if (sessionContainer) sessionContainer.classList.add("gm-pane-hidden");
-      if (btnGM) {
-        btnGM.classList.remove("btn-primary");
-        btnGM.classList.add("btn-secondary");
-        btnGM.title = "GM Campaign Hub (Click to show GM tracker pane)";
+        CampaignManager.addLogEntry(eventPkt);
+        sessionLocalLog.push(eventPkt);
+        renderSessionFeed();
+        syncPartyRosterUI();
       }
     }
-  }
-  window.setGMPaneOpen = setGMPaneOpen;
-
-  function isGMPaneOpen() {
-    const gmUnifiedSec = document.getElementById("gmUnifiedSection");
-    const sessionContainer = document.getElementById("sessionTabContainer");
-    if (!gmUnifiedSec) return false;
-    if (sessionContainer && sessionContainer.classList.contains("gm-pane-hidden")) return false;
-    return gmUnifiedSec.style.display !== "none";
-  }
-  window.isGMPaneOpen = isGMPaneOpen;
-
-  function openGMTab() {
-    const sessionContent = document.getElementById("tab-session");
-    const btnBack = document.getElementById("btnBackFromTables");
-    const btnTables = document.getElementById("btnOpenTables");
-    const btnTracker = document.getElementById("btnOpenTracker");
-
-    const isCurrentlyOnSessionTab = sessionContent && sessionContent.classList.contains("active");
-
-    if (isCurrentlyOnSessionTab) {
-      // User is already on the Session tab: toggle the GM pane open or closed!
-      if (isGMPaneOpen()) {
-        setGMPaneOpen(false);
-      } else {
-        setGMPaneOpen(true);
-      }
-      return;
-    }
-
-    // User is NOT on the Session tab: switch to Session tab and ensure GM pane is open!
-    const currentActiveBtn = document.querySelector(".tab-btn.active");
-    if (currentActiveBtn && currentActiveBtn.dataset.tab && currentActiveBtn.dataset.tab !== "tab-session") {
-      previousActiveTab = currentActiveBtn.dataset.tab;
-    }
-
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
-    
-    const sessionBtn = document.querySelector('.tab-btn[data-tab="tab-session"]');
-    if (sessionBtn) sessionBtn.classList.add("active");
-    if (sessionContent) sessionContent.classList.add("active");
-
-    const trackerContent = document.getElementById("tab-tracker");
-    if (trackerContent) trackerContent.classList.remove("active");
-    const tablesContent = document.getElementById("tab-tables");
-    if (tablesContent) tablesContent.classList.remove("active");
-
-    if (btnTables) {
-      btnTables.classList.remove("btn-primary");
-      btnTables.classList.add("btn-secondary");
-    }
-    if (btnTracker) {
-      btnTracker.classList.remove("btn-primary");
-      btnTracker.classList.add("btn-secondary");
-    }
-
-    if (btnBack) {
-      btnBack.style.display = "inline-flex";
-      const targetTab = previousActiveTab || "tab-basics";
-      const prevBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
-      const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-tables" ? "Tables" : "Previous View"));
-      btnBack.title = `Return to ${prevName}`;
-    }
-
-    setGMPaneOpen(true);
-  }
-  window.openGMTab = openGMTab;
-
-  if (btnOpenGM) {
-    btnOpenGM.addEventListener("click", openGMTab);
-  }
-
-  if (btnGMReturn) {
-    btnGMReturn.addEventListener("click", () => {
-      const btnBack = document.getElementById("btnBackFromTables");
-      if (btnBack) btnBack.click();
-    });
-  }
-
-  function syncGMUI() {
-    if (typeof CampaignManager === 'undefined') return;
-    const camps = CampaignManager.getCampaigns();
-    const activeCamp = CampaignManager.getActiveCampaign();
-
-    if (selGMCamps) {
-      selGMCamps.innerHTML = camps.map(c => `
-        <option value="${c.id}" ${activeCamp && activeCamp.id === c.id ? 'selected' : ''}>${c.name} (${c.code})</option>
-      `).join('');
-    }
-
-    if (!activeCamp) return;
-
-    if (typeof SessionNetwork !== 'undefined') {
-      const netStatus = SessionNetwork.getStatus();
-      if (netStatus.role !== 'HOST' || netStatus.code !== activeCamp.code) {
-        SessionNetwork.startHost(activeCamp.code);
-      }
-    }
-
-    if (lblActiveCampCode) {
-      lblActiveCampCode.textContent = activeCamp.code || "campaign-1";
-    }
-
-    const lblGMUserCount = document.getElementById("lblGMUserCount");
-    if (lblGMUserCount) {
-      lblGMUserCount.textContent = CampaignManager.getAuthorizedUsers().length;
-    }
-
-    renderGMJoinRequests();
-    syncGMRosterUI();
-  }
-  window.syncGMUI = syncGMUI;
-
-  function renderGMJoinRequests() {
-    if (!boxJoinReqs || !listJoinReqs || typeof CampaignManager === 'undefined') return;
-    const camp = CampaignManager.getActiveCampaign();
-    const reqs = camp?.pendingRequests || [];
-
-    if (reqs.length === 0) {
-      boxJoinReqs.style.display = "none";
-      listJoinReqs.innerHTML = "";
-      return;
-    }
-
-    boxJoinReqs.style.display = "block";
-    listJoinReqs.innerHTML = reqs.map(r => `
-      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
-        <div>
-          <strong>${r.playerName}</strong> playing <span class="badge" style="color: var(--accent-primary);">${r.characterName}</span>
-        </div>
-        <div style="display: flex; gap: 6px;">
-          <button type="button" class="btn btn-primary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>
-          <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  window.gmApprovePlayer = function(playerId) {
-    if (typeof CampaignManager === 'undefined') return;
-    const camp = CampaignManager.getActiveCampaign();
-    CampaignManager.approvePlayer(playerId);
-    if (typeof SessionNetwork !== 'undefined') {
-      SessionNetwork.acceptJoin(playerId, camp);
-    }
-    renderGMJoinRequests();
-    syncGMRosterUI();
-    if (typeof showToast === 'function') showToast("Player accepted into campaign!", "success");
   };
 
-  window.gmRejectPlayer = function(playerId) {
-    if (typeof CampaignManager === 'undefined') return;
-    CampaignManager.rejectPlayer(playerId);
-    if (typeof SessionNetwork !== 'undefined') {
-      SessionNetwork.rejectJoin(playerId);
-    }
-    renderGMJoinRequests();
-    if (typeof showToast === 'function') showToast("Join request declined.", "info");
-  };
-
-  function syncGMRosterUI() {
-    if (!tableGMRoster || typeof CampaignManager === 'undefined') return;
+  // --- Party & Character Tracker UI (Top section of Session Tab) ---
+  function syncPartyRosterUI() {
+    const tableRoster = document.getElementById("tbodySessionPartyRoster");
+    if (!tableRoster || typeof CampaignManager === 'undefined') return;
     const camp = CampaignManager.getActiveCampaign();
     if (!camp) return;
 
     const roster = [];
     const designatedGMId = CampaignManager.getGMPlayerId();
+    const isLocalGM = CampaignManager.isDesignatedGM('local_player');
 
-    // Current local hero
+    // 1. Current local hero
     if (char && char.name) {
-      const isDesignatedGM = designatedGMId === "local_player";
-      const localUserName = (char.playerName && char.playerName.trim()) || localStorage.getItem("mm2e_player_name") || (isDesignatedGM ? (CampaignManager.getGMUserName() || "GM") : "You");
+      const localUserName = (char.playerName && char.playerName.trim()) || localStorage.getItem("mm2e_player_name") || (isLocalGM ? (CampaignManager.getGMUserName() || "GM") : "You");
+      const isSilenced = (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char.name)));
       roster.push({
         id: "local_hero",
         isLocal: true,
         isNPC: false,
-        isGM: isDesignatedGM,
+        isGM: isLocalGM,
         sheetHistoryCount: 1,
         playerName: `${localUserName} (Local Sheet)`,
         characterName: char.name,
@@ -3475,14 +3346,15 @@ function setupSessionAndGMHub() {
         injured: char.trackerState?.conditions?.Injured || 0,
         conditions: char.trackerState?.conditions || {},
         heroPoints: char.heroPoints || 1,
-        isSilent: (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char.name)))
+        isSilent: isSilenced
       });
     }
 
-    // Connected/Approved Players
+    // 2. Connected/Approved Players
     (camp.acceptedPlayers || []).forEach(p => {
       if (p.characterName !== char?.name) {
         const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
+        const isSilenced = CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName);
         roster.push({
           id: p.id,
           isLocal: false,
@@ -3498,13 +3370,14 @@ function setupSessionAndGMHub() {
           injured: p.currentInjured || 0,
           conditions: p.conditions || {},
           heroPoints: p.heroPoints !== undefined ? p.heroPoints : 1,
-          isSilent: CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName)
+          isSilent: isSilenced
         });
       }
     });
 
-    // Attached NPCs
+    // 3. Attached Party NPCs
     (camp.npcs || []).forEach(n => {
+      const isSilenced = CampaignManager.isCharacterSilent(n.id);
       roster.push({
         id: n.id,
         isLocal: false,
@@ -3520,7 +3393,7 @@ function setupSessionAndGMHub() {
         injured: n.currentInjured || 0,
         conditions: n.conditions || {},
         heroPoints: n.heroPoints || 0,
-        isSilent: CampaignManager.isCharacterSilent(n.id)
+        isSilent: isSilenced
       });
     });
 
@@ -3580,118 +3453,1020 @@ function setupSessionAndGMHub() {
         ? `<button type="button" class="gm-cond-clear-btn" onclick="window.gmClearAllConditions('${item.id}', ${item.isNPC})" title="Clear all conditions for ${item.characterName}">↺</button>`
         : '';
 
+      const silencedClass = item.isSilent ? 'char-silenced' : '';
+      const muteIcon = item.isSilent ? `<span class="char-mute-icon" title="Logged roll output muted">🔇</span>` : '';
+
       return `
-        <tr style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(220, 38, 38, 0.05)' : 'transparent'};">
-          <td style="padding: 8px;">
-            <div class="gm-char-menu-wrapper">
-              <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for Character Sheet &amp; File Operations">
-                ${item.characterName} <span style="font-size: 10px; opacity: 0.7;">▾</span>
+        <tr class="${silencedClass}" style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(2, 132, 199, 0.04)' : 'transparent'};">
+          <td style="padding: 6px 10px;">
+            <div class="gm-char-menu-wrapper" style="position: relative; display: inline-block;">
+              <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for actions, spend HP, or sheet operations" style="background: none; border: none; font-weight: 700; font-size: 13px; color: var(--accent-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0;">
+                ${escapeHtml(item.characterName)} ${muteIcon} <span style="font-size: 10px; opacity: 0.7;">▾</span>
               </button>
               <div id="gmCharMenu_${item.id}" class="gm-char-dropdown-menu" style="display: none;">
+                <button type="button" class="gm-char-menu-item" onclick="window.sessionSpendHeroPoint('${item.id}'); window.gmCloseAllCharMenus();">
+                  ⭐ Spend Hero Point (${item.heroPoints || 0} HP)
+                </button>
+                <div class="gm-char-menu-divider"></div>
+                ${isLocalGM && !item.isLocal && !item.isNPC ? `
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmPullSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    📥 Pull Sheet to GM Editor
+                  </button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmPushCurrentSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    📤 Push Editor Sheet to Player
+                  </button>
+                ` : ''}
                 ${item.isNPC ? `
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}')">💾 Export NPC (.mm2e)</button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}')">👁️ Load into Editor</button>
-                  <div class="gm-char-menu-divider"></div>
-                  <button type="button" class="gm-char-menu-item danger" onclick="window.gmRemoveNPC('${item.id}')">✕ Remove / Close NPC</button>
-                  <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
-                ` : (item.isLocal ? `
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('local_hero')">📜 Version History (${item.sheetHistoryCount || 0})</button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('local_hero')">💾 Export Sheet (.mm2e)</button>
-                  <div class="gm-char-menu-divider"></div>
-                  <button type="button" class="gm-char-menu-item danger" onclick="window.gmCloseLocalHero()">✕ Close Character</button>
-                  <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}'); window.gmCloseAllCharMenus();">
+                    👁️ Load NPC to Editor
+                  </button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    💾 Export NPC (.mm2e)
+                  </button>
                 ` : `
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}')">📜 Version History (${item.sheetHistoryCount || 0})</button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}')">💾 Export Sheet (.mm2e)</button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmRequestSheet('${item.id}')">🔄 Request Fresh Sheet</button>
-                  ${!item.isGM ? `
-                    <div class="gm-char-menu-divider"></div>
-                    <button type="button" class="gm-char-menu-item danger" onclick="window.gmTransferGMClick('${item.id}', '${item.playerName.replace(/'/g, "\\'")}', '${item.characterName.replace(/'/g, "\\'")}')">👑 Transfer GM Status</button>
-                  ` : ''}
-                  <div class="gm-char-menu-divider"></div>
-                  <button type="button" class="gm-char-menu-item danger" onclick="window.gmRemovePlayer('${item.id}')">✕ Remove from Campaign</button>
-                  <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
-                `)}
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}'); window.gmCloseAllCharMenus();">
+                    📜 Version History (${item.sheetHistoryCount || 0})
+                  </button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    💾 Export Sheet (.mm2e)
+                  </button>
+                `}
+                <div class="gm-char-menu-divider"></div>
+                <button type="button" class="gm-char-menu-item" onclick="window.gmTogglePlayerSilentBtn('${item.id}'); window.gmCloseAllCharMenus();">
+                  ${item.isSilent ? '📡 Unmute Roll Output' : '🔇 Mute Roll Output'}
+                </button>
+                <div class="gm-char-menu-divider"></div>
+                <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
               </div>
             </div>
-            <div style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
-              ${item.isNPC ? '<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #ef4444; font-size: 12px;">NPC</span>' : '<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7; font-size: 12px;">PC</span>'}
-              ${item.playerName} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: 12px;">👑 GM</span>' : ''}
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+              ${item.isNPC ? '<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: 10px;">NPC</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 10px;">PC</span>'}
+              ${escapeHtml(item.playerName)} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: 10px;">👑 GM</span>' : ''}
             </div>
           </td>
-          <td style="text-align: center; font-size: 14px;">
-            PL ${item.powerLevel}<br>
-            <span style="color: var(--text-muted); font-size: 13px;">Def ${item.defense} / Tgh ${item.toughness}</span>
+          <td style="text-align: center; font-size: 13px;">
+            <strong>PL ${item.powerLevel}</strong><br>
+            <span style="color: var(--text-muted); font-size: 11px;">Def ${item.defense} / Tgh ${item.toughness}</span>
           </td>
-          <td style="text-align: center; padding: 6px;">
-            <div style="display: inline-flex; flex-direction: column; gap: 3px; align-items: center;">
+          <td style="text-align: center; padding: 4px;">
+            <div style="display: inline-flex; flex-direction: column; gap: 2px; align-items: center;">
               <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Bruised (Non-Lethal, -1 to saves)">
-                <span style="font-size: 13px; min-width: 48px; text-align: right; color: var(--text-muted);">Bruised:</span>
+                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Bruised:</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', -1)">−</button>
-                <span style="min-width: 22px; text-align: center; font-weight: bold; font-size: 14px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
+                <span style="min-width: 18px; text-align: center; font-weight: bold; font-size: 13px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', 1)">+</button>
               </div>
               <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Injured (Lethal, -1 to saves)">
-                <span style="font-size: 13px; min-width: 48px; text-align: right; color: var(--text-muted);">Injured:</span>
+                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Injured:</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', -1)">−</button>
-                <span style="min-width: 22px; text-align: center; font-weight: bold; font-size: 14px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
+                <span style="min-width: 18px; text-align: center; font-weight: bold; font-size: 13px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', 1)">+</button>
               </div>
             </div>
           </td>
-          <td style="padding: 6px;">
+          <td style="padding: 4px 8px;">
             <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
               ${pillsHtml}
               ${condPickerHtml}
               ${clearAllHtml}
             </div>
           </td>
-          <td style="text-align: center; font-weight: bold; font-size: 14px; color: #0284c7;">
-            ${item.isNPC ? '—' : item.heroPoints}
-          </td>
-          <td style="text-align: center; padding: 4px;">
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-              <button type="button" class="btn" style="padding: 2px 6px; font-size: 12px; height: 24px; min-width: 62px; background: ${item.isSilent ? 'rgba(245, 158, 11, 0.2)' : 'var(--bg-card)'}; color: ${item.isSilent ? '#f59e0b' : 'var(--text-muted)'}; border: 1px solid ${item.isSilent ? '#f59e0b' : 'var(--border-color)'}; font-weight: 600; cursor: pointer;" onclick="window.gmTogglePlayerSilentBtn('${item.id}')" title="${item.isSilent ? 'Silent Mode ON: Rolls are not broadcast. Click to disable.' : 'Silent Mode OFF: Rolls are broadcast. Click to enable.'}">
-                ${item.isSilent ? '🔇 Silent' : '📡 On'}
-              </button>
-              ${item.isNPC ? `
-                <div style="display: flex; gap: 4px;">
-                  <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 12px; height: 22px;" onclick="window.gmQuickRollNPC('${item.id}')" title="Quick Roll 1d20 for this NPC">🎲</button>
-                  <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 12px; height: 22px;" onclick="window.gmRemoveNPC('${item.id}')" title="Remove NPC">✕</button>
-                </div>
-              ` : (item.isLocal ? '' : `
-                <button type="button" class="btn-delete-power" style="padding: 2px 6px; font-size: 12px; height: 22px;" onclick="window.gmRemovePlayer('${item.id}')" title="Remove Player">✕</button>
-              `)}
-            </div>
-          </td>
         </tr>
       `;
     }).join('');
 
-    const MIN_ROSTER_ROWS = 6;
-    if (roster.length < MIN_ROSTER_ROWS) {
-      const needed = MIN_ROSTER_ROWS - roster.length;
-      for (let i = 0; i < needed; i++) {
-        const isFirstEmpty = (roster.length === 0 && i === 0);
-        rowsHtml += `
-          <tr class="gm-roster-empty-row" style="border-bottom: 1px dashed var(--border-color); height: 46px; opacity: 0.35;">
-            <td style="padding: 8px; font-style: italic; color: var(--text-muted); font-size: 13px;">
-              ${isFirstEmpty ? 'No characters in campaign' : '—'}
-            </td>
-            <td style="text-align: center; color: var(--text-muted); font-size: 13px;">—</td>
-            <td style="text-align: center; color: var(--text-muted); font-size: 13px;">—</td>
-            <td style="padding: 6px; color: var(--text-muted); font-size: 13px;">—</td>
-            <td style="text-align: center; color: var(--text-muted); font-size: 14px;">—</td>
-            <td style="text-align: center; color: var(--text-muted); font-size: 12px;">—</td>
-          </tr>
-        `;
+    if (roster.length === 0) {
+      rowsHtml = `
+        <tr style="border-bottom: 1px dashed var(--border-color); height: 44px; opacity: 0.5;">
+          <td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px; font-style: italic;">
+            No characters in party. Enter your user name above to log in, or load a hero into the editor.
+          </td>
+        </tr>
+      `;
+    }
+
+    tableRoster.innerHTML = rowsHtml;
+  }
+  window.syncPartyRosterUI = syncPartyRosterUI;
+  window.syncGMRosterUI = syncPartyRosterUI; // Backwards compatible alias
+
+  function syncSessionUI() {
+    if (txtPlayerName && !txtPlayerName.value) {
+      txtPlayerName.value = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
+    }
+    if (txtCampCode && !txtCampCode.value) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlCamp = urlParams.get("campaign") || urlParams.get("room");
+      txtCampCode.value = urlCamp || localStorage.getItem("mm2e_last_campaign_code") || "";
+    }
+
+    updateSilentModeUI();
+    updateSessionConnectionUI();
+    syncPartyRosterUI();
+    renderSessionFeed();
+  }
+  window.syncSessionUI = syncSessionUI;
+
+  // --- Session Event Listeners & Chat Input Handlers ---
+  if (btnConnect) {
+    btnConnect.addEventListener("click", () => {
+      const status = typeof SessionNetwork !== 'undefined' ? SessionNetwork.getStatus().status : "disconnected";
+      if (status === "connected" || status === "connecting" || status === "waiting_approval") {
+        SessionNetwork.disconnect();
+        return;
+      }
+
+      const pName = txtPlayerName?.value?.trim() || "";
+      if (!pName) {
+        if (typeof showToast === 'function') {
+          showToast("Please enter your user name to log into the campaign.", "warning");
+        } else {
+          alert("Please enter your user name to log into the campaign.");
+        }
+        if (txtPlayerName) txtPlayerName.focus();
+        return;
+      }
+
+      const cCode = txtCampCode?.value?.trim() || "default";
+      localStorage.setItem("mm2e_player_name", pName);
+      localStorage.setItem("mm2e_last_campaign_code", cCode);
+      if (typeof char !== 'undefined' && char) {
+        char.playerName = pName;
+      }
+      const pInput = document.getElementById("playerNameInput");
+      if (pInput && pInput.value !== pName) {
+        pInput.value = pName;
+      }
+
+      SessionNetwork.joinHost(cCode, {
+        playerName: pName,
+        characterName: char?.name || "Hero",
+        characterSummary: {
+          powerLevel: char?.powerLevel || 10,
+          defense: char?.combat?.DEF || 0
+        }
+      });
+    });
+  }
+
+  if (txtPlayerName) {
+    txtPlayerName.addEventListener("input", (e) => {
+      const val = e.target.value.slice(0, 45);
+      localStorage.setItem("mm2e_player_name", val);
+      if (typeof char !== 'undefined' && char) {
+        char.playerName = val;
+      }
+      const pInput = document.getElementById("playerNameInput");
+      if (pInput && pInput.value !== val) {
+        pInput.value = val;
+      }
+      syncPartyRosterUI();
+    });
+  }
+
+  if (btnSilentToggle) {
+    btnSilentToggle.addEventListener("click", () => {
+      if (typeof SessionNetwork !== 'undefined') {
+        const nextSilent = SessionNetwork.toggleSilentMode();
+        if (typeof CampaignManager !== 'undefined') {
+          CampaignManager.setPlayerForcedMode("local_hero", "silent", nextSilent);
+          if (char && char.name) {
+            CampaignManager.setPlayerForcedMode(char.name, "silent", nextSilent);
+          }
+        }
+        updateSilentModeUI();
+        syncPartyRosterUI();
+      }
+    });
+  }
+
+  let poppedOutWindow = null;
+
+  function getSavedPopoutBounds() {
+    let bounds = { width: 480, height: 850, left: 100, top: 100 };
+    try {
+      const saved = localStorage.getItem("mm2e_session_log_bounds");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
+      }
+    } catch (e) {}
+    return bounds;
+  }
+
+  function savePopoutBoundsFromRef(win) {
+    if (!win) return;
+    try {
+      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
+      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const width = win.outerWidth || win.innerWidth;
+      const height = win.outerHeight || win.innerHeight;
+      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 200) {
+        localStorage.setItem("mm2e_session_log_bounds", JSON.stringify({ left, top, width, height }));
+      }
+    } catch (e) {}
+  }
+
+  if (btnPopout) {
+    btnPopout.addEventListener("click", () => {
+      const bounds = getSavedPopoutBounds();
+      const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
+      poppedOutWindow = window.open("log_window.html", "MM2CG_SessionLog", features);
+      updateSessionDockMode(true);
+    });
+  }
+
+  if (btnRedock) {
+    btnRedock.addEventListener("click", () => {
+      if (poppedOutWindow && !poppedOutWindow.closed) {
+        savePopoutBoundsFromRef(poppedOutWindow);
+        try { poppedOutWindow.close(); } catch (e) {}
+      }
+      updateSessionDockMode(false);
+    });
+  }
+
+  if (typeof SessionNetwork !== 'undefined') {
+    SessionNetwork.addEventListener('onPopoutDocked', () => {
+      updateSessionDockMode(false);
+    });
+  }
+
+  window.addEventListener('focus', () => {
+    if (poppedOutWindow && poppedOutWindow.closed) {
+      updateSessionDockMode(false);
+    }
+  });
+
+  if (txtSearch) {
+    txtSearch.addEventListener("input", (e) => {
+      sessionSearchQuery = e.target.value;
+      renderSessionFeed();
+    });
+  }
+
+  if (btnClearSearch) {
+    btnClearSearch.addEventListener("click", () => {
+      if (txtSearch) txtSearch.value = "";
+      sessionSearchQuery = "";
+      renderSessionFeed();
+    });
+  }
+
+  filterChips.forEach(btn => {
+    btn.addEventListener("click", () => {
+      filterChips.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      sessionCurrentFilter = btn.dataset.filter || "all";
+      renderSessionFeed();
+    });
+  });
+
+  if (btnClearFeed) {
+    btnClearFeed.addEventListener("click", () => {
+      sessionLocalLog.length = 0;
+      renderSessionFeed();
+    });
+  }
+
+  // --- Bottom Chat Bar & @ Mention Autocomplete ---
+  function initChatMentionHandler() {
+    const chatInput = document.getElementById("txtSessionChatInput");
+    const popover = document.getElementById("chatMentionPopover");
+    const list = document.getElementById("chatMentionList");
+    if (!chatInput || !popover || !list) return;
+
+    function getMentionCandidates() {
+      const candidates = [];
+      const camp = (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null;
+      const gmName = (typeof CampaignManager !== 'undefined') ? CampaignManager.getGMUserName() : 'GM';
+
+      candidates.push({ label: `👑 ${gmName} (-GM-)`, value: gmName });
+
+      if (camp && Array.isArray(camp.acceptedPlayers)) {
+        camp.acceptedPlayers.forEach(p => {
+          if (p.characterName && p.characterName !== char?.name) {
+            candidates.push({ label: `👤 [${p.playerName}] / [${p.characterName}]`, value: p.characterName });
+          }
+        });
+      }
+
+      if (camp && Array.isArray(camp.npcs)) {
+        camp.npcs.forEach(n => {
+          candidates.push({ label: `🛡️ NPC: [${n.name}]`, value: n.name });
+        });
+      }
+
+      if (char && char.name) {
+        const localPlayer = char.playerName || 'You';
+        candidates.push({ label: `🦸 [${localPlayer}] / [${char.name}]`, value: char.name });
+      }
+
+      return candidates;
+    }
+
+    let activeMentionIdx = 0;
+
+    function updateMentionPopup() {
+      const val = chatInput.value;
+      const cursor = chatInput.selectionStart || val.length;
+      const leftText = val.substring(0, cursor);
+      const atIdx = leftText.lastIndexOf('@');
+
+      if (atIdx === -1 || (atIdx > 0 && /\S/.test(leftText[atIdx - 1]))) {
+        popover.style.display = 'none';
+        return;
+      }
+
+      const query = leftText.substring(atIdx + 1).toLowerCase().trim();
+      const allCandidates = getMentionCandidates();
+      const filtered = query
+        ? allCandidates.filter(c => c.label.toLowerCase().includes(query) || c.value.toLowerCase().includes(query))
+        : allCandidates;
+
+      if (filtered.length === 0) {
+        popover.style.display = 'none';
+        return;
+      }
+
+      activeMentionIdx = Math.min(activeMentionIdx, filtered.length - 1);
+
+      list.innerHTML = filtered.map((c, idx) => `
+        <div class="mention-item ${idx === activeMentionIdx ? 'active' : ''}" data-value="${escapeHtml(c.value)}" onclick="window.insertMentionCandidate('${escapeHtml(c.value)}')">
+          <span>${c.label}</span>
+          <span style="font-size: 10px; color: var(--text-muted); opacity: 0.8;">@${c.value}</span>
+        </div>
+      `).join('');
+
+      popover.style.display = 'flex';
+    }
+
+    chatInput.addEventListener('input', updateMentionPopup);
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (popover.style.display !== 'none') {
+        const items = list.querySelectorAll('.mention-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          activeMentionIdx = (activeMentionIdx + 1) % items.length;
+          items.forEach((it, idx) => it.classList.toggle('active', idx === activeMentionIdx));
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          activeMentionIdx = (activeMentionIdx - 1 + items.length) % items.length;
+          items.forEach((it, idx) => it.classList.toggle('active', idx === activeMentionIdx));
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          const activeItem = items[activeMentionIdx];
+          if (activeItem) {
+            e.preventDefault();
+            window.insertMentionCandidate(activeItem.dataset.value);
+            return;
+          }
+        }
+        if (e.key === 'Escape') {
+          popover.style.display = 'none';
+          return;
+        }
+      }
+
+      if (e.key === 'Enter' && !e.shiftKey && popover.style.display === 'none') {
+        e.preventDefault();
+        handleSendChatInput();
+      }
+    });
+
+    window.insertMentionCandidate = function(val) {
+      const input = document.getElementById("txtSessionChatInput");
+      if (!input) return;
+      const text = input.value;
+      const cursor = input.selectionStart || text.length;
+      const leftText = text.substring(0, cursor);
+      const atIdx = leftText.lastIndexOf('@');
+      if (atIdx !== -1) {
+        const beforeAt = text.substring(0, atIdx);
+        const afterCursor = text.substring(cursor);
+        input.value = `${beforeAt}@${val} ${afterCursor}`;
+        input.focus();
+        const newCursor = atIdx + val.length + 2;
+        input.setSelectionRange(newCursor, newCursor);
+      }
+      popover.style.display = 'none';
+    };
+
+    window.sessionInsertMention = function(name) {
+      const input = document.getElementById("txtSessionChatInput");
+      if (!input) return;
+      input.value = `@${name} ` + input.value.replace(/^@[^\s]+\s*/, '');
+      input.focus();
+    };
+  }
+  initChatMentionHandler();
+
+  function handleSendChatInput() {
+    const chatInput = document.getElementById("txtSessionChatInput");
+    if (!chatInput) return;
+    const raw = chatInput.value.trim();
+    if (!raw) return;
+
+    // 1. /hp spend Hero Point
+    if (raw.toLowerCase() === '/hp' || raw.toLowerCase().startsWith('/hp ')) {
+      const det = raw.length > 3 ? raw.substring(4).trim() : 'Hero Point expended';
+      window.sessionSpendHeroPoint('local_hero', det);
+      chatInput.value = '';
+      return;
+    }
+
+    // 2. /r or /roll dice command
+    if (/^\/(r|roll)\s+/i.test(raw)) {
+      const expr = raw.replace(/^\/(r|roll)\s+/i, '').trim();
+      const res = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: expr };
+      const rollEntry = {
+        characterName: char?.name || "Hero",
+        playerName: char?.playerName || localStorage.getItem("mm2e_player_name") || "Player",
+        rollType: `Dice (${res.expression || expr})`,
+        total: res.total,
+        breakdown: res.breakdown || `${res.total}`,
+        isNat20: !!res.isNat20,
+        isNat1: !!res.isNat1
+      };
+      if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
+      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+      sessionLocalLog.push(rollEntry);
+      renderSessionFeed();
+      chatInput.value = '';
+      return;
+    }
+
+    // 3. Whisper: @Recipient message OR /w Recipient message
+    let recipient = null;
+    let messageText = raw;
+
+    const whisperMatch = raw.match(/^\/(?:w|whisper)\s+([^\s]+)\s+(.+)$/i) || raw.match(/^@([^\s]+)\s+(.+)$/);
+    if (whisperMatch) {
+      recipient = whisperMatch[1];
+      messageText = whisperMatch[2];
+    }
+
+    if (recipient) {
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendChat(messageText, recipient, true);
+      } else {
+        const localPkt = {
+          type: 'CHAT',
+          id: 'chat_' + Date.now(),
+          author: char?.name || 'You',
+          recipient,
+          isPrivate: true,
+          text: messageText,
+          timestamp: new Date().toISOString()
+        };
+        sessionLocalLog.push(localPkt);
+        renderSessionFeed();
+      }
+    } else {
+      if (typeof SessionNetwork !== 'undefined') {
+        SessionNetwork.sendChat(messageText, null, false);
+      } else {
+        const localPkt = {
+          type: 'CHAT',
+          id: 'chat_' + Date.now(),
+          author: char?.name || 'You',
+          text: messageText,
+          timestamp: new Date().toISOString()
+        };
+        sessionLocalLog.push(localPkt);
+        renderSessionFeed();
       }
     }
 
-    tableGMRoster.innerHTML = rowsHtml;
+    chatInput.value = '';
   }
 
-  // Master Roster Actions
+  if (btnSendChat) {
+    btnSendChat.addEventListener("click", handleSendChatInput);
+  }
+
+  if (btnDiceShortcut) {
+    btnDiceShortcut.addEventListener("click", () => {
+      const res = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll("1d20") : { total: Math.floor(Math.random() * 20) + 1, breakdown: "1d20" };
+      const rollEntry = {
+        characterName: char?.name || "Hero",
+        playerName: char?.playerName || localStorage.getItem("mm2e_player_name") || "Player",
+        rollType: "Quick Check (1d20)",
+        total: res.total,
+        breakdown: res.breakdown || "1d20",
+        isNat20: res.total === 20,
+        isNat1: res.total === 1
+      };
+      if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
+      if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+      sessionLocalLog.push(rollEntry);
+      renderSessionFeed();
+    });
+  }
+
+  // 3. Standalone Dedicated GM Tab Operations
+  function openGMTab() {
+    const gmContent = document.getElementById("tab-gm");
+    const btnBack = document.getElementById("btnBackFromTables");
+    const btnTables = document.getElementById("btnOpenTables");
+    const btnTracker = document.getElementById("btnOpenTracker");
+    const btnGM = document.getElementById("btnOpenGM");
+
+    // If GM tab is already active, return back to previous view
+    if (gmContent && gmContent.classList.contains("active")) {
+      if (btnBack) btnBack.click();
+      return;
+    }
+
+    const currentActiveBtn = document.querySelector(".tab-btn.active");
+    if (currentActiveBtn && currentActiveBtn.dataset.tab && currentActiveBtn.dataset.tab !== "tab-gm") {
+      previousActiveTab = currentActiveBtn.dataset.tab;
+    }
+
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+
+    if (gmContent) gmContent.classList.add("active");
+
+    const trackerContent = document.getElementById("tab-tracker");
+    if (trackerContent) trackerContent.classList.remove("active");
+    const tablesContent = document.getElementById("tab-tables");
+    if (tablesContent) tablesContent.classList.remove("active");
+
+    if (btnGM) {
+      btnGM.classList.add("btn-primary");
+      btnGM.classList.remove("btn-secondary");
+    }
+    if (btnTables) {
+      btnTables.classList.remove("btn-primary");
+      btnTables.classList.add("btn-secondary");
+    }
+    if (btnTracker) {
+      btnTracker.classList.remove("btn-primary");
+      btnTracker.classList.add("btn-secondary");
+    }
+
+    if (btnBack) {
+      btnBack.style.display = "inline-flex";
+      const targetTab = previousActiveTab || "tab-basics";
+      const prevBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+      const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-session" ? "Session" : (previousActiveTab === "tab-tracker" ? "Tracker" : "Previous View"));
+      btnBack.title = `Return to ${prevName}`;
+    }
+
+    syncGMUI();
+  }
+  window.openGMTab = openGMTab;
+
+  if (btnOpenGM) {
+    btnOpenGM.addEventListener("click", openGMTab);
+  }
+
+  if (btnGMReturn) {
+    btnGMReturn.addEventListener("click", () => {
+      const btnBack = document.getElementById("btnBackFromTables");
+      if (btnBack) btnBack.click();
+    });
+  }
+
+  function syncGMUI() {
+    if (typeof CampaignManager === 'undefined') return;
+    const camps = CampaignManager.getCampaigns();
+    const activeCamp = CampaignManager.getActiveCampaign();
+
+    if (selGMCamps) {
+      selGMCamps.innerHTML = camps.map(c => `
+        <option value="${c.id}" ${activeCamp && activeCamp.id === c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
+      `).join('');
+    }
+
+    if (!activeCamp) return;
+
+    if (typeof SessionNetwork !== 'undefined') {
+      const netStatus = SessionNetwork.getStatus();
+      if (netStatus.role !== 'HOST' || netStatus.code !== activeCamp.code) {
+        SessionNetwork.startHost(activeCamp.code);
+      }
+    }
+
+    if (lblActiveCampCode) {
+      lblActiveCampCode.textContent = activeCamp.code || "campaign-1";
+    }
+
+    const lblGMUserCount = document.getElementById("lblGMUserCount");
+    if (lblGMUserCount) {
+      lblGMUserCount.textContent = CampaignManager.getAuthorizedUsers().length;
+    }
+
+    renderGMJoinRequests();
+    renderGMTimeline();
+    renderGMPartyNpcList();
+    renderGMEncounterEnemyList();
+    syncPartyRosterUI();
+  }
+  window.syncGMUI = syncGMUI;
+
+  function renderGMJoinRequests() {
+    if (!boxJoinReqs || !listJoinReqs || typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const reqs = camp?.pendingRequests || [];
+
+    if (reqs.length === 0) {
+      boxJoinReqs.style.display = "none";
+      listJoinReqs.innerHTML = "";
+      return;
+    }
+
+    boxJoinReqs.style.display = "block";
+    listJoinReqs.innerHTML = reqs.map(r => `
+      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
+        <div>
+          <strong>${escapeHtml(r.playerName)}</strong> playing <span class="badge" style="color: var(--accent-primary);">${escapeHtml(r.characterName)}</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-primary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>
+          <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.gmApprovePlayer = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    CampaignManager.approvePlayer(playerId);
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.acceptJoin(playerId, camp);
+    }
+    renderGMJoinRequests();
+    syncPartyRosterUI();
+    if (typeof showToast === 'function') showToast("Player accepted into campaign!", "success");
+  };
+
+  window.gmRejectPlayer = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.rejectPlayer(playerId);
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.rejectJoin(playerId);
+    }
+    renderGMJoinRequests();
+    if (typeof showToast === 'function') showToast("Join request declined.", "info");
+  };
+
+  // --- Save Point Timeline Operations ---
+  function renderGMTimeline() {
+    const container = document.getElementById("gmTimelineContainer");
+    const chkAuto = document.getElementById("chkGMAutoBackupChars");
+    if (!container || typeof CampaignManager === 'undefined') return;
+
+    if (chkAuto) {
+      chkAuto.checked = CampaignManager.isAutoBackupCharactersEnabled();
+    }
+
+    const timeline = CampaignManager.getSnapshotTimeline();
+    if (timeline.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 16px; font-style: italic;">
+          No Save Points recorded yet. Click "📸 Create Save Point" above to create an instant snapshot checkpoint.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = timeline.map(s => {
+      const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+      return `
+        <div class="gm-timeline-item">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+            <span style="font-family: monospace; font-size: 11px; color: var(--text-muted);">[${dateStr}]</span>
+            <strong style="font-size: 12px; color: var(--text-main);">${escapeHtml(s.label)}</strong>
+            <span class="badge" style="font-size: 10px; background: rgba(2, 132, 199, 0.15); color: #0284c7;">${s.characterCount || 0} characters</span>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button type="button" class="btn btn-primary" style="height: 22px; padding: 0 8px; font-size: 11px;" onclick="window.gmRollbackClick('${s.id}')" title="Roll back campaign to this save point">⏪ Roll Back</button>
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 8px; font-size: 11px;" onclick="window.openCharExtractionModal('${s.id}')" title="Extract individual character from this snapshot">📦 Extract</button>
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmDeleteSnapshotClick('${s.id}')" title="Delete snapshot">🗑</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (btnGMCreateSavePoint) {
+    btnGMCreateSavePoint.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const defLabel = `Save Point - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      const label = prompt("Enter Save Point label / description:", defLabel);
+      if (label !== null) {
+        CampaignManager.createSnapshot(label);
+        renderGMTimeline();
+        if (typeof showToast === 'function') showToast("Save Point created!", "success");
+      }
+    });
+  }
+
+  if (chkGMAutoBackupChars) {
+    chkGMAutoBackupChars.addEventListener("change", (e) => {
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.setAutoBackupCharacters(e.target.checked);
+      }
+    });
+  }
+
+  window.gmRollbackClick = function(snapshotId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const timeline = CampaignManager.getSnapshotTimeline();
+    const snap = timeline.find(s => s.id === snapshotId);
+    if (!snap) return;
+
+    if (confirm(`Roll back campaign state to Save Point "${snap.label}"?\n\n(A pre-rollback checkpoint will be saved automatically so no current progress is lost)`)) {
+      const res = CampaignManager.rollbackToSnapshot(snapshotId);
+      if (res.success) {
+        if (typeof showToast === 'function') showToast(`Rolled back to "${snap.label}"!`, "success");
+        syncPartyRosterUI();
+        syncGMUI();
+      } else {
+        alert(res.error || "Rollback failed");
+      }
+    }
+  };
+
+  window.gmDeleteSnapshotClick = function(snapshotId) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (confirm("Delete this Save Point snapshot from the timeline?")) {
+      CampaignManager.deleteSnapshot(snapshotId);
+      renderGMTimeline();
+    }
+  };
+
+  // --- Selective Character Extraction ---
+  if (btnGMExtractCharacter) {
+    btnGMExtractCharacter.addEventListener("click", () => {
+      window.openCharExtractionModal(null);
+    });
+  }
+
+  window.openCharExtractionModal = function(snapshotId = null) {
+    const modal = document.getElementById("charExtractionModal");
+    const body = document.getElementById("charExtractionModalBody");
+    const title = document.getElementById("charExtractionModalTitle");
+    if (!modal || !body || typeof CampaignManager === 'undefined') return;
+
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    let snapLabel = "Live Campaign State";
+    const characters = [];
+
+    if (snapshotId) {
+      const timeline = CampaignManager.getSnapshotTimeline();
+      const snap = timeline.find(s => s.id === snapshotId);
+      if (snap && snap.state) {
+        snapLabel = snap.label;
+        (snap.state.acceptedPlayers || []).forEach(p => {
+          characters.push({ id: p.id, name: p.characterName, player: p.playerName, pl: p.characterSummary?.powerLevel || 10, type: 'PC', snapId: snapshotId, raw: p });
+        });
+        (snap.state.npcs || []).forEach(n => {
+          characters.push({ id: n.id, name: n.name, player: 'GM (Party NPC)', pl: n.powerLevel || 10, type: 'NPC', snapId: snapshotId, raw: n });
+        });
+        (snap.state.encounterEnemies || []).forEach(e => {
+          characters.push({ id: e.id, name: e.name, player: 'GM (Enemy)', pl: e.powerLevel || 10, type: 'Enemy', snapId: snapshotId, raw: e });
+        });
+      }
+    } else {
+      if (char && char.name) {
+        characters.push({ id: 'local_hero', name: char.name, player: char.playerName || 'Local', pl: char.powerLevel || 10, type: 'Local Hero', snapId: null });
+      }
+      (camp.acceptedPlayers || []).forEach(p => {
+        characters.push({ id: p.id, name: p.characterName, player: p.playerName, pl: p.characterSummary?.powerLevel || 10, type: 'PC', snapId: null, raw: p });
+      });
+      (camp.npcs || []).forEach(n => {
+        characters.push({ id: n.id, name: n.name, player: 'GM (Party NPC)', pl: n.powerLevel || 10, type: 'NPC', snapId: null, raw: n });
+      });
+      (camp.encounterEnemies || []).forEach(e => {
+        characters.push({ id: e.id, name: e.name, player: 'GM (Enemy)', pl: e.powerLevel || 10, type: 'Enemy', snapId: null, raw: e });
+      });
+    }
+
+    if (title) title.textContent = `📦 Character Extraction: ${snapLabel}`;
+
+    if (characters.length === 0) {
+      body.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 24px;">No characters found in this save point.</div>`;
+    } else {
+      body.innerHTML = characters.map(c => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; gap: 10px;">
+          <div>
+            <strong style="font-size: 14px; color: var(--accent-primary);">${escapeHtml(c.name)}</strong>
+            <span class="badge" style="font-size: 11px; margin-left: 6px;">PL ${c.pl}</span>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+              ${c.type} • ${escapeHtml(c.player)}
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-primary" style="font-size: 11px; padding: 3px 8px;" onclick="window.gmExtractAndLoad('${c.snapId || ''}', '${c.id}')">👁️ Load into Editor</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="window.gmExtractAndDownload('${c.snapId || ''}', '${c.id}')">💾 Download .mm2e</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    modal.classList.add("active");
+  };
+
+  window.gmExtractAndLoad = function(snapshotId, charId) {
+    if (charId === 'local_hero') {
+      if (typeof showToast === 'function') showToast("Local hero is already in editor.", "info");
+      return;
+    }
+    const extracted = CampaignManager.extractCharacterFromSnapshot(snapshotId || null, charId);
+    if (extracted && extracted.sheet) {
+      if (confirm(`Load "${extracted.characterName}" into your character editor? (This will overwrite current editor sheet)`)) {
+        applyLoadedCharacter(extracted.sheet);
+        document.getElementById("charExtractionModal")?.classList.remove("active");
+        if (typeof showToast === 'function') showToast(`Loaded "${extracted.characterName}" into editor!`, "success");
+      }
+    } else {
+      alert("No character sheet data available for this character.");
+    }
+  };
+
+  window.gmExtractAndDownload = function(snapshotId, charId) {
+    if (charId === 'local_hero') {
+      window.gmExportCharSheet('local_hero');
+      return;
+    }
+    const extracted = CampaignManager.extractCharacterFromSnapshot(snapshotId || null, charId);
+    if (extracted && extracted.sheet) {
+      const payload = JSON.stringify(extracted.sheet, null, 2);
+      downloadCharJson(payload, `${extracted.characterName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mm2e`);
+      if (typeof showToast === 'function') showToast(`Downloaded "${extracted.characterName}" sheet!`, "success");
+    } else {
+      alert("No character sheet data available for this character.");
+    }
+  };
+
+  // --- Party NPCs & Encounter Adversaries in GM Tab ---
+  function renderGMPartyNpcList() {
+    const list = document.getElementById("gmPartyNpcList");
+    if (!list || typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const npcs = camp?.npcs || [];
+
+    if (npcs.length === 0) {
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 12px; font-style: italic;">No friendly party NPCs attached.</div>`;
+      return;
+    }
+
+    list.innerHTML = npcs.map(n => `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 10px;">
+        <div>
+          <strong style="font-size: 12px; color: #0284c7;">${escapeHtml(n.name)}</strong>
+          <span style="font-size: 11px; color: var(--text-muted); margin-left: 6px;">PL ${n.powerLevel || 10}</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmLoadNpcToEditor('${n.id}')">👁️ Load</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmExportCharSheet('${n.id}')">💾 .mm2e</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveNPC('${n.id}')">✕</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderGMEncounterEnemyList() {
+    const list = document.getElementById("gmEncounterEnemyList");
+    if (!list || typeof CampaignManager === 'undefined') return;
+    const enemies = CampaignManager.getEncounterEnemies();
+
+    if (enemies.length === 0) {
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 12px; font-style: italic;">No encounter adversaries or enemies added.</div>`;
+      return;
+    }
+
+    list.innerHTML = enemies.map(e => `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <strong style="font-size: 12px; color: #ef4444;">${escapeHtml(e.name)}</strong>
+          <span style="font-size: 11px; color: var(--text-muted);">PL ${e.powerLevel || 10}</span>
+          <span style="font-size: 11px; color: ${e.currentBruises > 0 ? '#f59e0b' : 'var(--text-muted)'};">B: ${e.currentBruises || 0}</span>
+          <span style="font-size: 11px; color: ${e.currentInjured > 0 ? '#ef4444' : 'var(--text-muted)'};">I: ${e.currentInjured || 0}</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmQuickRollEnemy('${e.id}')" title="Quick Roll 1d20 Attack">🎲 Roll</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmStepEnemyBruise('${e.id}', 1)" title="+1 Bruised">+B</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveEnemy('${e.id}')">✕</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.gmQuickRollEnemy = function(enemyId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const enemies = CampaignManager.getEncounterEnemies();
+    const enemy = enemies.find(e => e.id === enemyId);
+    if (!enemy) return;
+
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const atk = enemy.characterData?.combat?.ATK || Math.floor(enemy.powerLevel / 2);
+    const total = d20 + atk;
+    const rollEntry = {
+      characterName: enemy.name,
+      playerName: "Adversary",
+      isNPC: true,
+      rollType: "Attack Check",
+      total,
+      breakdown: `1d20 (${d20}) + ${atk} = ${total}`,
+      isNat20: d20 === 20,
+      isNat1: d20 === 1
+    };
+
+    if (typeof SessionNetwork !== 'undefined') SessionNetwork.sendRoll(rollEntry);
+    CampaignManager.addLogEntry(rollEntry);
+    sessionLocalLog.push(rollEntry);
+    renderSessionFeed();
+    if (typeof showToast === 'function') showToast(`Rolled attack for ${enemy.name}: ${total}`, "info");
+  };
+
+  window.gmStepEnemyBruise = function(enemyId, delta) {
+    if (typeof CampaignManager === 'undefined') return;
+    const enemies = CampaignManager.getEncounterEnemies();
+    const enemy = enemies.find(e => e.id === enemyId);
+    if (enemy) {
+      const next = Math.max(0, (enemy.currentBruises || 0) + delta);
+      CampaignManager.updateEncounterEnemyConditions(enemyId, next, enemy.conditions, enemy.currentInjured);
+      renderGMEncounterEnemyList();
+    }
+  };
+
+  window.gmRemoveEnemy = function(enemyId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.removeEncounterEnemy(enemyId);
+    renderGMEncounterEnemyList();
+    if (typeof showToast === 'function') showToast("Removed encounter enemy.", "info");
+  };
+
+  if (btnGMAddEnemy) {
+    btnGMAddEnemy.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const name = prompt("Enter Adversary / Enemy Name:", "Villain");
+      if (!name) return;
+      const plStr = prompt("Enter Power Level (PL):", "10");
+      const pl = parseInt(plStr, 10) || 10;
+      CampaignManager.addEncounterEnemy(null, name, pl);
+      renderGMEncounterEnemyList();
+      if (typeof showToast === 'function') showToast(`Added adversary "${name}"!`, "success");
+    });
+  }
+
+  if (btnGMAddEnemyFile && fileGMAddEnemy) {
+    btnGMAddEnemyFile.addEventListener("click", () => fileGMAddEnemy.click());
+    fileGMAddEnemy.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file || typeof CampaignManager === 'undefined') return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          const cData = parsed.character || parsed;
+          CampaignManager.addEncounterEnemy(cData, cData.name, cData.powerLevel);
+          renderGMEncounterEnemyList();
+          if (typeof showToast === 'function') showToast(`Added enemy "${cData.name || 'Adversary'}" from file!`, "success");
+        } catch (err) {
+          alert("Failed to parse character file: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    });
+  }
+
+  if (btnGMAttachNPCFile && fileGMAttachNPC) {
+    btnGMAttachNPCFile.addEventListener("click", () => fileGMAttachNPC.click());
+    fileGMAttachNPC.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file || typeof CampaignManager === 'undefined') return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          const cData = parsed.character || parsed;
+          CampaignManager.attachNPC(cData, cData.name, cData.powerLevel);
+          renderGMPartyNpcList();
+          syncPartyRosterUI();
+          if (typeof showToast === 'function') showToast(`Attached party NPC "${cData.name || 'NPC'}" from file!`, "success");
+        } catch (err) {
+          alert("Failed to parse character file: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    });
+  }
+
+  // Master Roster / Party Damage & Condition Steppers
   window.gmStepBruises = function(charId, isNpc, type, delta) {
     if (typeof CampaignManager === 'undefined') return;
     if (isNpc) {
@@ -3705,13 +4480,12 @@ function setupSessionAndGMHub() {
           const next = Math.max(0, (npc.currentBruises || 0) + delta);
           CampaignManager.updateNPCConditions(charId, next, npc.conditions, npc.currentInjured);
         }
-        syncGMRosterUI();
+        syncPartyRosterUI();
       }
     } else if (charId === "local_hero") {
       stepConditionCount(type, delta);
-      syncGMRosterUI();
+      syncPartyRosterUI();
     } else {
-      // Remote player
       const camp = CampaignManager.getActiveCampaign();
       const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
       if (player) {
@@ -3729,10 +4503,11 @@ function setupSessionAndGMHub() {
             heroPoints: player.heroPoints
           });
         }
-        syncGMRosterUI();
+        syncPartyRosterUI();
       }
     }
   };
+
 
   window.gmSetCondition = function(charId, isNpc, condName, val) {
     if (typeof CampaignManager === 'undefined') return;
@@ -4358,6 +5133,61 @@ function setupSessionAndGMHub() {
     SessionNetwork.requestCharacterSheets(playerId);
     if (typeof showToast === 'function') showToast("Requested character sheet from player...", "info");
   };
+
+  window.gmPullSheet = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === playerId);
+    if (!player) return;
+
+    if (typeof SessionNetwork !== 'undefined' && SessionNetwork.requestCharacterSheets) {
+      SessionNetwork.requestCharacterSheets(playerId);
+    }
+
+    if (player.characterSheet) {
+      if (confirm(`Pull and load sheet for "${player.characterName}" (${player.playerName}) into your character editor?`)) {
+        applyLoadedCharacter(player.characterSheet);
+        if (typeof showToast === 'function') showToast(`Loaded sheet for "${player.characterName}" into editor!`, "success");
+      }
+    } else {
+      if (typeof showToast === 'function') showToast(`Requested fresh character sheet from ${player.playerName}...`, "info");
+    }
+  };
+
+  window.gmPushCurrentSheet = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === playerId);
+    if (!player) return;
+
+    if (typeof char === 'undefined' || !char) {
+      alert("No character is currently loaded in the editor to push.");
+      return;
+    }
+
+    const hero = window.primaryHero || char;
+    const heroName = hero.name || player.characterName || "Hero";
+    const warnMsg = `Push the current character in your editor ("${heroName}") to player ${player.playerName} (${player.characterName})?\n\nThe player will receive a prompt to review and activate your changes.`;
+    if (!confirm(warnMsg)) return;
+
+    const serialized = hero.serialize();
+    const versionTimestamp = new Date().toISOString();
+    const version = (player.sheetHistory ? player.sheetHistory.length + 1 : 1);
+
+    // Save in GM's local campaign history for this player
+    CampaignManager.ingestCharacterSheet(playerId, serialized, player.playerName, heroName);
+
+    // Send push packet across network
+    if (typeof SessionNetwork !== 'undefined' && SessionNetwork.sendPushCharacter) {
+      const sent = SessionNetwork.sendPushCharacter(playerId, serialized, heroName, versionTimestamp, version);
+      if (sent) {
+        if (typeof showToast === 'function') showToast(`Pushed updated sheet for "${heroName}" to ${player.playerName}!`, "success");
+      } else {
+        if (typeof showToast === 'function') showToast(`Unable to send sheet to ${player.playerName} (not connected).`, "warning");
+      }
+    }
+  };
+
 
   window.gmTransferGMClick = function(targetPlayerId, playerName, characterName) {
     if (typeof CampaignManager === 'undefined') return;

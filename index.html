@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=38">
+  <link rel="stylesheet" href="styles.css?v=39">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -442,13 +442,13 @@
               <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('inputDEF', 1, -5, 20)">+</button>
             </div>
           </div>
-          <div class="combat-item" style="border-left: 1px solid var(--border-color); padding-left: 16px;">
+          <div class="combat-item" style="border-left: 1px solid var(--border-color); padding-left: 10px; margin-left: 2px;">
             <button type="button" class="row-title-btn" id="btnRollMeleeAtk" onclick="window.rollAttackCheck('Melee Attack')" title="Roll Melee Attack Check" style="padding: 0 4px; font-size: inherit;">
               <span>🎲</span>
               <label style="cursor: pointer; margin: 0;">Melee Attack:</label>
             </button>
             <span class="badge" id="lblCloseAttack" style="font-size: var(--font-size-labels);">+0</span>
-            <span class="secondary-text" id="lblCloseAtkBreakdown" style="margin-left: 4px;">(ATK + Feat)</span>
+            <span class="secondary-text" id="lblCloseAtkBreakdown" style="margin-left: 2px; font-size: var(--font-size-fine-print);">(ATK + Feat)</span>
           </div>
           <div class="combat-item">
             <button type="button" class="row-title-btn" id="btnRollRangedAtk" onclick="window.rollAttackCheck('Ranged Attack')" title="Roll Ranged Attack Check" style="padding: 0 4px; font-size: inherit;">
@@ -456,11 +456,11 @@
               <label style="cursor: pointer; margin: 0;">Ranged Attack:</label>
             </button>
             <span class="badge" id="lblRangedAttack" style="font-size: var(--font-size-labels);">+0</span>
-            <span class="secondary-text" id="lblRangedAtkBreakdown" style="margin-left: 4px;">(ATK + Feat)</span>
+            <span class="secondary-text" id="lblRangedAtkBreakdown" style="margin-left: 2px; font-size: var(--font-size-fine-print);">(ATK + Feat)</span>
           </div>
 
-          <div class="combat-item" style="margin-left: auto;">
-            <label class="secondary-text" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: normal;">
+          <div class="combat-item" style="margin-left: auto; white-space: nowrap;">
+            <label class="secondary-text" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: normal; font-size: var(--font-size-secondary);">
               <input type="checkbox" id="chkFilterUnrankedSkills" onchange="refreshUI()"> Hide Unranked Skills
             </label>
           </div>
@@ -864,8 +864,8 @@
   </section>
 
   <!-- TAB: SESSION (Discord / Roll20-Style Tabletop Client) -->
-  <section id="tab-session" class="tab-content" style="max-width: 1360px;">
-    <div class="session-tab-container session-docked" id="sessionTabContainer" style="display: flex; flex-direction: column; gap: 8px; max-width: 1360px; margin: 0 auto; min-height: 600px;">
+  <section id="tab-session" class="tab-content">
+    <div class="session-tab-container session-docked" id="sessionTabContainer">
       
       <!-- TOP SECTION: PARTY & USER TRACKER (Visible to all by default, lengthens dynamically) -->
       <div id="sessionPartyTrackerCard" class="tracker-card session-party-tracker" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; flex-shrink: 0;">
@@ -874,12 +874,12 @@
             <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
               🛡️ Party &amp; Character Tracker
             </strong>
-            <span class="secondary-text" style="font-size: 11px;">(Damage tracks &amp; conditions visible to all • Click character name for actions)</span>
+            <span class="secondary-text" style="font-size: var(--font-size-fine-print);">(Damage tracks &amp; conditions visible to all • Click character name for actions)</span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Offline</span>
-            <button type="button" class="btn btn-secondary" id="btnToggleLoginBar" style="height: 24px; padding: 0 8px; font-size: 11px;" title="User name and campaign login">👤 Login / Room ▾</button>
-            <button type="button" class="btn btn-secondary" id="btnToggleSilentMode" style="height: 24px; padding: 0 8px; font-size: 11px;" title="Mute/unmute local roll output to others">📡 Broadcast: ON</button>
+            <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">Offline</span>
+            <button type="button" class="btn btn-secondary" id="btnToggleLoginBar" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="User name and campaign login">👤 Login / Room ▾</button>
+            <button type="button" class="btn btn-secondary" id="btnToggleSilentMode" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="Mute/unmute local roll output to others">📡 Broadcast: ON</button>
           </div>
         </div>
 
@@ -889,18 +889,19 @@
           <input type="text" id="txtSessionPlayerName" placeholder="Enter your user name" maxlength="45" style="width: 140px; height: 24px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
           <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtSessionCampaignCode">Room / Code:</label>
           <input type="text" id="txtSessionCampaignCode" placeholder="campaign-1" maxlength="45" style="width: 130px; height: 24px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
-          <button type="button" class="btn btn-primary" id="btnSessionConnect" style="height: 24px; padding: 0 10px; font-size: 11px; font-weight: 600;">🔑 Log In</button>
-          <button type="button" class="btn btn-secondary" id="btnSessionOpenProfile" style="height: 24px; padding: 0 8px; font-size: 11px;" title="View your User Identity &amp; Account Key in Campaigns">👤 Profile</button>
-          <span id="lblSessionConnectMsg" style="font-size: 11px; color: var(--text-muted);"></span>
+          <button type="button" class="btn btn-primary" id="btnSessionConnect" style="height: 24px; padding: 0 10px; font-size: var(--font-size-fine-print); font-weight: 600;">🔑 Log In</button>
+          <button type="button" class="btn btn-secondary" id="btnSessionOpenProfile" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="View your User Identity &amp; Account Key in Campaigns">👤 Profile</button>
+          <span id="lblSessionConnectMsg" style="font-size: var(--font-size-fine-print); color: var(--text-muted);"></span>
         </div>
 
-        <!-- Party Tracker Table (NO Hero Points column, NO Modes column) -->
+        <!-- Party Tracker Table (NO Hero Points column, NO Modes column, includes Initiative) -->
         <div class="gm-tracker-table-container" id="sessionPartyTableContainer" style="overflow-x: auto; overflow-y: auto; max-height: 240px; transition: max-height 0.2s;">
           <table class="data-table" id="tableSessionPartyRoster" style="width: 100%; border-collapse: collapse; min-width: 680px;">
             <thead>
               <tr>
-                <th style="width: 240px; text-align: left;">Character</th>
-                <th style="width: 120px; text-align: center;">PL / Def / Tough</th>
+                <th style="width: 220px; text-align: left;">Character</th>
+                <th style="width: 85px; text-align: center;">Init</th>
+                <th style="width: 125px; text-align: center;">PL / Def / Tough</th>
                 <th style="width: 170px; text-align: center;">Damage (Bruised / Injured)</th>
                 <th style="text-align: left;">Active Conditions</th>
               </tr>
@@ -920,34 +921,32 @@
           <!-- Left: Search Box -->
           <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 260px;">
             <input type="text" id="txtSessionSearch" placeholder='Search log... ("exact phrase", -exclude, from:Hero, type:attack)' style="flex: 1; height: 26px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
-            <button type="button" class="btn btn-secondary" id="btnSessionClearSearch" style="height: 26px; padding: 0 8px; font-size: 11px;" title="Clear search">Clear</button>
+            <button type="button" class="btn btn-secondary" id="btnSessionClearSearch" style="height: 26px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="Clear search">Clear</button>
             <div style="display: flex; gap: 3px;" id="sessionFilterChips">
-              <button type="button" class="filter-chip active" data-filter="all" style="padding: 1px 6px; font-size: 11px;">All</button>
-              <button type="button" class="filter-chip" data-filter="attack" style="padding: 1px 6px; font-size: 11px;">Atk</button>
-              <button type="button" class="filter-chip" data-filter="save" style="padding: 1px 6px; font-size: 11px;">Save</button>
-              <button type="button" class="filter-chip" data-filter="chat" style="padding: 1px 6px; font-size: 11px;">Chat</button>
-              <button type="button" class="filter-chip" data-filter="whisper" style="padding: 1px 6px; font-size: 11px;">Whisper</button>
+              <button type="button" class="filter-chip active" data-filter="all" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">All</button>
+              <button type="button" class="filter-chip" data-filter="attack" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Atk</button>
+              <button type="button" class="filter-chip" data-filter="save" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Save</button>
+              <button type="button" class="filter-chip" data-filter="chat" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Chat</button>
+              <button type="button" class="filter-chip" data-filter="whisper" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Whisper</button>
             </div>
           </div>
 
-          <!-- Right: Live Time & Date, GM Name, Player Name, Pop-Out -->
-          <div style="display: flex; align-items: center; gap: 10px; font-size: 12px;">
-            <span id="lblSessionLiveClock" style="font-family: monospace; font-weight: 600; color: var(--text-muted);" title="Current Live Date and Time">--:--:--</span>
-            <span id="lblSessionGMInfo" style="color: var(--accent-primary);" title="Campaign GM Host">👑 GM: <strong>GM</strong></span>
-            <span id="lblSessionPlayerInfo" style="color: var(--text-main);" title="Your Player Identity">👤 You: <strong>Player</strong></span>
-            <button type="button" class="btn btn-secondary" id="btnPopoutSessionLog" style="height: 24px; padding: 0 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Pop out continuous session log in separate window">↗ Pop Out</button>
+          <!-- Right: GM Name & Pop-Out -->
+          <div style="display: flex; align-items: center; gap: 10px; font-size: var(--font-size-controls);">
+            <span id="lblSessionGMInfo" style="color: var(--accent-primary); font-size: var(--font-size-secondary);" title="Campaign GM Host">👑 GM: <strong>GM</strong></span>
+            <button type="button" class="btn btn-secondary" id="btnPopoutSessionLog" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print); display: inline-flex; align-items: center; gap: 4px;" title="Pop out continuous session log in separate window">↗ Pop Out</button>
           </div>
         </div>
 
         <!-- Popped-Out Notice -->
         <div id="boxPoppedOutNotice" style="display: none; background: var(--bg-card); border-bottom: 1px dashed var(--border-color); padding: 6px 12px; justify-content: space-between; align-items: center;">
-          <span style="font-size: 12px; color: var(--text-muted);">🪟 Session Log popped out in separate window. Rolls and chat remain synchronized.</span>
-          <button type="button" class="btn btn-secondary" id="btnRedockSessionLog" style="height: 22px; padding: 0 8px; font-size: 11px;">⬅ Re-dock</button>
+          <span style="font-size: var(--font-size-fine-print); color: var(--text-muted);">🪟 Session Log popped out in separate window. Rolls and chat remain synchronized.</span>
+          <button type="button" class="btn btn-secondary" id="btnRedockSessionLog" style="height: 22px; padding: 0 8px; font-size: var(--font-size-fine-print);">⬅ Re-dock</button>
         </div>
 
         <!-- Continuous Discord/Roll20-Style Single-Line Log Container (auto-scrolls down) -->
         <div id="sessionLogFeedContainer" style="flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-main); min-height: 200px;">
-          <div style="text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 32px; font-style: italic;">
+          <div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-fine-print); margin-top: 32px; font-style: italic;">
             No rolls or messages recorded yet. Type below or roll from your sheet!
           </div>
         </div>
@@ -967,7 +966,7 @@
             <input type="text" id="txtSessionChatInput" placeholder="Message or @whisper (type /r 1d20+5 to roll, /hp to spend Hero Point)..." style="flex: 1; height: 32px; font-size: 13px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 10px;">
             <button type="button" class="btn btn-primary" id="btnSessionSendChat" style="height: 32px; padding: 0 14px; font-weight: 600; font-size: 12px;">Send</button>
             <button type="button" class="btn btn-secondary" id="btnSessionDiceShortcut" style="height: 32px; padding: 0 10px; font-size: 12px;" title="Quick Dice (1d20)">🎲 Roll</button>
-            <button type="button" class="btn btn-secondary" id="btnSessionClearLog" style="height: 32px; padding: 0 8px; font-size: 11px; color: var(--text-muted);" title="Clear chat feed">Clear</button>
+            <button type="button" class="btn btn-secondary" id="btnSessionClearLog" style="height: 32px; padding: 0 8px; font-size: var(--font-size-fine-print); color: var(--text-muted);" title="Clear chat feed">Clear</button>
           </div>
         </div>
 
@@ -2088,13 +2087,13 @@
   <script src="campaign_manager.js?v=7"></script>
   <script src="session_network.js?v=6"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=98"></script>
+  <script src="app.js?v=99"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=44').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=45').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

@@ -1054,7 +1054,7 @@ input[type="checkbox"] {
 
 .combat-inline-row {
   display: flex;
-  gap: 24px;
+  gap: 8px 12px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -1062,7 +1062,7 @@ input[type="checkbox"] {
 .combat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 table {
@@ -1712,7 +1712,7 @@ button.row-title-btn.row-title,
 
 .log-time {
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--font-size-fine-print, 13px);
   color: var(--text-muted);
   flex-shrink: 0;
   user-select: none;
@@ -1778,7 +1778,7 @@ button.row-title-btn.row-title,
   background: rgba(168, 85, 247, 0.2);
   color: #c084fc;
   border: 1px solid #a855f7;
-  font-size: 10px;
+  font-size: var(--font-size-fine-print, 12px);
   font-weight: bold;
   padding: 1px 5px;
   border-radius: 3px;
@@ -1793,7 +1793,7 @@ button.row-title-btn.row-title,
   background: rgba(2, 132, 199, 0.2);
   color: #38bdf8;
   border: 1px solid #0284c7;
-  font-size: 10px;
+  font-size: var(--font-size-fine-print, 12px);
   font-weight: bold;
   padding: 1px 5px;
   border-radius: 3px;
@@ -1803,7 +1803,7 @@ button.row-title-btn.row-title,
   background: rgba(245, 158, 11, 0.2);
   color: #f59e0b;
   border: 1px solid #f59e0b;
-  font-size: 10px;
+  font-size: var(--font-size-fine-print, 12px);
   font-weight: bold;
   padding: 1px 5px;
   border-radius: 3px;
@@ -1843,7 +1843,7 @@ button.row-title-btn.row-title,
 }
 
 .mention-header {
-  font-size: 11px;
+  font-size: var(--font-size-fine-print, 12px);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1893,6 +1893,60 @@ button.row-title-btn.row-title,
 
 .gm-timeline-item:hover {
   border-color: var(--accent-primary);
+}
+
+/* Session Tab Client & Full-Height Bottom Docked Layout */
+#tab-session {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+#tab-session.active {
+  display: flex !important;
+  flex-direction: column;
+  height: calc(100vh - 128px);
+  min-height: 520px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.session-tab-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  width: 100%;
+}
+
+.session-party-tracker {
+  flex-shrink: 0;
+}
+
+.session-chat-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.session-chat-header {
+  flex-shrink: 0;
+}
+
+#sessionLogFeedContainer {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.session-chat-bar-container {
+  flex-shrink: 0;
 }
 
 /* Popped-Out Mode Layout */

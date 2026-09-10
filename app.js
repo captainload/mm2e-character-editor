@@ -1012,6 +1012,7 @@ window.rollInitiativeCheck = function() {
       const featStr = initFeat > 0 ? ` + Imp. Init (${initFeat * 4})` : "";
       lblInitBreakdown.textContent = `Rolled 1d20 (${d20}) + DEX (${dexMod >= 0 ? "+" : ""}${dexMod})${featStr} = ${total}`;
     }
+    if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
   }
 
   const details = `
@@ -2455,6 +2456,7 @@ function setupStatusTracker() {
         if (lblInitBreakdown) {
           lblInitBreakdown.textContent = `Rolled: 1d20 (${d20}) + ${totalMod} = ${total}`;
         }
+        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
       });
     }
 
@@ -2466,6 +2468,7 @@ function setupStatusTracker() {
         char.trackerState.initiativeRoll = next;
         if (numInitResult) numInitResult.value = next;
         if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
+        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
       });
     }
 
@@ -2477,6 +2480,7 @@ function setupStatusTracker() {
         char.trackerState.initiativeRoll = next;
         if (numInitResult) numInitResult.value = next;
         if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
+        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
       });
     }
 
@@ -2485,6 +2489,7 @@ function setupStatusTracker() {
         ensureTrackerState();
         const val = parseInt(e.target.value);
         char.trackerState.initiativeRoll = isNaN(val) ? null : val;
+        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
       });
     }
 
@@ -2494,6 +2499,7 @@ function setupStatusTracker() {
         char.trackerState.initiativeRoll = null;
         if (numInitResult) numInitResult.value = "";
         if (lblInitBreakdown) lblInitBreakdown.textContent = "";
+        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
       });
     }
 
@@ -2821,28 +2827,15 @@ function setupSessionAndGMHub() {
     });
   }
 
-  // Live Clock & Top Status Bar
-  function initLiveClock() {
-    function tick() {
-      if (lblLiveClock) {
-        const now = new Date();
-        const dStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        const tStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        lblLiveClock.textContent = `${dStr} • ${tStr}`;
-      }
-      if (lblGMInfo && typeof CampaignManager !== 'undefined') {
-        const gmName = CampaignManager.getGMUserName() || 'GM';
-        lblGMInfo.innerHTML = `👑 GM: <strong>${escapeHtml(gmName)}</strong>`;
-      }
-      if (lblPlayerInfo) {
-        const pName = char?.playerName || localStorage.getItem("mm2e_player_name") || 'Player';
-        lblPlayerInfo.innerHTML = `👤 You: <strong>${escapeHtml(pName)}</strong>`;
-      }
+  // Top Status Bar GM Info
+  function updateSessionGMInfo() {
+    if (lblGMInfo && typeof CampaignManager !== 'undefined') {
+      const gmName = CampaignManager.getGMUserName() || 'GM';
+      lblGMInfo.innerHTML = `👑 GM: <strong>${escapeHtml(gmName)}</strong>`;
     }
-    tick();
-    setInterval(tick, 1000);
   }
-  initLiveClock();
+  updateSessionGMInfo();
+  setInterval(updateSessionGMInfo, 5000);
 
   // 1. Initialize Network Listeners
   if (typeof SessionNetwork !== 'undefined') {
@@ -3252,7 +3245,7 @@ function setupSessionAndGMHub() {
     const author = item.characterName || 'Hero';
     const subPlayer = item.playerName ? ` (${item.playerName})` : '';
     const natClass = item.isNat20 ? 'log-nat20' : (item.isNat1 ? 'log-nat1' : '');
-    const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold; font-size: 10px;">★ Nat 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold; font-size: 10px;">⚠️ Nat 1</span>` : '');
+    const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold; font-size: var(--font-size-fine-print, 12px);">★ Nat 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold; font-size: var(--font-size-fine-print, 12px);">⚠️ Nat 1</span>` : '');
     const silentBadge = item.isSilent ? `<span class="badge log-silent-badge">🔇 Silent</span>` : '';
 
     let resultHtml = '';
@@ -3393,6 +3386,18 @@ function setupSessionAndGMHub() {
     if (char && char.name) {
       const localUserName = (char.playerName && char.playerName.trim()) || localStorage.getItem("mm2e_player_name") || (isLocalGM ? (CampaignManager.getGMUserName() || "GM") : "You");
       const isSilenced = (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char.name)));
+      const effFeats = char.effectiveFeats || char.feats || {};
+      const impInit = effFeats["Improved Initiative"] || 0;
+      const dexMod = (typeof char.getAbilityRank === 'function')
+        ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5)
+        : (char.abilities?.DEX || 0);
+      const localInitMod = (char.derivedStats && typeof char.derivedStats.initiative === 'number')
+        ? char.derivedStats.initiative
+        : (dexMod + (impInit * 4));
+      const localInitRoll = (char.trackerState && char.trackerState.initiativeRoll !== null && char.trackerState.initiativeRoll !== undefined)
+        ? char.trackerState.initiativeRoll
+        : null;
+
       roster.push({
         id: "local_hero",
         isLocal: true,
@@ -3401,6 +3406,8 @@ function setupSessionAndGMHub() {
         sheetHistoryCount: 1,
         playerName: `${localUserName} (Local Sheet)`,
         characterName: char.name,
+        initiativeMod: localInitMod,
+        initiativeRoll: localInitRoll,
         powerLevel: char.powerLevel || 10,
         defense: char.combat?.DEF || 0,
         toughness: (char.purchasedResistances?.Toughness || 0) + (char.abilities?.CON || 0),
@@ -3417,6 +3424,11 @@ function setupSessionAndGMHub() {
       if (p.characterName !== char?.name) {
         const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
         const isSilenced = CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName);
+        const pInitMod = p.characterSummary?.initiative !== undefined
+          ? p.characterSummary.initiative
+          : (p.characterSheet?.derivedStats?.initiative ?? ((p.characterSheet?.abilities?.DEX || 0) + ((p.characterSheet?.feats?.['Improved Initiative'] || 0) * 4)));
+        const pInitRoll = p.characterSummary?.initiativeRoll !== undefined ? p.characterSummary.initiativeRoll : (p.initiativeRoll ?? null);
+
         roster.push({
           id: p.id,
           isLocal: false,
@@ -3425,6 +3437,8 @@ function setupSessionAndGMHub() {
           sheetHistoryCount: histCount,
           playerName: p.playerName,
           characterName: p.characterName,
+          initiativeMod: pInitMod,
+          initiativeRoll: pInitRoll,
           powerLevel: p.characterSummary?.powerLevel || 10,
           defense: p.characterSummary?.defense || 10,
           toughness: p.characterSummary?.toughness || 10,
@@ -3440,6 +3454,11 @@ function setupSessionAndGMHub() {
     // 3. Attached Party NPCs
     (camp.npcs || []).forEach(n => {
       const isSilenced = CampaignManager.isCharacterSilent(n.id);
+      const nInitMod = n.characterData?.derivedStats?.initiative !== undefined
+        ? n.characterData.derivedStats.initiative
+        : ((n.characterData?.abilities?.DEX || 0) + ((n.characterData?.feats?.['Improved Initiative'] || 0) * 4));
+      const nInitRoll = n.characterData?.trackerState?.initiativeRoll ?? (n.initiativeRoll ?? null);
+
       roster.push({
         id: n.id,
         isLocal: false,
@@ -3448,6 +3467,8 @@ function setupSessionAndGMHub() {
         sheetHistoryCount: 1,
         playerName: "GM (NPC)",
         characterName: n.name,
+        initiativeMod: nInitMod,
+        initiativeRoll: nInitRoll,
         powerLevel: n.powerLevel || 10,
         defense: n.characterData?.combat?.DEF || 10,
         toughness: (n.characterData?.purchasedResistances?.Toughness || 0) + (n.characterData?.abilities?.CON || 0),
@@ -3518,12 +3539,20 @@ function setupSessionAndGMHub() {
       const silencedClass = item.isSilent ? 'char-silenced' : '';
       const muteIcon = item.isSilent ? `<span class="char-mute-icon" title="Logged roll output muted">🔇</span>` : '';
 
+      const initModStr = item.initiativeMod >= 0 ? `+${item.initiativeMod}` : `${item.initiativeMod}`;
+      const initRollDisplay = (item.initiativeRoll !== null && item.initiativeRoll !== undefined)
+        ? `<strong style="font-size: 15px; color: var(--accent-primary); line-height: 1.1;">${item.initiativeRoll}</strong><div style="font-size: var(--font-size-fine-print); color: var(--text-muted);">${initModStr} mod</div>`
+        : `<strong style="font-size: 13px;">${initModStr}</strong>`;
+      const localRollBtn = item.isLocal
+        ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 6px; font-size: var(--font-size-fine-print); margin-top: 2px; height: 20px; line-height: 1;">🎲 Roll</button>`
+        : '';
+
       return `
         <tr class="${silencedClass}" style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(2, 132, 199, 0.04)' : 'transparent'};">
           <td style="padding: 6px 10px;">
             <div class="gm-char-menu-wrapper" style="position: relative; display: inline-block;">
               <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for actions, spend HP, or sheet operations" style="background: none; border: none; font-weight: 700; font-size: 13px; color: var(--accent-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0;">
-                ${escapeHtml(item.characterName)} ${muteIcon} <span style="font-size: 10px; opacity: 0.7;">▾</span>
+                ${escapeHtml(item.characterName)} ${muteIcon} <span style="font-size: var(--font-size-fine-print); opacity: 0.7;">▾</span>
               </button>
               <div id="gmCharMenu_${item.id}" class="gm-char-dropdown-menu" style="display: none;">
                 <button type="button" class="gm-char-menu-item" onclick="window.sessionSpendHeroPoint('${item.id}'); window.gmCloseAllCharMenus();">
@@ -3561,25 +3590,31 @@ function setupSessionAndGMHub() {
                 <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
               </div>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-              ${item.isNPC ? '<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: 10px;">NPC</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 10px;">PC</span>'}
-              ${escapeHtml(item.playerName)} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: 10px;">👑 GM</span>' : ''}
+            <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 2px;">
+              ${item.isNPC ? '<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: var(--font-size-fine-print);">NPC</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: var(--font-size-fine-print);">PC</span>'}
+              ${escapeHtml(item.playerName)} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: var(--font-size-fine-print);">👑 GM</span>' : ''}
+            </div>
+          </td>
+          <td style="text-align: center; vertical-align: middle; padding: 4px 6px;">
+            <div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center;">
+              ${initRollDisplay}
+              ${localRollBtn}
             </div>
           </td>
           <td style="text-align: center; font-size: 13px;">
             <strong>PL ${item.powerLevel}</strong><br>
-            <span style="color: var(--text-muted); font-size: 11px;">Def ${item.defense} / Tgh ${item.toughness}</span>
+            <span style="color: var(--text-muted); font-size: var(--font-size-fine-print);">Def ${item.defense} / Tgh ${item.toughness}</span>
           </td>
           <td style="text-align: center; padding: 4px;">
             <div style="display: inline-flex; flex-direction: column; gap: 2px; align-items: center;">
               <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Bruised (Non-Lethal, -1 to saves)">
-                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Bruised:</span>
+                <span style="font-size: var(--font-size-fine-print); min-width: 44px; text-align: right; color: var(--text-muted);">Bruised:</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', -1)">−</button>
                 <span style="min-width: 18px; text-align: center; font-weight: bold; font-size: 13px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', 1)">+</button>
               </div>
               <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Injured (Lethal, -1 to saves)">
-                <span style="font-size: 11px; min-width: 44px; text-align: right; color: var(--text-muted);">Injured:</span>
+                <span style="font-size: var(--font-size-fine-print); min-width: 44px; text-align: right; color: var(--text-muted);">Injured:</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', -1)">−</button>
                 <span style="min-width: 18px; text-align: center; font-weight: bold; font-size: 13px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
                 <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', 1)">+</button>
@@ -3600,7 +3635,7 @@ function setupSessionAndGMHub() {
     if (roster.length === 0) {
       rowsHtml = `
         <tr style="border-bottom: 1px dashed var(--border-color); height: 44px; opacity: 0.5;">
-          <td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px; font-style: italic;">
+          <td colspan="5" style="text-align: center; color: var(--text-muted); font-size: var(--font-size-fine-print); padding: 12px; font-style: italic;">
             No characters in party. Enter your user name above to log in, or load a hero into the editor.
           </td>
         </tr>
@@ -3660,12 +3695,23 @@ function setupSessionAndGMHub() {
         pInput.value = pName;
       }
 
+      const effFeats = char?.effectiveFeats || char?.feats || {};
+      const impInit = effFeats["Improved Initiative"] || 0;
+      const dexMod = (typeof char?.getAbilityRank === 'function')
+        ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5)
+        : (char?.abilities?.DEX || 0);
+      const totalInit = (char?.derivedStats && typeof char.derivedStats.initiative === 'number')
+        ? char.derivedStats.initiative
+        : (dexMod + (impInit * 4));
+
       SessionNetwork.joinHost(cCode, {
         playerName: pName,
         characterName: char?.name || "Hero",
         characterSummary: {
           powerLevel: char?.powerLevel || 10,
-          defense: char?.combat?.DEF || 0
+          defense: char?.combat?.DEF || 0,
+          initiative: totalInit,
+          initiativeRoll: char?.trackerState?.initiativeRoll ?? null
         }
       });
     });

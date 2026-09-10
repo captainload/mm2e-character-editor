@@ -47,7 +47,8 @@
     onPopoutDocked: [],
     onPartyAction: [],
     onPartyRosterHtml: [],
-    onPartyReqRoster: []
+    onPartyReqRoster: [],
+    onThemeChange: []
   };
 
   function initBroadcastChannel() {
@@ -297,6 +298,10 @@
 
       case 'ROSTER_UPDATE':
         emit('onRosterUpdate', packet.roster);
+        break;
+
+      case 'THEME_CHANGE':
+        emit('onThemeChange', packet);
         break;
 
       default:

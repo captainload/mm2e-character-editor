@@ -1476,7 +1476,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let previousActiveTab = "tab-basics";
 
+function updatePersistentHeaderHeight() {
+  const pHeader = document.querySelector('.persistent-header');
+  if (pHeader) {
+    const h = pHeader.offsetHeight;
+    document.documentElement.style.setProperty('--persistent-header-height', h + 'px');
+  }
+}
+window.updatePersistentHeaderHeight = updatePersistentHeaderHeight;
+
 function setupTabs() {
+  window.addEventListener("resize", updatePersistentHeaderHeight);
+  updatePersistentHeaderHeight();
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1538,6 +1549,16 @@ function setupTabs() {
         if (btnBack) btnBack.style.display = "none";
       }
       
+      // Manage session-tab-active class for whole-window vertical fit
+      if (btn.dataset.tab === "tab-session") {
+        document.documentElement.classList.add("session-tab-active");
+        document.body.classList.add("session-tab-active");
+        updatePersistentHeaderHeight();
+      } else {
+        document.documentElement.classList.remove("session-tab-active");
+        document.body.classList.remove("session-tab-active");
+      }
+
       // Update power context or session UI
       if (btn.dataset.tab === "tab-blueprints") {
           window.activePowerContext = 'blueprints';
@@ -1579,6 +1600,8 @@ function setupTabs() {
 
       document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+      document.documentElement.classList.remove("session-tab-active");
+      document.body.classList.remove("session-tab-active");
       if (tablesContent) tablesContent.classList.add("active");
 
       // Reset tracker & GM state
@@ -2387,6 +2410,8 @@ function setupStatusTracker() {
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
       }
+      if (document.documentElement) document.documentElement.classList.remove("session-tab-active");
+      if (document.body) document.body.classList.remove("session-tab-active");
       if (trackerContent) trackerContent.classList.add("active");
       if (modal) modal.classList.add("active");
 
@@ -4154,6 +4179,8 @@ function setupSessionAndGMHub() {
 
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+    if (document.documentElement) document.documentElement.classList.remove("session-tab-active");
+    if (document.body) document.body.classList.remove("session-tab-active");
 
     if (gmContent) gmContent.classList.add("active");
 
@@ -5906,6 +5933,9 @@ function setupThemeAndFontControls() {
     root.setAttribute("data-theme", nextTheme);
     updateThemeBtnUI(nextTheme);
     localStorage.setItem("mm2e_theme", nextTheme);
+    if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+      SessionNetwork.sendLocalBroadcast({ type: 'THEME_CHANGE', theme: nextTheme });
+    }
   });
 
   if (sliderLabel) {

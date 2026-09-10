@@ -4,13 +4,44 @@
   <meta charset="UTF-8">
   <title>MM2CG — Session Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=41">
+  <script>
+    (function() {
+      function applySavedThemeAndFonts() {
+        const root = document.documentElement;
+        const savedTheme = localStorage.getItem("mm2e_theme") || "light";
+        root.setAttribute("data-theme", savedTheme);
+
+        const savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
+        const savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
+        const savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
+        const savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
+        const savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
+        const savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+
+        root.style.setProperty("--font-size-labels", savedLabelFont + "px");
+        root.style.setProperty("--font-size-controls", savedControlFont + "px");
+        root.style.setProperty("--font-size-tags", savedTagFont + "px");
+        root.style.setProperty("--font-size-links", savedTagFont + "px");
+        root.style.setProperty("--font-size-secondary", savedSecondaryFont + "px");
+        root.style.setProperty("--font-size-minor-controls", savedMinorControlFont + "px");
+        root.style.setProperty("--font-size-fine-print", savedFinePrintFont + "px");
+      }
+      applySavedThemeAndFonts();
+      window.__applySavedThemeAndFonts = applySavedThemeAndFonts;
+      window.addEventListener("storage", function(e) {
+        if (!e.key || e.key.startsWith("mm2e_") || e.key.startsWith("mm4e_")) {
+          applySavedThemeAndFonts();
+        }
+      });
+    })();
+  </script>
   <style>
     body {
       margin: 0;
       padding: 12px;
-      background: var(--bg-app, #18181b);
-      color: var(--text-main, #f4f4f5);
+      background: var(--bg-app);
+      color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
@@ -24,7 +55,7 @@
       justify-content: space-between;
       gap: 8px;
       padding-bottom: 8px;
-      border-bottom: 1px solid var(--border-color, #27272a);
+      border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
     }
     .search-filter-box {

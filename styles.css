@@ -917,9 +917,13 @@ input[type="checkbox"] {
 .row-title {
   width: 140px;
   min-width: 140px;
+  max-width: 140px;
+  box-sizing: border-box;
   font-size: var(--font-size-labels);
   font-weight: bold;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .misc-row-title {
@@ -1635,6 +1639,60 @@ button.row-title-btn.row-title,
   padding: 2px 4px !important;
 }
 
+button.row-title-btn.save-row-title-btn,
+.save-row-title-btn {
+  width: 110px !important;
+  min-width: 110px !important;
+  max-width: 110px !important;
+  box-sizing: border-box !important;
+  padding: 2px 4px !important;
+}
+
+.save-stepper-group {
+  width: calc(var(--font-size-controls) * 6.2) !important;
+  min-width: calc(var(--font-size-controls) * 6.2) !important;
+  max-width: calc(var(--font-size-controls) * 6.2) !important;
+}
+
+.save-stepper-group .stepper-btn {
+  width: calc(var(--font-size-controls) * 1.8) !important;
+  min-width: calc(var(--font-size-controls) * 1.8) !important;
+  max-width: calc(var(--font-size-controls) * 1.8) !important;
+}
+
+.save-stepper-group .stepper-input {
+  width: calc(var(--font-size-controls) * 2.4) !important;
+  min-width: calc(var(--font-size-controls) * 2.4) !important;
+  max-width: calc(var(--font-size-controls) * 2.4) !important;
+  box-sizing: border-box !important;
+}
+
+.save-stepper-spacer {
+  display: inline-flex;
+  height: calc(var(--font-size-controls) * 2.14);
+  min-height: 26px;
+  width: calc(var(--font-size-controls) * 6.2);
+  min-width: calc(var(--font-size-controls) * 6.2);
+  max-width: calc(var(--font-size-controls) * 6.2);
+  margin: 1px 0;
+  box-sizing: border-box;
+  visibility: hidden;
+  flex-shrink: 0;
+}
+
+.defense-row-spacer {
+  display: inline-flex;
+  height: calc(var(--font-size-controls) * 2.14);
+  min-height: 26px;
+  width: calc(var(--font-size-controls) * 6.2 - 30px);
+  min-width: calc(var(--font-size-controls) * 6.2 - 30px);
+  max-width: calc(var(--font-size-controls) * 6.2 - 30px);
+  margin: 1px 0;
+  box-sizing: border-box;
+  visibility: hidden;
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .tracker-body {
     grid-template-columns: 1fr !important;
@@ -1904,11 +1962,19 @@ button.row-title-btn.row-title,
 #tab-session.active {
   display: flex !important;
   flex-direction: column;
-  height: calc(100vh - 128px);
-  min-height: 520px;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  height: calc(100vh - var(--persistent-header-height, 155px));
+  max-height: calc(100vh - var(--persistent-header-height, 155px));
+  min-height: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
   box-sizing: border-box;
+  overflow: hidden;
+}
+
+html.session-tab-active,
+body.session-tab-active {
+  overflow-y: hidden !important;
+  height: 100vh !important;
 }
 
 .session-tab-container {

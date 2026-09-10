@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=40">
+  <link rel="stylesheet" href="styles.css?v=41">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -502,16 +502,16 @@
         <div class="full-width-list">
           <div class="list-row">
             <span class="row-title">Defense Class</span>
-            <div style="width: 110px; min-width: 110px;"></div>
+            <div class="defense-row-spacer"></div>
             <div class="row-adjustments" id="adjDefenseClass">Base (10 + Total Defense)</div>
             <div class="defense-total-col" id="resDefenseClass">10</div>
           </div>
           <div class="list-row">
-            <button type="button" class="row-title-btn row-title" id="btnRollSave_Reflex" onclick="window.rollSaveCheck('Reflex')" title="Roll Reflex Save (1d20 + Reflex)">
+            <button type="button" class="row-title-btn save-row-title-btn" id="btnRollSave_Reflex" onclick="window.rollSaveCheck('Reflex')" title="Roll Reflex Save (1d20 + Reflex)">
               <span style="font-size: var(--font-size-labels);">🎲</span>
               <span>Reflex</span>
             </button>
-            <div class="stepper-group">
+            <div class="stepper-group save-stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputReflex', -1, 0, 20)">−</button>
               <input type="number" id="inputReflex" class="stepper-input" min="0" max="20" value="0">
               <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('inputReflex', 1, 0, 20)">+</button>
@@ -520,20 +520,20 @@
             <div class="defense-total-col" id="resReflex">0</div>
           </div>
           <div class="list-row">
-            <button type="button" class="row-title-btn row-title" id="btnRollSave_Toughness" onclick="window.rollSaveCheck('Toughness')" title="Roll Toughness Save (1d20 + Toughness)">
+            <button type="button" class="row-title-btn save-row-title-btn" id="btnRollSave_Toughness" onclick="window.rollSaveCheck('Toughness')" title="Roll Toughness Save (1d20 + Toughness)">
               <span style="font-size: var(--font-size-labels);">🎲</span>
               <span>Toughness</span>
             </button>
-            <div style="width: 110px; min-width: 110px;"></div>
+            <div class="save-stepper-spacer"></div>
             <div class="row-adjustments" id="adjToughness">Base CON</div>
             <div class="defense-total-col" id="resToughness">0</div>
           </div>
           <div class="list-row">
-            <button type="button" class="row-title-btn row-title" id="btnRollSave_Fortitude" onclick="window.rollSaveCheck('Fortitude')" title="Roll Fortitude Save (1d20 + Fortitude)">
+            <button type="button" class="row-title-btn save-row-title-btn" id="btnRollSave_Fortitude" onclick="window.rollSaveCheck('Fortitude')" title="Roll Fortitude Save (1d20 + Fortitude)">
               <span style="font-size: var(--font-size-labels);">🎲</span>
               <span>Fortitude</span>
             </button>
-            <div class="stepper-group">
+            <div class="stepper-group save-stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputFort', -1, 0, 20)">−</button>
               <input type="number" id="inputFort" class="stepper-input" min="0" max="20" value="0">
               <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('inputFort', 1, 0, 20)">+</button>
@@ -542,11 +542,11 @@
             <div class="defense-total-col" id="resFortitude">0</div>
           </div>
           <div class="list-row">
-            <button type="button" class="row-title-btn row-title" id="btnRollSave_Will" onclick="window.rollSaveCheck('Will')" title="Roll Will Save (1d20 + Will)">
+            <button type="button" class="row-title-btn save-row-title-btn" id="btnRollSave_Will" onclick="window.rollSaveCheck('Will')" title="Roll Will Save (1d20 + Will)">
               <span style="font-size: var(--font-size-labels);">🎲</span>
               <span>Will</span>
             </button>
-            <div class="stepper-group">
+            <div class="stepper-group save-stepper-group">
               <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('inputWill', -1, 0, 20)">−</button>
               <input type="number" id="inputWill" class="stepper-input" min="0" max="20" value="0">
               <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('inputWill', 1, 0, 20)">+</button>
@@ -556,7 +556,7 @@
           </div>
           <div class="list-row">
             <span class="row-title">Total Defense</span>
-            <div style="width: 110px; min-width: 110px;"></div>
+            <div class="defense-row-spacer"></div>
             <div class="row-adjustments" id="adjTotalDef">Base DEF + Dodge Focus Feat</div>
             <div class="defense-total-col" id="resTotalDef">0</div>
             <!-- Hidden backward-compatibility elements -->
@@ -565,7 +565,7 @@
           </div>
           <div class="list-row">
             <span class="row-title">Flat-Footed Defense</span>
-            <div style="width: 110px; min-width: 110px;"></div>
+            <div class="defense-row-spacer"></div>
             <div class="row-adjustments" id="adjFlatFootedDef">Base DEF (No Dodge bonus)</div>
             <div class="defense-total-col" id="resFlatFootedDef">0</div>
             <!-- Hidden backward-compatibility elements -->
@@ -869,18 +869,18 @@
       
       <!-- TOP SECTION: PARTY & USER TRACKER (Visible to all by default, lengthens dynamically) -->
       <div id="sessionPartyTrackerCard" class="tracker-card session-party-tracker" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; flex-shrink: 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; flex-wrap: wrap; gap: 6px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; gap: 8px; width: 100%; box-sizing: border-box;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px; color: var(--accent-primary); white-space: nowrap;">
               🛡️ Party Display
             </strong>
-            <span class="secondary-text" style="font-size: var(--font-size-fine-print);">(Damage tracks &amp; conditions visible to all • Click character name for actions)</span>
+            <span class="secondary-text" style="font-size: var(--font-size-fine-print); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">(Damage tracks &amp; conditions visible to all • Click character name for actions)</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
             <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">Offline</span>
             <button type="button" class="btn btn-secondary" id="btnToggleLoginBar" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="User name and campaign login">👤 Login / Room ▾</button>
             <button type="button" class="btn btn-secondary" id="btnToggleSilentMode" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="Mute/unmute local roll output to others">📡 Broadcast: ON</button>
-            <button type="button" class="btn btn-secondary" id="btnPopoutPartyDisplay" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print); display: inline-flex; align-items: center; gap: 4px;" title="Pop out Party Display in separate window">↗ Pop Out</button>
+            <button type="button" class="btn btn-secondary" id="btnPopoutPartyDisplay" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print); display: inline-flex; align-items: center; gap: 4px; margin-left: 6px;" title="Pop out Party Display in separate window">↗ Pop Out</button>
           </div>
         </div>
 
@@ -921,7 +921,7 @@
       </div>
 
       <!-- BOTTOM SECTION: DISCORD / ROLL20-STYLE TABLETOP CHAT & LOG -->
-      <div id="sessionChatSection" class="session-chat-section" style="display: flex; flex-direction: column; flex: 1; min-height: 320px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
+      <div id="sessionChatSection" class="session-chat-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
         
         <!-- Chat & Log Top Header Bar -->
         <div class="session-chat-header" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 6px 12px; flex-wrap: wrap; gap: 8px;">
@@ -945,7 +945,7 @@
         </div>
 
         <!-- Continuous Discord/Roll20-Style Single-Line Log Container (auto-scrolls down) -->
-        <div id="sessionLogFeedContainer" style="flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-main); min-height: 200px;">
+        <div id="sessionLogFeedContainer" style="flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-main); min-height: 0;">
           <div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-fine-print); margin-top: 32px; font-style: italic;">
             No rolls or messages recorded yet. Type below or roll from your sheet!
           </div>
@@ -2085,15 +2085,15 @@
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=7"></script>
+  <script src="session_network.js?v=8"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=101"></script>
+  <script src="app.js?v=102"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=47').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=48').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

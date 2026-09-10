@@ -44,7 +44,10 @@
     onGMTransfer: [],
     onDuplicateLoginAttempt: [],
     onTokenMismatch: [],
-    onPopoutDocked: []
+    onPopoutDocked: [],
+    onPartyAction: [],
+    onPartyRosterHtml: [],
+    onPartyReqRoster: []
   };
 
   function initBroadcastChannel() {
@@ -153,7 +156,28 @@
         break;
 
       case 'POPOUT_DOCKED':
+      case 'PARTY_DISPLAY_DOCKED':
         emit('onPopoutDocked', packet);
+        break;
+
+      case 'PARTY_ACTION':
+        emit('onPartyAction', packet);
+        break;
+
+      case 'PARTY_ROSTER_HTML':
+        emit('onPartyRosterHtml', packet);
+        break;
+
+      case 'PARTY_REQ_ROSTER':
+        emit('onPartyReqRoster', packet);
+        break;
+
+      case 'PARTY_BOUNDS_UPDATE':
+        if (packet.bounds) {
+          try {
+            localStorage.setItem('mm2e_party_display_bounds', JSON.stringify(packet.bounds));
+          } catch (e) {}
+        }
         break;
 
       case 'ROLL':

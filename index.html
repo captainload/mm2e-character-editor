@@ -2085,15 +2085,15 @@
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=6"></script>
+  <script src="session_network.js?v=7"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=100"></script>
+  <script src="app.js?v=101"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=46').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=47').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

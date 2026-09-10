@@ -2894,6 +2894,20 @@ function setupSessionAndGMHub() {
       if (typeof redockPartyDisplay === 'function') redockPartyDisplay();
     });
 
+    SessionNetwork.addEventListener("onPartyAction", (packet) => {
+      if (packet && packet.action && typeof window[packet.action] === 'function') {
+        try {
+          window[packet.action](...(packet.args || []));
+        } catch (e) {
+          console.error("Error executing party action:", packet.action, e);
+        }
+      }
+    });
+
+    SessionNetwork.addEventListener("onPartyReqRoster", () => {
+      syncPartyRosterUI();
+    });
+
     SessionNetwork.addEventListener("onGMStatusOverride", (packet) => {
       if (typeof char !== 'undefined' && char) {
         if (!char.trackerState) char.trackerState = { conditions: {}, customPoints: [], fadesTrackers: [] };
@@ -3671,6 +3685,11 @@ function setupSessionAndGMHub() {
         if (popTable) popTable.innerHTML = rowsHtml;
       }
     } catch (e) {}
+    try {
+      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+        SessionNetwork.sendLocalBroadcast({ type: 'PARTY_ROSTER_HTML', html: rowsHtml });
+      }
+    } catch (e) {}
   }
   window.syncPartyRosterUI = syncPartyRosterUI;
   window.syncGMRosterUI = syncPartyRosterUI; // Backwards compatible alias
@@ -3805,9 +3824,12 @@ function setupSessionAndGMHub() {
 
   function openPartyDisplayPopout() {
     const bounds = getSavedPartyDisplayBounds();
-    const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},resizable=yes,scrollbars=yes`;
+    const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
     poppedOutPartyWindow = window.open("party_window.html", "MM2CG_PartyDisplay", features);
     updatePartyDisplayDockMode(true);
+    setTimeout(() => {
+      syncPartyRosterUI();
+    }, 250);
   }
   window.openPartyDisplayPopout = openPartyDisplayPopout;
 

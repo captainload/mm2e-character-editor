@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Party Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=40">
   <style>
     body {
       margin: 0;
@@ -52,7 +52,7 @@
       <span class="badge" id="lblPartyWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
-      <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplayWindow" style="height: 26px; padding: 0 10px; font-size: var(--font-size-fine-print, 12px); font-weight: 600;">
+      <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplayWindow" onclick="window.redockPartyDisplayWindow()" style="height: 26px; padding: 0 10px; font-size: var(--font-size-fine-print, 12px); font-weight: 600; cursor: pointer;">
         ⬅ Re-dock
       </button>
     </div>
@@ -77,55 +77,183 @@
   </div>
 
   <!-- Scripts -->
-  <script src="dice_notation.js"></script>
-  <script src="campaign_manager.js"></script>
-  <script src="session_network.js"></script>
+  <script src="dice_notation.js?v=3"></script>
+  <script src="campaign_manager.js?v=7"></script>
+  <script src="session_network.js?v=6"></script>
   <script>
     const STORAGE_KEY_BOUNDS = 'mm2e_party_display_bounds';
 
-    // BroadcastChannel synchronization
-    let broadcastChannel = null;
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        broadcastChannel = new BroadcastChannel('MM2CG_Session');
-        broadcastChannel.onmessage = (event) => {
-          const packet = event.data;
-          if (!packet || !packet.type) return;
-          if (packet.type === 'CONDITION_UPDATE' ||
-              packet.type === 'ROLL' ||
-              packet.type === 'HERO_POINT_SPENT' ||
-              packet.type === 'ROSTER_UPDATE' ||
-              packet.type === 'STATE_SYNC' ||
-              packet.type === 'PARTY_DISPLAY_SYNC') {
-            syncPartyFromOpenerOrLocal();
+    // ==========================================
+    // 1. RE-DOCKING LOGIC (Declared first so it's always ready)
+    // ==========================================
+    function redockPartyDisplayWindow() {
+      saveWindowBounds();
+
+      // 1. Broadcast docking notification over mm2e_session_channel
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'PARTY_DISPLAY_DOCKED' });
+          SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('mm2e_session_channel');
+          bc.postMessage({ type: 'PARTY_DISPLAY_DOCKED' });
+          bc.postMessage({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+
+      // 2. Safe call to opener if permitted
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
+          window.opener.redockPartyDisplay();
+        }
+      } catch (e) {}
+
+      // 3. Always close this window
+      try {
+        window.close();
+      } catch (e) {}
+    }
+    window.redockPartyDisplayWindow = redockPartyDisplayWindow;
+    window.redockWindow = redockPartyDisplayWindow;
+
+    const btnRedock = document.getElementById('btnRedockPartyDisplayWindow');
+    if (btnRedock) {
+      btnRedock.addEventListener('click', redockPartyDisplayWindow);
+    }
+
+    // ==========================================
+    // 2. BOUNDS PERSISTENCE (Size & Position)
+    // ==========================================
+    function saveWindowBounds() {
+      try {
+        const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+        const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+        const width = window.outerWidth || window.innerWidth;
+        const height = window.outerHeight || window.innerHeight;
+
+        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
+          const bounds = { left, top, width, height };
+          localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
+          try {
+            if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+              SessionNetwork.sendLocalBroadcast({ type: 'PARTY_BOUNDS_UPDATE', bounds });
+            }
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    window.saveWindowBounds = saveWindowBounds;
+
+    function restoreWindowBounds() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 200 && b.height >= 150) {
+            if (window.outerWidth !== b.width || window.outerHeight !== b.height) {
+              try { window.resizeTo(b.width, b.height); } catch (e) {}
+            }
           }
-        };
-      }
-    } catch (e) {
-      console.warn('BroadcastChannel error in Party Display:', e);
+          if (typeof b.left === 'number' && typeof b.top === 'number') {
+            if (window.screenX !== b.left || window.screenY !== b.top) {
+              try { window.moveTo(b.left, b.top); } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {}
     }
 
-    // Call opener action or fallback
-    function callOpenerOrLocal(fnName, ...args) {
-      if (window.opener && !window.opener.closed && typeof window.opener[fnName] === 'function') {
-        const res = window.opener[fnName](...args);
-        syncPartyFromOpenerOrLocal();
-        return res;
+    // Restore bounds immediately and on load
+    restoreWindowBounds();
+    window.addEventListener('DOMContentLoaded', restoreWindowBounds);
+    window.addEventListener('load', restoreWindowBounds);
+
+    // Track resize
+    window.addEventListener('resize', () => {
+      clearTimeout(window._resTimer);
+      window._resTimer = setTimeout(saveWindowBounds, 200);
+    });
+
+    // Periodic poll for position changes (handling user dragging the window)
+    setInterval(() => {
+      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+      const width = window.outerWidth || window.innerWidth;
+      const height = window.outerHeight || window.innerHeight;
+
+      if (!window._lastBounds ||
+          window._lastBounds.left !== left ||
+          window._lastBounds.top !== top ||
+          window._lastBounds.width !== width ||
+          window._lastBounds.height !== height) {
+        window._lastBounds = { left, top, width, height };
+        saveWindowBounds();
       }
+    }, 500);
+
+    window.addEventListener('beforeunload', () => {
+      saveWindowBounds();
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'PARTY_DISPLAY_DOCKED' });
+          SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
+          window.opener.redockPartyDisplay();
+        }
+      } catch (e) {}
+    });
+
+    window.addEventListener('unload', saveWindowBounds);
+    window.addEventListener('pagehide', saveWindowBounds);
+
+    // ==========================================
+    // 3. TWO-WAY ACTION FORWARDING & LIVE SYNC
+    // ==========================================
+    function callOpenerOrBroadcast(fnName, ...args) {
+      // 1. Try opener directly if accessible
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener[fnName] === 'function') {
+          const res = window.opener[fnName](...args);
+          syncPartyFromOpenerOrLocal();
+          return res;
+        }
+      } catch (e) {}
+
+      // 2. Broadcast action to main window
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'PARTY_ACTION', action: fnName, args: args });
+        }
+      } catch (e) {}
+      syncPartyFromOpenerOrLocal();
     }
 
-    window.gmToggleCondition = (id, isNpc, cond) => callOpenerOrLocal('gmToggleCondition', id, isNpc, cond);
-    window.gmAddConditionSelect = (id, isNpc, selectElem) => callOpenerOrLocal('gmAddConditionSelect', id, isNpc, selectElem);
-    window.gmClearAllConditions = (id, isNpc) => callOpenerOrLocal('gmClearAllConditions', id, isNpc);
-    window.gmStepDamage = (id, type, delta, isNpc) => callOpenerOrLocal('gmStepDamage', id, type, delta, isNpc);
-    window.sessionSpendHeroPoint = (id) => callOpenerOrLocal('sessionSpendHeroPoint', id);
-    window.rollInitiativeCheck = () => callOpenerOrLocal('rollInitiativeCheck');
-    window.gmTogglePlayerSilentBtn = (id) => callOpenerOrLocal('gmTogglePlayerSilentBtn', id);
-    window.gmPullSheet = (id) => callOpenerOrLocal('gmPullSheet', id);
-    window.gmPushCurrentSheet = (id) => callOpenerOrLocal('gmPushCurrentSheet', id);
-    window.gmLoadNpcToEditor = (id) => callOpenerOrLocal('gmLoadNpcToEditor', id);
-    window.gmExportCharSheet = (id) => callOpenerOrLocal('gmExportCharSheet', id);
-    window.gmOpenCharHistory = (id) => callOpenerOrLocal('gmOpenCharHistory', id);
+    window.gmToggleCondition = (id, isNpc, cond) => callOpenerOrBroadcast('gmToggleCondition', id, isNpc, cond);
+    window.gmAddConditionSelect = (id, isNpc, selectElem) => {
+      const val = selectElem ? selectElem.value : null;
+      if (val) {
+        callOpenerOrBroadcast('gmToggleCondition', id, isNpc, val);
+        selectElem.selectedIndex = 0;
+      }
+    };
+    window.gmClearAllConditions = (id, isNpc) => callOpenerOrBroadcast('gmClearAllConditions', id, isNpc);
+    window.gmStepDamage = (id, type, delta, isNpc) => callOpenerOrBroadcast('gmStepDamage', id, type, delta, isNpc);
+    window.gmStepBruises = (id, isNpc, condName, delta) => callOpenerOrBroadcast('gmStepBruises', id, isNpc, condName, delta);
+    window.sessionSpendHeroPoint = (id) => callOpenerOrBroadcast('sessionSpendHeroPoint', id);
+    window.rollInitiativeCheck = () => callOpenerOrBroadcast('rollInitiativeCheck');
+    window.gmTogglePlayerSilentBtn = (id) => callOpenerOrBroadcast('gmTogglePlayerSilentBtn', id);
+    window.gmPullSheet = (id) => callOpenerOrBroadcast('gmPullSheet', id);
+    window.gmPushCurrentSheet = (id) => callOpenerOrBroadcast('gmPushCurrentSheet', id);
+    window.gmLoadNpcToEditor = (id) => callOpenerOrBroadcast('gmLoadNpcToEditor', id);
+    window.gmExportCharSheet = (id) => callOpenerOrBroadcast('gmExportCharSheet', id);
+    window.gmOpenCharHistory = (id) => callOpenerOrBroadcast('gmOpenCharHistory', id);
 
     // Dropdown menu handling
     window.gmToggleCharMenu = function(e, id) {
@@ -144,122 +272,46 @@
       const tableRoster = document.getElementById('tbodySessionPartyRoster');
       if (!tableRoster) return;
 
-      if (window.opener && !window.opener.closed) {
-        if (typeof window.opener.syncPartyRosterUI === 'function') {
-          try {
-            window.opener.syncPartyRosterUI();
-          } catch (e) {}
-        }
-        const openerTbody = window.opener.document ? window.opener.document.getElementById('tbodySessionPartyRoster') : null;
-        if (openerTbody && openerTbody.innerHTML) {
-          tableRoster.innerHTML = openerTbody.innerHTML;
-          return;
-        }
-      }
-
-      // Fallback: If no opener, render from CampaignManager
-      if (typeof CampaignManager !== 'undefined') {
-        const camp = CampaignManager.getActiveCampaign();
-        if (camp) {
-          const npcs = camp.npcs || [];
-          const players = camp.acceptedPlayers || [];
-          if (npcs.length === 0 && players.length === 0) {
-            tableRoster.innerHTML = `
-              <tr style="border-bottom: 1px dashed var(--border-color); height: 44px; opacity: 0.5;">
-                <td colspan="5" style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px; font-style: italic;">
-                  No characters in party.
-                </td>
-              </tr>
-            `;
+      // 1. Try reading from opener safely
+      try {
+        if (window.opener && !window.opener.closed && window.opener.document) {
+          const openerTbody = window.opener.document.getElementById('tbodySessionPartyRoster');
+          if (openerTbody && openerTbody.innerHTML && openerTbody.innerHTML.trim().length > 0) {
+            tableRoster.innerHTML = openerTbody.innerHTML;
+            return;
           }
         }
-      }
+      } catch (e) {}
+
+      // 2. Request fresh HTML from main window via broadcast
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'PARTY_REQ_ROSTER' });
+        }
+      } catch (e) {}
+    }
+
+    // Initialize BroadcastChannel via SessionNetwork
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.initBroadcastChannel();
+
+      SessionNetwork.addEventListener('onPartyRosterHtml', (packet) => {
+        if (packet && packet.html) {
+          const tableRoster = document.getElementById('tbodySessionPartyRoster');
+          if (tableRoster) tableRoster.innerHTML = packet.html;
+        }
+      });
+
+      SessionNetwork.addEventListener('onConditionUpdate', () => syncPartyFromOpenerOrLocal());
+      SessionNetwork.addEventListener('onRoll', () => syncPartyFromOpenerOrLocal());
+      SessionNetwork.addEventListener('onHeroPointSpent', () => syncPartyFromOpenerOrLocal());
+      SessionNetwork.addEventListener('onRosterUpdate', () => syncPartyFromOpenerOrLocal());
+      SessionNetwork.addEventListener('onStateSync', () => syncPartyFromOpenerOrLocal());
     }
 
     // Initial render and interval sync
     syncPartyFromOpenerOrLocal();
     setInterval(syncPartyFromOpenerOrLocal, 2000);
-
-    // --- Bounds Management (Remember size and position) ---
-    function saveWindowBounds() {
-      try {
-        const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-        const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-        const width = window.outerWidth || window.innerWidth;
-        const height = window.outerHeight || window.innerHeight;
-
-        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
-          localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify({ left, top, width, height }));
-        }
-      } catch (e) {}
-    }
-
-    function restoreWindowBounds() {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
-        if (saved) {
-          const b = JSON.parse(saved);
-          if (b.width && b.height && (window.outerWidth !== b.width || window.outerHeight !== b.height)) {
-            try { window.resizeTo(b.width, b.height); } catch (e) {}
-          }
-          if (typeof b.left === 'number' && typeof b.top === 'number' && (window.screenX !== b.left || window.screenY !== b.top)) {
-            try { window.moveTo(b.left, b.top); } catch (e) {}
-          }
-        }
-      } catch (e) {}
-    }
-
-    restoreWindowBounds();
-
-    window.addEventListener('resize', () => {
-      clearTimeout(window._resTimer);
-      window._resTimer = setTimeout(saveWindowBounds, 250);
-    });
-
-    setInterval(() => {
-      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-      const width = window.outerWidth || window.innerWidth;
-      const height = window.outerHeight || window.innerHeight;
-
-      if (!window._lastBounds ||
-          window._lastBounds.left !== left ||
-          window._lastBounds.top !== top ||
-          window._lastBounds.width !== width ||
-          window._lastBounds.height !== height) {
-        window._lastBounds = { left, top, width, height };
-        saveWindowBounds();
-      }
-    }, 1000);
-
-    // Re-docking logic
-    const btnRedock = document.getElementById('btnRedockPartyDisplayWindow');
-    if (btnRedock) {
-      btnRedock.addEventListener('click', redockWindow);
-    }
-
-    function redockWindow() {
-      saveWindowBounds();
-      if (broadcastChannel) {
-        try { broadcastChannel.postMessage({ type: 'PARTY_DISPLAY_DOCKED' }); } catch (e) {}
-      }
-      if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
-        try { window.opener.redockPartyDisplay(); } catch (e) {}
-      }
-      window.close();
-    }
-
-    window.addEventListener('beforeunload', () => {
-      saveWindowBounds();
-      if (broadcastChannel) {
-        try { broadcastChannel.postMessage({ type: 'PARTY_DISPLAY_DOCKED' }); } catch (e) {}
-      }
-      if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
-        try { window.opener.redockPartyDisplay(); } catch (e) {}
-      }
-    });
-
-    window.addEventListener('unload', saveWindowBounds);
   </script>
 </body>
 </html>

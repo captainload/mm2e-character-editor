@@ -2761,6 +2761,12 @@ function setupSessionAndGMHub() {
   const selGMCamps = document.getElementById("selGMCampaigns");
   const btnGMNewCamp = document.getElementById("btnGMNewCampaign");
   const btnGMCopyLink = document.getElementById("btnGMCopyPlayerLink");
+  const btnGMManageUsers = document.getElementById("btnGMManageUsers");
+  const modalCampaignUsers = document.getElementById("campaignUsersModal");
+  const txtNewUserName = document.getElementById("txtNewCampaignUserName");
+  const btnAddNewUser = document.getElementById("btnAddNewCampaignUser");
+  const txtGMName = document.getElementById("txtUsersModalGMName");
+  const btnSaveGMName = document.getElementById("btnSaveUsersModalGMName");
   const lblActiveCampCode = document.getElementById("lblGMActiveCampCode");
   const btnGMExport = document.getElementById("btnGMExportCampaign");
   const btnGMImport = document.getElementById("btnGMImportCampaign");
@@ -2900,36 +2906,37 @@ function setupSessionAndGMHub() {
     if (!lblStatus) return;
 
     if (status === "connected") {
-      lblStatus.textContent = "🟢 Connected";
+      lblStatus.textContent = "🟢 Logged In";
       lblStatus.style.borderColor = "#10b981";
       lblStatus.style.color = "#10b981";
       lblStatus.style.background = "rgba(16, 185, 129, 0.15)";
       if (btnConnect) {
-        btnConnect.textContent = "Disconnect";
+        btnConnect.textContent = "🚪 Log Out";
         btnConnect.classList.remove("btn-primary");
         btnConnect.classList.add("btn-secondary");
       }
-      if (lblMsg) lblMsg.textContent = info?.detail || "Joined campaign.";
+      if (lblMsg) lblMsg.textContent = info?.detail || "Logged into campaign.";
     } else if (status === "waiting_approval") {
       lblStatus.textContent = "🟡 Waiting Approval";
       lblStatus.style.borderColor = "#f59e0b";
       lblStatus.style.color = "#f59e0b";
       lblStatus.style.background = "rgba(245, 158, 11, 0.15)";
-      if (btnConnect) btnConnect.textContent = "Cancel Request";
-      if (lblMsg) lblMsg.textContent = info?.detail || "Waiting for GM...";
+      if (btnConnect) btnConnect.textContent = "✕ Cancel Login";
+      if (lblMsg) lblMsg.textContent = info?.detail || "Waiting for GM to approve...";
     } else if (status === "connecting") {
-      lblStatus.textContent = "🔵 Connecting...";
+      lblStatus.textContent = "🔵 Logging In...";
       lblStatus.style.borderColor = "#0284c7";
       lblStatus.style.color = "#0284c7";
       lblStatus.style.background = "rgba(2, 132, 199, 0.15)";
+      if (btnConnect) btnConnect.textContent = "✕ Cancel";
       if (lblMsg) lblMsg.textContent = info?.detail || "Connecting...";
     } else {
-      lblStatus.textContent = "⚪ Offline";
+      lblStatus.textContent = "⚪ Logged Out / Standby";
       lblStatus.style.borderColor = "var(--border-color)";
       lblStatus.style.color = "var(--text-muted)";
       lblStatus.style.background = "var(--bg-panel)";
       if (btnConnect) {
-        btnConnect.textContent = "Connect to Campaign";
+        btnConnect.textContent = "🔑 Log In";
         btnConnect.classList.add("btn-primary");
         btnConnect.classList.remove("btn-secondary");
       }
@@ -3056,10 +3063,27 @@ function setupSessionAndGMHub() {
         return;
       }
 
-      const pName = txtPlayerName?.value?.trim() || "Player";
+      const pName = txtPlayerName?.value?.trim() || "";
+      if (!pName) {
+        if (typeof showToast === 'function') {
+          showToast("Please enter your user name to log into the campaign.", "warning");
+        } else {
+          alert("Please enter your user name to log into the campaign.");
+        }
+        if (txtPlayerName) txtPlayerName.focus();
+        return;
+      }
+
       const cCode = txtCampCode?.value?.trim() || "default";
       localStorage.setItem("mm2e_player_name", pName);
       localStorage.setItem("mm2e_last_campaign_code", cCode);
+      if (typeof char !== 'undefined' && char) {
+        char.playerName = pName;
+      }
+      const pInput = document.getElementById("playerNameInput");
+      if (pInput && pInput.value !== pName) {
+        pInput.value = pName;
+      }
 
       SessionNetwork.joinHost(cCode, {
         playerName: pName,
@@ -3069,6 +3093,24 @@ function setupSessionAndGMHub() {
           defense: char?.combat?.DEF || 0
         }
       });
+    });
+  }
+
+  // Bi-directional user name sync from Session Tab input to Character Sheet & Storage
+  if (txtPlayerName) {
+    txtPlayerName.addEventListener("input", (e) => {
+      const val = e.target.value.slice(0, 45);
+      localStorage.setItem("mm2e_player_name", val);
+      if (typeof char !== 'undefined' && char) {
+        char.playerName = val;
+      }
+      const pInput = document.getElementById("playerNameInput");
+      if (pInput && pInput.value !== val) {
+        pInput.value = val;
+      }
+      if (typeof syncGMRosterUI === 'function') {
+        syncGMRosterUI();
+      }
     });
   }
 
@@ -3349,6 +3391,11 @@ function setupSessionAndGMHub() {
       lblActiveCampCode.textContent = activeCamp.code || "campaign-1";
     }
 
+    const lblGMUserCount = document.getElementById("lblGMUserCount");
+    if (lblGMUserCount) {
+      lblGMUserCount.textContent = CampaignManager.getAuthorizedUsers().length;
+    }
+
     renderGMJoinRequests();
     syncGMRosterUI();
   }
@@ -3411,13 +3458,15 @@ function setupSessionAndGMHub() {
 
     // Current local hero
     if (char && char.name) {
+      const isDesignatedGM = designatedGMId === "local_player";
+      const localUserName = (char.playerName && char.playerName.trim()) || localStorage.getItem("mm2e_player_name") || (isDesignatedGM ? (CampaignManager.getGMUserName() || "GM") : "You");
       roster.push({
         id: "local_hero",
         isLocal: true,
         isNPC: false,
-        isGM: designatedGMId === "local_player",
+        isGM: isDesignatedGM,
         sheetHistoryCount: 1,
-        playerName: "You (Local Sheet)",
+        playerName: `${localUserName} (Local Sheet)`,
         characterName: char.name,
         powerLevel: char.powerLevel || 10,
         defense: char.combat?.DEF || 0,
@@ -3891,7 +3940,8 @@ function setupSessionAndGMHub() {
 
       const name = prompt("Enter new campaign name:", "New Campaign");
       if (name && typeof CampaignManager !== 'undefined') {
-        const c = CampaignManager.createCampaign(name, null, 'local_player');
+        const gmDefaultName = (char && char.playerName) || localStorage.getItem("mm2e_player_name") || "GM";
+        const c = CampaignManager.createCampaign(name, null, 'local_player', gmDefaultName);
         syncGMUI();
         if (typeof showToast === 'function') showToast(`Created campaign ${c.name}!`, "success");
       }
@@ -3928,6 +3978,151 @@ function setupSessionAndGMHub() {
           prompt("Campaign Code for Players to Join:", campCode);
         }
       }
+    });
+  }
+
+  // --- Campaign Authorized Users Management UI ---
+  function openCampaignUsersModal() {
+    if (!modalCampaignUsers || typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    const lblCampName = document.getElementById("lblUsersModalCampName");
+    const lblCampCode = document.getElementById("lblUsersModalCampCode");
+    if (lblCampName) lblCampName.textContent = camp.name || "Campaign";
+    if (lblCampCode) lblCampCode.textContent = camp.code || "code";
+    if (txtGMName) txtGMName.value = CampaignManager.getGMUserName() || "";
+
+    renderCampaignUsersList();
+    modalCampaignUsers.classList.add("active");
+    if (txtNewUserName) {
+      txtNewUserName.value = "";
+      txtNewUserName.focus();
+    }
+  }
+  window.openCampaignUsersModal = openCampaignUsersModal;
+
+  function renderCampaignUsersList() {
+    const modalBody = document.getElementById("campaignUsersModalBody");
+    const lblSummary = document.getElementById("lblCampaignUsersSummary");
+    const lblGMUserCount = document.getElementById("lblGMUserCount");
+    if (!modalBody || typeof CampaignManager === 'undefined') return;
+
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    const users = CampaignManager.getAuthorizedUsers();
+    if (lblGMUserCount) lblGMUserCount.textContent = users.length;
+    if (lblSummary) lblSummary.textContent = `${users.length} authorized user${users.length === 1 ? '' : 's'}`;
+
+    if (users.length === 0) {
+      modalBody.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 24px; font-style: italic;">
+          No authorized user names added yet.<br>
+          Enter user names above to allow players to log into this campaign automatically.
+        </div>
+      `;
+      return;
+    }
+
+    const connectedClients = (typeof SessionNetwork !== 'undefined') ? SessionNetwork.getClientConnections() : [];
+
+    const rowsHtml = users.map(u => {
+      // Check if user is currently online/connected
+      const matchingAccepted = (camp.acceptedPlayers || []).find(p => (p.playerName || '').toLowerCase() === (u.userName || '').toLowerCase());
+      const isOnline = matchingAccepted && connectedClients.some(c => c.peerId === matchingAccepted.id);
+      const isLocalUser = char && char.playerName && char.playerName.toLowerCase() === u.userName.toLowerCase();
+
+      let statusBadge = `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: 11px;">⚪ Awaiting Login</span>`;
+      if (isOnline || isLocalUser) {
+        statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px;">🟢 Logged In</span>`;
+      } else if (matchingAccepted) {
+        statusBadge = `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid #0284c7; font-size: 11px;">🟡 Known (Offline)</span>`;
+      }
+
+      const charName = u.lastCharacter || matchingAccepted?.characterName || '—';
+      const addedDate = u.addedAt ? new Date(u.addedAt).toLocaleDateString() : '—';
+      const safeUserName = u.userName.replace(/'/g, "\\'");
+
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap;">
+            <span style="font-weight: 700; font-size: 13px; color: var(--accent-primary); min-width: 120px;">
+              👤 ${u.userName}
+            </span>
+            ${statusBadge}
+            <span style="font-size: 12px; color: var(--text-muted);">
+              Character: <strong style="color: var(--text-main);">${charName}</strong>
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted);" title="Added: ${u.addedAt || ''}">${addedDate}</span>
+            <button type="button" class="btn btn-secondary" style="height: 24px; padding: 0 8px; font-size: 11px; color: #ef4444;" title="Remove this authorized user" onclick="window.gmRemoveAuthorizedUserClick('${safeUserName}')">🗑 Remove</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    modalBody.innerHTML = rowsHtml;
+  }
+  window.renderCampaignUsersList = renderCampaignUsersList;
+
+  window.gmRemoveAuthorizedUserClick = function(userName) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (confirm(`Remove "${userName}" from the authorized users list?`)) {
+      CampaignManager.removeAuthorizedUser(userName);
+      renderCampaignUsersList();
+      syncGMUI();
+      if (typeof showToast === 'function') showToast(`Removed user "${userName}".`, "info");
+    }
+  };
+
+  if (btnGMManageUsers) {
+    btnGMManageUsers.addEventListener("click", () => {
+      openCampaignUsersModal();
+    });
+  }
+
+  if (btnAddNewUser) {
+    const handleAdd = () => {
+      if (!txtNewUserName || typeof CampaignManager === 'undefined') return;
+      const val = txtNewUserName.value.trim();
+      if (!val) {
+        if (typeof showToast === 'function') showToast("Please enter a user name to authorize.", "warning");
+        txtNewUserName.focus();
+        return;
+      }
+      const res = CampaignManager.addAuthorizedUser(val);
+      if (res.success) {
+        txtNewUserName.value = "";
+        renderCampaignUsersList();
+        syncGMUI();
+        if (typeof showToast === 'function') showToast(`Authorized user "${val}" for this campaign!`, "success");
+        txtNewUserName.focus();
+      } else {
+        if (typeof showToast === 'function') showToast(res.error || "Could not add user.", "error");
+        else alert(res.error);
+      }
+    };
+    btnAddNewUser.addEventListener("click", handleAdd);
+    if (txtNewUserName) {
+      txtNewUserName.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleAdd();
+        }
+      });
+    }
+  }
+
+  if (btnSaveGMName && txtGMName) {
+    btnSaveGMName.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const gmName = txtGMName.value.trim() || "GM";
+      CampaignManager.setGMUserName(gmName);
+      if (typeof showToast === 'function') showToast(`GM user name set to "${gmName}".`, "success");
+      syncGMUI();
+      syncGMRosterUI();
     });
   }
 
@@ -4439,7 +4634,7 @@ function setupSessionAndGMHub() {
     }
   }
 
-  // Auto-connect check from URL query parameter
+  // Auto-connect / invite check from URL query parameter
   if (typeof window !== 'undefined' && window.location) {
     const urlParams = new URLSearchParams(window.location.search);
     const qCamp = urlParams.get("campaign") || urlParams.get("room");
@@ -4447,6 +4642,20 @@ function setupSessionAndGMHub() {
       const pName = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
       if (txtPlayerName) txtPlayerName.value = pName;
       if (txtCampCode) txtCampCode.value = qCamp;
+
+      // Switch to session tab so player sees the campaign login immediately
+      setTimeout(() => {
+        const sessionTabBtn = document.querySelector('.tab-btn[data-tab="tab-session"]');
+        if (sessionTabBtn && !sessionTabBtn.classList.contains("active")) {
+          sessionTabBtn.click();
+        }
+        if (!pName && txtPlayerName) {
+          txtPlayerName.focus();
+          if (typeof showToast === 'function') {
+            showToast(`Campaign invite detected (${qCamp})! Enter your user name to log in.`, "info");
+          }
+        }
+      }, 350);
     }
   }
 }
@@ -4822,6 +5031,14 @@ function buildAbilitiesUI() {
   });
   document.getElementById("playerNameInput").addEventListener("input", (e) => {
     char.playerName = e.target.value.slice(0, 45);
+    localStorage.setItem("mm2e_player_name", char.playerName);
+    const sessionNameInput = document.getElementById("txtSessionPlayerName");
+    if (sessionNameInput && sessionNameInput.value !== char.playerName) {
+      sessionNameInput.value = char.playerName;
+    }
+    if (typeof syncGMRosterUI === 'function') {
+      syncGMRosterUI();
+    }
     if (!window.isCharacterLoading && typeof FileManager !== 'undefined' && FileManager.markDirty) {
       FileManager.markDirty();
     }
@@ -12106,7 +12323,13 @@ function populateUIFromCharacter() {
       nameEl.value = (char.name && char.name !== "New Hero") ? char.name : "";
     }
   }
-  if (document.getElementById("playerNameInput")) document.getElementById("playerNameInput").value = char.playerName || "";
+  if (document.getElementById("playerNameInput")) {
+    document.getElementById("playerNameInput").value = char.playerName || "";
+    const sessionNameInput = document.getElementById("txtSessionPlayerName");
+    if (sessionNameInput && char.playerName && !sessionNameInput.value) {
+      sessionNameInput.value = char.playerName;
+    }
+  }
   if (document.getElementById("heroPLInput")) document.getElementById("heroPLInput").value = char.powerLevel || 10;
   if (document.getElementById("heroPointsInput")) {
     const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);

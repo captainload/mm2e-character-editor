@@ -64,6 +64,8 @@
     const camp = data.campaigns.find(c => c.id === data.activeCampaignId) || null;
     if (camp) {
       if (!camp.gmPlayerId) camp.gmPlayerId = 'local_player';
+      if (!camp.gmUserName) camp.gmUserName = 'GM';
+      if (!Array.isArray(camp.authorizedUsers)) camp.authorizedUsers = [];
       if (!Array.isArray(camp.fileOperationsLog)) camp.fileOperationsLog = [];
     }
     return camp;
@@ -80,7 +82,7 @@
     return false;
   }
 
-  function createCampaign(name, customCode = null, creatorPlayerId = 'local_player') {
+  function createCampaign(name, customCode = null, creatorPlayerId = 'local_player', gmUserName = 'GM') {
     const data = getStorageData();
     const campName = (name && name.trim()) ? name.trim() : 'New Campaign';
     const code = customCode ? customCode.trim().toLowerCase() : generateSlug(campName);
@@ -91,8 +93,10 @@
       code: code,
       createdAt: new Date().toISOString(),
       gmPlayerId: creatorPlayerId || 'local_player',
+      gmUserName: gmUserName || 'GM',
       npcs: [],
       acceptedPlayers: [],
+      authorizedUsers: [],
       pendingRequests: [],
       forcedModes: {
         forceSilentParty: false,
@@ -204,10 +208,52 @@
     const camp = getActiveCampaign();
     if (!camp) return null;
     if (!Array.isArray(camp.pendingRequests)) camp.pendingRequests = [];
+    if (!Array.isArray(camp.authorizedUsers)) camp.authorizedUsers = [];
+    if (!Array.isArray(camp.acceptedPlayers)) camp.acceptedPlayers = [];
 
-    const alreadyAccepted = (camp.acceptedPlayers || []).some(p => p.id === playerInfo.id || (p.playerName === playerInfo.playerName && p.characterName === playerInfo.characterName));
+    const pName = (playerInfo.playerName || '').trim();
+    const normalizedPlayerName = pName.toLowerCase();
+
+    // 1. Check if user is pre-authorized by GM in authorizedUsers whitelist
+    const authEntry = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === normalizedPlayerName);
+    if (authEntry) {
+      authEntry.lastLogin = new Date().toISOString();
+      authEntry.lastCharacter = playerInfo.characterName || 'Hero';
+
+      let playerRecord = camp.acceptedPlayers.find(p => (p.playerName || '').trim().toLowerCase() === normalizedPlayerName);
+      if (!playerRecord) {
+        playerRecord = {
+          id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
+          playerName: pName,
+          characterName: playerInfo.characterName || 'Hero',
+          characterSummary: playerInfo.characterSummary || {},
+          approvedAt: new Date().toISOString(),
+          forceSilent: false
+        };
+        camp.acceptedPlayers.push(playerRecord);
+      } else {
+        playerRecord.id = playerInfo.id || playerRecord.id;
+        playerRecord.characterName = playerInfo.characterName || playerRecord.characterName;
+        playerRecord.characterSummary = playerInfo.characterSummary || playerRecord.characterSummary;
+      }
+
+      camp.pendingRequests = camp.pendingRequests.filter(r => r.id !== playerInfo.id && (r.playerName || '').trim().toLowerCase() !== normalizedPlayerName);
+
+      updateActiveCampaign({
+        authorizedUsers: camp.authorizedUsers,
+        acceptedPlayers: camp.acceptedPlayers,
+        pendingRequests: camp.pendingRequests
+      });
+
+      addFileOperationLog(`Authorized user "${pName}" logged into campaign "${camp.name}" with character "${playerInfo.characterName || 'Hero'}".`, 'user_login');
+      return { status: 'already_accepted' };
+    }
+
+    // 2. Check if already accepted previously
+    const alreadyAccepted = camp.acceptedPlayers.some(p => p.id === playerInfo.id || (p.playerName && p.playerName.trim().toLowerCase() === normalizedPlayerName && p.characterName === playerInfo.characterName));
     if (alreadyAccepted) return { status: 'already_accepted' };
 
+    // 3. Queue as pending join request
     const existingIdx = camp.pendingRequests.findIndex(r => r.id === playerInfo.id);
     const requestItem = {
       id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
@@ -265,6 +311,78 @@
     if (!camp) return;
     camp.acceptedPlayers = (camp.acceptedPlayers || []).filter(p => p.id !== playerId);
     updateActiveCampaign({ acceptedPlayers: camp.acceptedPlayers });
+  }
+
+  // --- Authorized Campaign Users Management ---
+  function getAuthorizedUsers() {
+    const camp = getActiveCampaign();
+    if (!camp) return [];
+    if (!Array.isArray(camp.authorizedUsers)) camp.authorizedUsers = [];
+    return camp.authorizedUsers;
+  }
+
+  function addAuthorizedUser(userName, notes = '') {
+    const camp = getActiveCampaign();
+    if (!camp) return { success: false, error: 'No active campaign' };
+    if (!userName || !userName.trim()) return { success: false, error: 'User name cannot be empty' };
+
+    const trimmed = userName.trim();
+    if (!Array.isArray(camp.authorizedUsers)) camp.authorizedUsers = [];
+
+    const exists = camp.authorizedUsers.some(u => (u.userName || '').trim().toLowerCase() === trimmed.toLowerCase());
+    if (exists) return { success: false, error: `User "${trimmed}" is already authorized for this campaign.` };
+
+    const newUser = {
+      id: 'usr_' + Math.random().toString(36).substring(2, 8),
+      userName: trimmed,
+      addedAt: new Date().toISOString(),
+      notes: notes || '',
+      lastLogin: null,
+      lastCharacter: null
+    };
+
+    camp.authorizedUsers.push(newUser);
+    updateActiveCampaign({ authorizedUsers: camp.authorizedUsers });
+    addFileOperationLog(`Added authorized user "${trimmed}" to campaign "${camp.name}".`, 'user_whitelist');
+    return { success: true, user: newUser };
+  }
+
+  function removeAuthorizedUser(userName) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.authorizedUsers)) return false;
+
+    const trimmed = (userName || '').trim().toLowerCase();
+    const initialLen = camp.authorizedUsers.length;
+    camp.authorizedUsers = camp.authorizedUsers.filter(u => (u.userName || '').trim().toLowerCase() !== trimmed && u.id !== userName);
+
+    if (camp.authorizedUsers.length !== initialLen) {
+      updateActiveCampaign({ authorizedUsers: camp.authorizedUsers });
+      addFileOperationLog(`Removed authorized user "${userName}" from campaign "${camp.name}".`, 'user_whitelist');
+      return true;
+    }
+    return false;
+  }
+
+  function isUserAuthorized(userName) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.authorizedUsers) || camp.authorizedUsers.length === 0) return true; // Open if no list defined
+    const trimmed = (userName || '').trim().toLowerCase();
+    return camp.authorizedUsers.some(u => (u.userName || '').trim().toLowerCase() === trimmed);
+  }
+
+  function setGMUserName(name) {
+    const camp = getActiveCampaign();
+    if (!camp) return false;
+    const cleanName = (name && name.trim()) ? name.trim() : 'GM';
+    camp.gmUserName = cleanName;
+    updateActiveCampaign({ gmUserName: cleanName });
+    addFileOperationLog(`GM user name set to "${cleanName}" for campaign "${camp.name}".`, 'gm_identity');
+    return true;
+  }
+
+  function getGMUserName() {
+    const camp = getActiveCampaign();
+    return camp?.gmUserName || 'GM';
   }
 
   // --- Forced Modes (Silent, etc.) ---
@@ -542,6 +660,8 @@
       campData.id = 'camp_' + Math.random().toString(36).substring(2, 9);
       if (!campData.code) campData.code = generateSlug(campData.name);
       if (!campData.gmPlayerId) campData.gmPlayerId = 'local_player';
+      if (!campData.gmUserName) campData.gmUserName = 'GM';
+      if (!Array.isArray(campData.authorizedUsers)) campData.authorizedUsers = [];
       if (!Array.isArray(campData.fileOperationsLog)) campData.fileOperationsLog = [];
 
       campData.fileOperationsLog.push({
@@ -596,6 +716,12 @@
     getAutoBackupMeta,
     isAutoBackupDirty,
     clearAutoBackupDirty,
-    restoreAutoBackup
+    restoreAutoBackup,
+    getAuthorizedUsers,
+    addAuthorizedUser,
+    removeAuthorizedUser,
+    isUserAuthorized,
+    setGMUserName,
+    getGMUserName
   };
 }));

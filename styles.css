@@ -1739,15 +1739,21 @@ button.row-title-btn.row-title,
 }
 
 /* Unified Session & GM Tab Layout */
-.session-tab-container.session-docked .gm-tracker-table-container {
+.session-tab-container.session-docked:not(.gm-pane-hidden) .gm-tracker-table-container {
   max-height: 40vh;
   min-height: 240px;
   overflow-y: auto;
 }
 
-.session-tab-container.session-docked #sessionLogFeedContainer {
+.session-tab-container.session-docked:not(.gm-pane-hidden) #sessionLogFeedContainer {
   max-height: 34vh;
   min-height: 180px;
+  overflow-y: auto;
+}
+
+.session-tab-container.gm-pane-hidden #sessionLogFeedContainer {
+  max-height: 65vh !important;
+  min-height: 320px;
   overflow-y: auto;
 }
 

@@ -1513,8 +1513,13 @@ function setupTabs() {
         btnTracker.classList.add("btn-secondary");
       }
       if (btnGM) {
-        btnGM.classList.remove("btn-primary");
-        btnGM.classList.add("btn-secondary");
+        if (btn.dataset.tab === "tab-session" && typeof window.isGMPaneOpen === 'function' && window.isGMPaneOpen()) {
+          btnGM.classList.add("btn-primary");
+          btnGM.classList.remove("btn-secondary");
+        } else {
+          btnGM.classList.remove("btn-primary");
+          btnGM.classList.add("btn-secondary");
+        }
       }
       if (trackerContent) trackerContent.classList.remove("active");
       const trackerModal = document.getElementById("statusTrackerModal");
@@ -3217,19 +3222,60 @@ function setupSessionAndGMHub() {
   }
 
   // 3. GM Hub UI & Master Character Tracker
+  function setGMPaneOpen(isOpen) {
+    const gmUnifiedSec = document.getElementById("gmUnifiedSection");
+    const sessionContainer = document.getElementById("sessionTabContainer");
+    const btnGM = document.getElementById("btnOpenGM");
+
+    if (isOpen) {
+      if (gmUnifiedSec) gmUnifiedSec.style.display = "flex";
+      if (sessionContainer) sessionContainer.classList.remove("gm-pane-hidden");
+      if (btnGM) {
+        btnGM.classList.add("btn-primary");
+        btnGM.classList.remove("btn-secondary");
+        btnGM.title = "GM Campaign Hub (Click to hide GM tracker pane)";
+      }
+      syncGMUI();
+    } else {
+      if (gmUnifiedSec) gmUnifiedSec.style.display = "none";
+      if (sessionContainer) sessionContainer.classList.add("gm-pane-hidden");
+      if (btnGM) {
+        btnGM.classList.remove("btn-primary");
+        btnGM.classList.add("btn-secondary");
+        btnGM.title = "GM Campaign Hub (Click to show GM tracker pane)";
+      }
+    }
+  }
+  window.setGMPaneOpen = setGMPaneOpen;
+
+  function isGMPaneOpen() {
+    const gmUnifiedSec = document.getElementById("gmUnifiedSection");
+    const sessionContainer = document.getElementById("sessionTabContainer");
+    if (!gmUnifiedSec) return false;
+    if (sessionContainer && sessionContainer.classList.contains("gm-pane-hidden")) return false;
+    return gmUnifiedSec.style.display !== "none";
+  }
+  window.isGMPaneOpen = isGMPaneOpen;
+
   function openGMTab() {
     const sessionContent = document.getElementById("tab-session");
-    const gmUnifiedSec = document.getElementById("gmUnifiedSection");
     const btnBack = document.getElementById("btnBackFromTables");
     const btnTables = document.getElementById("btnOpenTables");
     const btnTracker = document.getElementById("btnOpenTracker");
 
-    // If already in Session tab and GM mode is active, clicking GM button can return to previous view
-    if (sessionContent && sessionContent.classList.contains("active") && btnOpenGM && btnOpenGM.classList.contains("btn-primary")) {
-      if (btnBack) btnBack.click();
+    const isCurrentlyOnSessionTab = sessionContent && sessionContent.classList.contains("active");
+
+    if (isCurrentlyOnSessionTab) {
+      // User is already on the Session tab: toggle the GM pane open or closed!
+      if (isGMPaneOpen()) {
+        setGMPaneOpen(false);
+      } else {
+        setGMPaneOpen(true);
+      }
       return;
     }
 
+    // User is NOT on the Session tab: switch to Session tab and ensure GM pane is open!
     const currentActiveBtn = document.querySelector(".tab-btn.active");
     if (currentActiveBtn && currentActiveBtn.dataset.tab && currentActiveBtn.dataset.tab !== "tab-session") {
       previousActiveTab = currentActiveBtn.dataset.tab;
@@ -3241,17 +3287,12 @@ function setupSessionAndGMHub() {
     const sessionBtn = document.querySelector('.tab-btn[data-tab="tab-session"]');
     if (sessionBtn) sessionBtn.classList.add("active");
     if (sessionContent) sessionContent.classList.add("active");
-    if (gmUnifiedSec) gmUnifiedSec.style.display = "flex";
 
     const trackerContent = document.getElementById("tab-tracker");
     if (trackerContent) trackerContent.classList.remove("active");
     const tablesContent = document.getElementById("tab-tables");
     if (tablesContent) tablesContent.classList.remove("active");
 
-    if (btnOpenGM) {
-      btnOpenGM.classList.add("btn-primary");
-      btnOpenGM.classList.remove("btn-secondary");
-    }
     if (btnTables) {
       btnTables.classList.remove("btn-primary");
       btnTables.classList.add("btn-secondary");
@@ -3269,7 +3310,7 @@ function setupSessionAndGMHub() {
       btnBack.title = `Return to ${prevName}`;
     }
 
-    syncGMUI();
+    setGMPaneOpen(true);
   }
   window.openGMTab = openGMTab;
 

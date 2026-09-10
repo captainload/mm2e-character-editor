@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=34">
+  <link rel="stylesheet" href="styles.css?v=35">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -880,6 +880,7 @@
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" class="btn btn-secondary" id="btnGMReturnToSheet" style="height: 24px; padding: 0 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Return to previous sheet view">⬅ Sheet</button>
+            <button type="button" class="btn btn-secondary" id="btnCloseGMPane" onclick="window.setGMPaneOpen(false)" style="height: 24px; padding: 0 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Hide GM Tracker Pane on Session tab">✕ Close Pane</button>
           </div>
         </div>
 
@@ -1863,13 +1864,13 @@
   <script src="campaign_manager.js?v=4"></script>
   <script src="session_network.js?v=4"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=94"></script>
+  <script src="app.js?v=95"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=40').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=41').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

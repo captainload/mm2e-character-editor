@@ -1223,12 +1223,28 @@
           <span class="badge" id="lblTrackerHeroName" style="font-size: var(--font-size-tags); font-weight: 600;">Hero</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-secondary" id="btnPopoutTracker" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Pop out Status & Combat Tracker into standalone window">🪟 Pop Out</button>
           <button type="button" class="btn btn-secondary" id="btnTrackerReturnToSheet" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Return to previous sheet view">⬅ Return to Sheet</button>
           <button type="button" class="btn btn-secondary" id="btnResetTrackerSize" style="display: none;" title="Reset Tracker Size">↺ Reset Size</button>
           <button class="info-popup-close" id="modalStatusTrackerClose" style="display: none;" title="Close Tracker">✕</button>
         </div>
       </div>
 
+      <!-- Docked Placeholder Notice when Popped Out -->
+      <div id="boxPoppedOutTrackerNotice" style="display: none; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 6px; padding: 12px 16px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;">🪟</span>
+          <div>
+            <div style="font-weight: 600; font-size: var(--font-size-labels); color: var(--accent-primary);">Status &amp; Combat Tracker popped out in separate window</div>
+            <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">Rolls, counters, damage track, and conditions remain synchronized.</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="btnRedockTracker" style="font-weight: 600; font-size: var(--font-size-controls); height: 28px; padding: 0 12px;">
+          ⬅ Re-dock Tracker
+        </button>
+      </div>
+
+      <div id="trackerDockableBody">
       <!-- Sticky Top Active Conditions Summary Bar -->
       <div class="tracker-summary-bar" id="trackerSummaryBar" style="background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-height: 42px;">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1;" id="boxActiveConditionsChips">
@@ -1401,6 +1417,7 @@
         </div>
 
       </div>
+      </div> <!-- end trackerDockableBody -->
       <div class="tracker-resize-handle tracker-resize-handle-bottom" id="trackerResizeBottom" style="display: none;"></div>
     </div>
   </section>
@@ -2088,14 +2105,14 @@
   <script src="session_network.js?v=9"></script>
   <script src="session_tracker.js?v=1"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=103"></script>
+  <script src="app.js?v=104"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     // Service Worker Registration for Offline PWA Capabilities
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=49').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=50').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

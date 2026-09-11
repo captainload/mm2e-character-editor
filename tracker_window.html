@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MM2CG — Status & Combat Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css?v=42">
+  <script>
+    (function() {
+      function getActiveTheme() {
+        // 1. Check URL query parameters (?theme=dark)
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlTheme = urlParams.get("theme");
+          if (urlTheme) return urlTheme;
+        } catch (e) {}
+
+        // 2. Check opener document directly
+        try {
+          if (window.opener && !window.opener.closed && window.opener.document && window.opener.document.documentElement) {
+            const openerTheme = window.opener.document.documentElement.getAttribute("data-theme");
+            if (openerTheme) return openerTheme;
+          }
+        } catch (e) {}
+
+        // 3. Check localStorage
+        try {
+          const savedTheme = localStorage.getItem("mm2e_theme");
+          if (savedTheme) return savedTheme;
+        } catch (e) {}
+
+        return "light";
+      }
+
+      function applySavedThemeAndFonts() {
+        const root = document.documentElement;
+        const theme = getActiveTheme();
+        root.setAttribute("data-theme", theme);
+        if (document.body) document.body.setAttribute("data-theme", theme);
+
+        let savedLabelFont = 16, savedControlFont = 14, savedTagFont = 13, savedSecondaryFont = 14, savedMinorControlFont = 15, savedFinePrintFont = 13;
+        try {
+          savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
+          savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
+          savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
+          savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
+          savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
+          savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+        } catch (e) {}
+
+        root.style.setProperty("--font-size-labels", savedLabelFont + "px");
+        root.style.setProperty("--font-size-controls", savedControlFont + "px");
+        root.style.setProperty("--font-size-tags", savedTagFont + "px");
+        root.style.setProperty("--font-size-links", savedTagFont + "px");
+        root.style.setProperty("--font-size-secondary", savedSecondaryFont + "px");
+        root.style.setProperty("--font-size-minor-controls", savedMinorControlFont + "px");
+        root.style.setProperty("--font-size-fine-print", savedFinePrintFont + "px");
+      }
+      applySavedThemeAndFonts();
+      window.__applySavedThemeAndFonts = applySavedThemeAndFonts;
+      window.addEventListener("DOMContentLoaded", applySavedThemeAndFonts);
+      window.addEventListener("load", applySavedThemeAndFonts);
+
+      try {
+        window.addEventListener("storage", function(e) {
+          if (!e.key || e.key.startsWith("mm2e_") || e.key.startsWith("mm4e_")) {
+            applySavedThemeAndFonts();
+          }
+        });
+      } catch (e) {}
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const directBc = new BroadcastChannel('mm2e_session_channel');
+          directBc.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'THEME_CHANGE' && event.data.theme) {
+              try { localStorage.setItem('mm2e_theme', event.data.theme); } catch (e) {}
+              applySavedThemeAndFonts();
+            }
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      background: var(--bg-app);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .tracker-win-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .tracker-win-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      box-sizing: border-box;
+    }
+    .tracker-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .tracker-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 6px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .tracker-summary-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-height: 40px;
+      margin-top: 8px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .tracker-condition-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--font-size-secondary, 13px);
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background 0.15s ease;
+      white-space: normal;
+      word-break: normal;
+      line-height: 1.25;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .tracker-condition-label:hover {
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .tracker-condition-label input[type="checkbox"] {
+      cursor: pointer;
+      margin: 0;
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+    }
+    .tracker-stepper {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+    }
+    .modifier-stepper-btn {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-main);
+      cursor: pointer;
+      padding: 0;
+      user-select: none;
+      transition: background 0.1s ease;
+    }
+    .modifier-stepper-btn:hover {
+      background: var(--accent-primary);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Header Bar -->
+  <div class="tracker-win-header">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <strong style="font-size: var(--font-size-labels, 15px); display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
+        ⏱ Status &amp; Combat Tracker
+      </strong>
+      <span class="badge" id="lblTrackerHeroName" style="font-size: var(--font-size-tags, 12px); font-weight: 600;">Hero</span>
+      <span class="badge" id="lblTrackerWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button type="button" class="btn btn-secondary" id="btnRedockTrackerWindow" onclick="window.redockTrackerWindow()" style="height: 26px; padding: 0 10px; font-size: var(--font-size-fine-print, 12px); font-weight: 600; cursor: pointer;">
+        ⬅ Re-dock
+      </button>
+    </div>
+  </div>
+
+  <!-- Sticky Top Active Conditions Summary Bar -->
+  <div class="tracker-summary-bar" id="trackerSummaryBar">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1;" id="boxActiveConditionsChips">
+      <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: var(--text-muted);">Active Conditions:</span>
+      <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600;">Normal / Unhindered</span>
+    </div>
+    <button type="button" class="btn btn-secondary" id="btnClearAllConditions" onclick="window.clearAllConditionsDirect()" style="font-size: var(--font-size-minor-controls, 13px); padding: 2px 8px; height: 26px;" title="Reset all conditions to normal">↺ Clear All Conditions</button>
+  </div>
+
+  <!-- Tracker Window Body: 2-Column Responsive Grid -->
+  <div class="tracker-win-container">
+    
+    <!-- Left Column: Initiative, General Dice Roller, Custom Points, Fades -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      
+      <!-- Card 1: Initiative Tracker -->
+      <div class="tracker-card">
+        <div class="tracker-card-header">
+          <strong style="font-size: var(--font-size-labels, 14px); display: flex; align-items: center; gap: 6px;">⚡ Initiative Roller</strong>
+          <span class="secondary-text" id="lblTrackerInitMod" style="font-size: var(--font-size-secondary, 13px); font-weight: 600;">Mod: +0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" id="btnRollInitiative" onclick="window.rollInitiativeDirect()" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls, 14px);">🎲 Roll Initiative</button>
+          
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: var(--text-muted);">Result:</span>
+            <div class="tracker-stepper">
+              <button type="button" class="modifier-stepper-btn" id="btnStepInitDown" onclick="window.stepInitDirect(-1)">−</button>
+              <input type="number" id="numInitiativeResult" onchange="window.setInitDirect(this.value)" style="width: 50px; height: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-controls, 14px); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-main); margin: 0 2px;" placeholder="—">
+              <button type="button" class="modifier-stepper-btn" id="btnStepInitUp" onclick="window.stepInitDirect(1)">+</button>
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-secondary" id="btnClearInit" onclick="window.clearInitDirect()" style="font-size: var(--font-size-minor-controls, 13px); padding: 2px 8px; height: 28px;" title="Reset Initiative">Clear</button>
+        </div>
+        <div id="lblInitiativeRollBreakdown" style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted); margin-top: 6px; min-height: 16px;"></div>
+      </div>
+
+      <!-- Card 2: General d20 Roller -->
+      <div class="tracker-card">
+        <div class="tracker-card-header">
+          <strong style="font-size: var(--font-size-labels, 14px); display: flex; align-items: center; gap: 6px;">🎲 General d20 Roller</strong>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: var(--text-muted);">Adj:</label>
+            <div class="tracker-stepper">
+              <button type="button" class="modifier-stepper-btn" id="btnStepD20AdjDown" onclick="window.stepD20AdjDirect(-1)">−</button>
+              <input type="number" id="numD20Adj" value="0" onchange="window.setD20AdjDirect(this.value)" style="width: 44px; height: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-controls, 14px); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-main); margin: 0 2px;">
+              <button type="button" class="modifier-stepper-btn" id="btnStepD20AdjUp" onclick="window.stepD20AdjDirect(1)">+</button>
+            </div>
+            <button type="button" class="btn btn-secondary" id="btnClearD20Adj" onclick="window.clearD20AdjDirect()" style="font-size: var(--font-size-minor-controls, 13px); padding: 1px 8px; height: 28px;" title="Reset adjustment to 0">Clear Adj</button>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" id="btnRollD20" onclick="window.rollD20Direct()" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls, 14px);">🎲 Roll</button>
+          <input type="text" id="txtTrackerDiceNotation" placeholder="Notation: 1d20+5, 2d6+3, +4..." onkeydown="if(event.key==='Enter') window.rollD20Direct()" style="width: 200px; height: 32px; font-size: var(--font-size-secondary, 13px); background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;" title="Enter custom dice expression e.g. 1d20+5, 2d6+3, or +4">
+          <div id="lblD20RollResult" style="font-size: var(--font-size-labels, 14px); font-weight: bold; color: var(--accent-primary);"></div>
+        </div>
+        <div id="lblD20RollBreakdown" style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted); margin-top: 4px; min-height: 16px;"></div>
+      </div>
+
+      <!-- Card 3: Custom Counters Tracker -->
+      <div class="tracker-card">
+        <div class="tracker-card-header">
+          <strong style="font-size: var(--font-size-labels, 14px); display: flex; align-items: center; gap: 6px;">🔋 Custom Counters</strong>
+          <button type="button" class="btn btn-secondary" id="btnAddCustomTracker" onclick="window.addCustomTrackerDirect()" style="font-size: var(--font-size-minor-controls, 13px); padding: 2px 8px; height: 24px;">+ Add Counter</button>
+        </div>
+        <p class="secondary-text" style="font-size: var(--font-size-secondary, 13px); margin-top: 0; margin-bottom: 8px;">Track Mecha Energy, Ammo, charges, or custom counters.</p>
+        <div id="listCustomTrackers" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Card 4: Fades Tracker -->
+      <div class="tracker-card">
+        <div class="tracker-card-header">
+          <strong style="font-size: var(--font-size-labels, 14px); display: flex; align-items: center; gap: 6px;">⏳ Fades Tracker</strong>
+          <button type="button" class="btn btn-secondary" id="btnAdvanceAllFades" onclick="window.advanceAllFadesDirect()" style="font-size: var(--font-size-minor-controls, 13px); padding: 2px 8px; height: 24px;" title="Advance all active fades by 1 round">⏱ Advance Round</button>
+        </div>
+        <div id="listFadesTrackers" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Conditions & Damage Track -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      
+      <div class="tracker-card" style="height: 100%; display: flex; flex-direction: column;">
+        <div class="tracker-card-header">
+          <strong style="font-size: var(--font-size-labels, 14px); display: flex; align-items: center; gap: 6px;">❤️ Conditions &amp; Damage Track</strong>
+        </div>
+
+        <div id="trackerConditionsScrollContainer" style="overflow-x: hidden; padding-right: 2px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+          
+          <!-- Damage Track Section -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
+            <div style="font-weight: bold; font-size: var(--font-size-labels, 14px); color: var(--accent-primary); margin-bottom: 6px;">💥 Damage Track (Toughness Saves)</div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <div>
+                  <strong style="font-size: var(--font-size-controls, 14px); display: block;">Bruised</strong>
+                  <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px);">-1 non-lethal</span>
+                </div>
+                <div class="tracker-stepper">
+                  <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Bruised', -1)">−</button>
+                  <span id="valBruisedCount" style="min-width: 22px; text-align: center; font-weight: bold; font-size: var(--font-size-controls, 14px);">0</span>
+                  <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Bruised', 1)">+</button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <div>
+                  <strong style="font-size: var(--font-size-controls, 14px); display: block;">Injured</strong>
+                  <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px);">-1 lethal</span>
+                </div>
+                <div class="tracker-stepper">
+                  <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Injured', -1)">−</button>
+                  <span id="valInjuredCount" style="min-width: 22px; text-align: center; font-weight: bold; font-size: var(--font-size-controls, 14px);">0</span>
+                  <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Injured', 1)">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px;">
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Dazed" onchange="toggleConditionDirect('Dazed', this.checked)"> <strong>Dazed</strong> (Std action only)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Staggered" onchange="toggleConditionDirect('Staggered', this.checked)"> <strong>Staggered</strong> (Half speed &amp; Dazed)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Disabled" onchange="toggleConditionDirect('Disabled', this.checked)"> <strong>Disabled</strong> (-5 checks, 1/2 spd)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Unconscious" onchange="toggleConditionDirect('Unconscious', this.checked)"> <strong>Unconscious</strong> (Helpless)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Dying" onchange="toggleConditionDirect('Dying', this.checked)"> <strong>Dying</strong> (Fort save/round)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Dead" onchange="toggleConditionDirect('Dead', this.checked)"> <strong>Dead</strong></label>
+            </div>
+          </div>
+
+          <!-- Sensory, Movement & Tactical Conditions -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
+            <div style="font-weight: bold; font-size: var(--font-size-labels, 14px); color: var(--accent-primary); margin-bottom: 6px;">🎯 Tactical &amp; Impairment Conditions</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px;">
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Blind" onchange="toggleConditionDirect('Blind', this.checked)"> <strong>Blind</strong> (-4 Search/Str/Dex)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Deaf" onchange="toggleConditionDirect('Deaf', this.checked)"> <strong>Deaf</strong> (-4 Init, no auditory)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Entangled" onchange="toggleConditionDirect('Entangled', this.checked)"> <strong>Entangled</strong> (-2 Atk, -4 Dex)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Exhausted" onchange="toggleConditionDirect('Exhausted', this.checked)"> <strong>Exhausted</strong> (-6 Str/Dex, 1/2 spd)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Fascinated" onchange="toggleConditionDirect('Fascinated', this.checked)"> <strong>Fascinated</strong> (No actions)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Fatigued" onchange="toggleConditionDirect('Fatigued', this.checked)"> <strong>Fatigued</strong> (-2 Str/Dex)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Flat-Footed" onchange="toggleConditionDirect('Flat-Footed', this.checked)"> <strong>Flat-Footed</strong> (No Dodge)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Helpless" onchange="toggleConditionDirect('Helpless', this.checked)"> <strong>Helpless</strong> (Def 5 or 0 melee)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Hindered" onchange="toggleConditionDirect('Hindered', this.checked)"> <strong>Hindered</strong> (Move 1/2 speed)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Immobile" onchange="toggleConditionDirect('Immobile', this.checked)"> <strong>Immobile</strong> (Speed 0)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Nauseated" onchange="toggleConditionDirect('Nauseated', this.checked)"> <strong>Nauseated</strong> (Move only)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Panicked" onchange="toggleConditionDirect('Panicked', this.checked)"> <strong>Panicked</strong> (-2, must flee)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Paralyzed" onchange="toggleConditionDirect('Paralyzed', this.checked)"> <strong>Paralyzed</strong> (Helpless, 0 Dex)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Pinned" onchange="toggleConditionDirect('Pinned', this.checked)"> <strong>Pinned</strong> (Grapple helpless)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Prone" onchange="toggleConditionDirect('Prone', this.checked)"> <strong>Prone</strong> (-4 melee, +4 ranged)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Shaken" onchange="toggleConditionDirect('Shaken', this.checked)"> <strong>Shaken</strong> (-2 checks &amp; saves)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Stunned" onchange="toggleConditionDirect('Stunned', this.checked)"> <strong>Stunned</strong> (No actions, -2 def)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Vulnerable" onchange="toggleConditionDirect('Vulnerable', this.checked)"> <strong>Vulnerable</strong> (No Dodge)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Defenseless" onchange="toggleConditionDirect('Defenseless', this.checked)"> <strong>Defenseless</strong> (Active Def 0)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Compelled" onchange="toggleConditionDirect('Compelled', this.checked)"> <strong>Compelled</strong> (Chosen action)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Controlled" onchange="toggleConditionDirect('Controlled', this.checked)"> <strong>Controlled</strong> (Dictated actions)</label>
+              <label class="tracker-condition-label"><input type="checkbox" data-cond="Unaware" onchange="toggleConditionDirect('Unaware', this.checked)"> <strong>Unaware</strong> (Auto-fail senses)</label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="dice_notation.js?v=3"></script>
+  <script src="campaign_manager.js?v=7"></script>
+  <script src="session_network.js?v=9"></script>
+  <script>
+    const STORAGE_KEY_BOUNDS = 'mm2e_tracker_bounds';
+
+    // Local tracker state cache (if opener unavailable)
+    let localTracker = {
+      heroName: 'Hero',
+      initiativeRoll: null,
+      initiativeModifier: { dexMod: 0, initFeat: 0, totalMod: 0 },
+      generalD20Roll: null,
+      generalD20Adj: 0,
+      conditions: {},
+      customPoints: [],
+      fadeStates: {},
+      powers: []
+    };
+
+    // ==========================================
+    // 1. RE-DOCKING LOGIC
+    // ==========================================
+    function redockTrackerWindow() {
+      saveWindowBounds();
+
+      // 1. Broadcast docking notification over mm2e_session_channel
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'TRACKER_DOCKED' });
+          SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('mm2e_session_channel');
+          bc.postMessage({ type: 'TRACKER_DOCKED' });
+          bc.postMessage({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+
+      // 2. Safe call to opener if permitted
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener.redockTracker === 'function') {
+          window.opener.redockTracker();
+        }
+      } catch (e) {}
+
+      // 3. Always close this window
+      try {
+        window.close();
+      } catch (e) {}
+    }
+    window.redockTrackerWindow = redockTrackerWindow;
+    window.redockWindow = redockTrackerWindow;
+
+    const btnRedock = document.getElementById('btnRedockTrackerWindow');
+    if (btnRedock) {
+      btnRedock.addEventListener('click', redockTrackerWindow);
+    }
+
+    // ==========================================
+    // 2. BOUNDS PERSISTENCE (Size & Position)
+    // ==========================================
+    function saveWindowBounds() {
+      try {
+        const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+        const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+        const width = window.outerWidth || window.innerWidth;
+        const height = window.outerHeight || window.innerHeight;
+
+        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
+          const bounds = { left, top, width, height };
+          localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
+          try {
+            if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+              SessionNetwork.sendLocalBroadcast({ type: 'TRACKER_BOUNDS_UPDATE', bounds });
+            }
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    window.saveWindowBounds = saveWindowBounds;
+
+    function restoreWindowBounds() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 200 && b.height >= 150) {
+            if (window.outerWidth !== b.width || window.outerHeight !== b.height) {
+              try { window.resizeTo(b.width, b.height); } catch (e) {}
+            }
+          }
+          if (typeof b.left === 'number' && typeof b.top === 'number') {
+            if (window.screenX !== b.left || window.screenY !== b.top) {
+              try { window.moveTo(b.left, b.top); } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    restoreWindowBounds();
+    window.addEventListener('DOMContentLoaded', restoreWindowBounds);
+    window.addEventListener('load', restoreWindowBounds);
+
+    // Track resize
+    window.addEventListener('resize', () => {
+      clearTimeout(window._resTimer);
+      window._resTimer = setTimeout(saveWindowBounds, 200);
+    });
+
+    // Periodic poll for position changes (handling user dragging the window)
+    setInterval(() => {
+      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+      const width = window.outerWidth || window.innerWidth;
+      const height = window.outerHeight || window.innerHeight;
+
+      if (!window._lastBounds ||
+          window._lastBounds.left !== left ||
+          window._lastBounds.top !== top ||
+          window._lastBounds.width !== width ||
+          window._lastBounds.height !== height) {
+        window._lastBounds = { left, top, width, height };
+        saveWindowBounds();
+      }
+    }, 500);
+
+    window.addEventListener('beforeunload', () => {
+      saveWindowBounds();
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'TRACKER_DOCKED' });
+          SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener.redockTracker === 'function') {
+          window.opener.redockTracker();
+        }
+      } catch (e) {}
+    });
+
+    window.addEventListener('unload', saveWindowBounds);
+    window.addEventListener('pagehide', saveWindowBounds);
+
+    // ==========================================
+    // 3. TWO-WAY ACTION DISPATCHING & SYNC
+    // ==========================================
+    function callOpenerAction(fnName, ...args) {
+      // 1. Try opener direct call
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener[fnName] === 'function') {
+          const res = window.opener[fnName](...args);
+          syncTrackerFromOpener();
+          return res;
+        }
+      } catch (e) {}
+
+      // 2. Try broadcast call
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'TRACKER_ACTION', action: fnName, args: args });
+        }
+      } catch (e) {}
+
+      // 3. Local fallback execution
+      executeLocalTrackerAction(fnName, args);
+      renderAllTrackerUI();
+    }
+
+    // Condition Stepping
+    function stepConditionCount(condName, delta) {
+      callOpenerAction('stepConditionCount', condName, delta);
+    }
+    window.stepConditionCount = stepConditionCount;
+
+    // Condition Checkbox
+    function toggleConditionDirect(condName, isChecked) {
+      callOpenerAction('toggleConditionDirect', condName, isChecked);
+    }
+    window.toggleConditionDirect = toggleConditionDirect;
+
+    // Clear All Conditions
+    function clearAllConditionsDirect() {
+      callOpenerAction('clearAllTrackerConditions');
+    }
+    window.clearAllConditionsDirect = clearAllConditionsDirect;
+
+    // Initiative
+    function rollInitiativeDirect() {
+      callOpenerAction('rollTrackerInitiative');
+    }
+    window.rollInitiativeDirect = rollInitiativeDirect;
+
+    function stepInitDirect(delta) {
+      callOpenerAction('stepTrackerInit', delta);
+    }
+    window.stepInitDirect = stepInitDirect;
+
+    function setInitDirect(val) {
+      callOpenerAction('setTrackerInit', val);
+    }
+    window.setInitDirect = setInitDirect;
+
+    function clearInitDirect() {
+      callOpenerAction('clearTrackerInit');
+    }
+    window.clearInitDirect = clearInitDirect;
+
+    // General d20
+    function rollD20Direct() {
+      const notation = document.getElementById('txtTrackerDiceNotation')?.value?.trim();
+      callOpenerAction('rollTrackerD20', notation);
+    }
+    window.rollD20Direct = rollD20Direct;
+
+    function stepD20AdjDirect(delta) {
+      callOpenerAction('stepTrackerD20Adj', delta);
+    }
+    window.stepD20AdjDirect = stepD20AdjDirect;
+
+    function setD20AdjDirect(val) {
+      const num = parseInt(val) || 0;
+      callOpenerAction('setTrackerD20Adj', num);
+    }
+    window.setD20AdjDirect = setD20AdjDirect;
+
+    function clearD20AdjDirect() {
+      callOpenerAction('clearTrackerD20Adj');
+    }
+    window.clearD20AdjDirect = clearD20AdjDirect;
+
+    // Custom Trackers
+    function addCustomTrackerDirect() {
+      callOpenerAction('addTrackerCustomCounter');
+    }
+    window.addCustomTrackerDirect = addCustomTrackerDirect;
+
+    function stepCustomPoint(id, delta) {
+      callOpenerAction('stepCustomPoint', id, delta);
+    }
+    window.stepCustomPoint = stepCustomPoint;
+
+    function updateCustomTrackerName(id, val) {
+      callOpenerAction('updateCustomTrackerName', id, val);
+    }
+    window.updateCustomTrackerName = updateCustomTrackerName;
+
+    function updateCustomTrackerCurrent(id, val) {
+      callOpenerAction('updateCustomTrackerCurrent', id, val);
+    }
+    window.updateCustomTrackerCurrent = updateCustomTrackerCurrent;
+
+    function updateCustomTrackerMax(id, val) {
+      callOpenerAction('updateCustomTrackerMax', id, val);
+    }
+    window.updateCustomTrackerMax = updateCustomTrackerMax;
+
+    function deleteCustomTracker(id) {
+      callOpenerAction('deleteCustomTracker', id);
+    }
+    window.deleteCustomTracker = deleteCustomTracker;
+
+    // Fades
+    function advanceAllFadesDirect() {
+      callOpenerAction('advanceAllTrackerFades');
+    }
+    window.advanceAllFadesDirect = advanceAllFadesDirect;
+
+    function stepFadeValue(effId, delta, maxVal, pIdx, eIdx) {
+      callOpenerAction('stepFadeValue', effId, delta, maxVal, pIdx, eIdx);
+    }
+    window.stepFadeValue = stepFadeValue;
+
+    function resetFadeValue(effId, maxVal, pIdx, eIdx) {
+      callOpenerAction('resetFadeValue', effId, maxVal, pIdx, eIdx);
+    }
+    window.resetFadeValue = resetFadeValue;
+
+    // ==========================================
+    // 4. LOCAL FALLBACK EXECUTION
+    // ==========================================
+    function executeLocalTrackerAction(fnName, args) {
+      if (fnName === 'stepConditionCount') {
+        const [condName, delta] = args;
+        const cur = localTracker.conditions[condName] || 0;
+        localTracker.conditions[condName] = Math.max(0, cur + delta);
+      } else if (fnName === 'toggleConditionDirect') {
+        const [condName, isChecked] = args;
+        localTracker.conditions[condName] = !!isChecked;
+      } else if (fnName === 'clearAllTrackerConditions') {
+        localTracker.conditions = {};
+      } else if (fnName === 'rollTrackerInitiative') {
+        const totalMod = localTracker.initiativeModifier?.totalMod || 0;
+        const d20 = Math.floor(Math.random() * 20) + 1;
+        localTracker.initiativeRoll = d20 + totalMod;
+        const lblBreakdown = document.getElementById('lblInitiativeRollBreakdown');
+        if (lblBreakdown) lblBreakdown.textContent = `Rolled: 1d20 (${d20}) + ${totalMod} = ${localTracker.initiativeRoll}`;
+      } else if (fnName === 'stepTrackerInit') {
+        const [delta] = args;
+        const cur = localTracker.initiativeRoll || 0;
+        localTracker.initiativeRoll = cur + delta;
+      } else if (fnName === 'setTrackerInit') {
+        const [val] = args;
+        const n = parseInt(val);
+        localTracker.initiativeRoll = isNaN(n) ? null : n;
+      } else if (fnName === 'clearTrackerInit') {
+        localTracker.initiativeRoll = null;
+        const lblBreakdown = document.getElementById('lblInitiativeRollBreakdown');
+        if (lblBreakdown) lblBreakdown.textContent = '';
+      } else if (fnName === 'stepTrackerD20Adj') {
+        const [delta] = args;
+        localTracker.generalD20Adj = (localTracker.generalD20Adj || 0) + delta;
+      } else if (fnName === 'setTrackerD20Adj') {
+        const [val] = args;
+        localTracker.generalD20Adj = parseInt(val) || 0;
+      } else if (fnName === 'clearTrackerD20Adj') {
+        localTracker.generalD20Adj = 0;
+      } else if (fnName === 'rollTrackerD20') {
+        const [customNotation] = args;
+        let total, breakdown, isNat20, isNat1;
+        if (customNotation && typeof DiceNotation !== 'undefined') {
+          const res = DiceNotation.roll(customNotation);
+          total = res.total; breakdown = res.breakdown; isNat20 = res.isNat20; isNat1 = res.isNat1;
+        } else {
+          const adj = localTracker.generalD20Adj || 0;
+          const d20 = Math.floor(Math.random() * 20) + 1;
+          total = d20 + adj;
+          isNat20 = d20 === 20; isNat1 = d20 === 1;
+          breakdown = `1d20 (${d20})${adj !== 0 ? (adj > 0 ? ' + ' + adj : ' - ' + Math.abs(adj)) : ''} = ${total}`;
+        }
+        localTracker.generalD20Roll = { total, breakdown, isNat20, isNat1 };
+      } else if (fnName === 'addTrackerCustomCounter') {
+        localTracker.customPoints.push({
+          id: 'pool_' + Math.random().toString(36).substr(2, 7),
+          name: '',
+          current: 0,
+          max: null,
+          explicitMax: false
+        });
+      } else if (fnName === 'stepCustomPoint') {
+        const [trackerId, delta] = args;
+        const t = localTracker.customPoints.find(x => x.id === trackerId);
+        if (t) {
+          const max = (t.max !== null && t.max !== undefined) ? Number(t.max) : Infinity;
+          t.current = Math.max(0, Math.min(max, (Number(t.current) || 0) + delta));
+        }
+      } else if (fnName === 'updateCustomTrackerName') {
+        const [trackerId, newName] = args;
+        const t = localTracker.customPoints.find(x => x.id === trackerId);
+        if (t) t.name = newName;
+      } else if (fnName === 'updateCustomTrackerCurrent') {
+        const [trackerId, newVal] = args;
+        const t = localTracker.customPoints.find(x => x.id === trackerId);
+        if (t) {
+          const max = (t.max !== null && t.max !== undefined) ? Number(t.max) : Infinity;
+          t.current = Math.max(0, Math.min(max, Number(newVal) || 0));
+        }
+      } else if (fnName === 'updateCustomTrackerMax') {
+        const [trackerId, newMax] = args;
+        const t = localTracker.customPoints.find(x => x.id === trackerId);
+        if (t) {
+          const trimmed = (newMax !== null && newMax !== undefined) ? String(newMax).trim() : '';
+          t.max = (trimmed !== '' && !isNaN(Number(trimmed))) ? Math.max(1, Number(trimmed)) : null;
+          if (t.max !== null && t.current > t.max) t.current = t.max;
+        }
+      } else if (fnName === 'deleteCustomTracker') {
+        const [trackerId] = args;
+        localTracker.customPoints = localTracker.customPoints.filter(x => x.id !== trackerId);
+      } else if (fnName === 'stepFadeValue') {
+        const [effId, delta, maxVal] = args;
+        const cur = localTracker.fadeStates[effId] !== undefined ? localTracker.fadeStates[effId] : maxVal;
+        localTracker.fadeStates[effId] = Math.max(0, Math.min(maxVal, cur + delta));
+      } else if (fnName === 'resetFadeValue') {
+        const [effId, maxVal] = args;
+        localTracker.fadeStates[effId] = maxVal;
+      } else if (fnName === 'advanceAllTrackerFades') {
+        // Decrement all fade states by 1
+        for (const [id, val] of Object.entries(localTracker.fadeStates)) {
+          if (val > 0) localTracker.fadeStates[id] = val - 1;
+        }
+      }
+    }
+
+    // ==========================================
+    // 5. RENDERING & SYNCHRONIZATION
+    // ==========================================
+    function renderAllTrackerUI() {
+      // 1. Hero Name
+      const lblHero = document.getElementById('lblTrackerHeroName');
+      if (lblHero) lblHero.textContent = localTracker.heroName || 'Hero';
+
+      // 2. Initiative
+      const lblInitMod = document.getElementById('lblTrackerInitMod');
+      const numInitResult = document.getElementById('numInitiativeResult');
+      if (lblInitMod && localTracker.initiativeModifier) {
+        const { dexMod, initFeat, totalMod } = localTracker.initiativeModifier;
+        lblInitMod.textContent = `Mod: ${totalMod >= 0 ? '+' + totalMod : totalMod} (DEX ${dexMod >= 0 ? '+' + dexMod : dexMod}${initFeat > 0 ? ', Imp Init ' + initFeat : ''})`;
+      }
+      if (numInitResult) {
+        numInitResult.value = (localTracker.initiativeRoll !== null && localTracker.initiativeRoll !== undefined) ? localTracker.initiativeRoll : '';
+      }
+
+      // 3. General d20
+      const numD20Adj = document.getElementById('numD20Adj');
+      if (numD20Adj) numD20Adj.value = localTracker.generalD20Adj || 0;
+
+      const lblD20Result = document.getElementById('lblD20RollResult');
+      const lblD20Breakdown = document.getElementById('lblD20RollBreakdown');
+      if (localTracker.generalD20Roll && lblD20Result && lblD20Breakdown) {
+        const r = localTracker.generalD20Roll;
+        let color = 'var(--accent-primary)';
+        if (r.isNat20) color = '#10b981';
+        else if (r.isNat1) color = '#ef4444';
+        lblD20Result.innerHTML = `<span style="color: ${color};">Result: ${r.total}</span> ${r.isNat20 ? '🎉 (Nat 20!)' : (r.isNat1 ? '⚠️ (Nat 1)' : '')}`;
+        lblD20Breakdown.textContent = r.breakdown || '';
+      }
+
+      // 4. Conditions & Damage Track
+      const conds = localTracker.conditions || {};
+      const valBruised = document.getElementById('valBruisedCount');
+      if (valBruised) valBruised.textContent = conds['Bruised'] || 0;
+      const valInjured = document.getElementById('valInjuredCount');
+      if (valInjured) valInjured.textContent = conds['Injured'] || 0;
+
+      // Checkboxes
+      document.querySelectorAll('input[type="checkbox"][data-cond]').forEach(cb => {
+        const c = cb.dataset.cond;
+        cb.checked = !!conds[c];
+      });
+
+      // Active Conditions Summary Chips
+      const boxChips = document.getElementById('boxActiveConditionsChips');
+      if (boxChips) {
+        const chips = [];
+        const bruised = conds['Bruised'] || 0;
+        const injured = conds['Injured'] || 0;
+        if (bruised > 0) {
+          chips.push(`<span class="badge" style="background: rgba(245, 158, 11, 0.18); color: #d97706; border: 1px solid #d97706; font-weight: bold;">💥 Bruised ×${bruised} (-${bruised} save)</span>`);
+        }
+        if (injured > 0) {
+          chips.push(`<span class="badge" style="background: rgba(239, 68, 68, 0.18); color: #dc2626; border: 1px solid #dc2626; font-weight: bold;">🩸 Injured ×${injured} (-${injured} save)</span>`);
+        }
+        for (const [cName, cVal] of Object.entries(conds)) {
+          if (cName === 'Bruised' || cName === 'Injured') continue;
+          if (cVal) {
+            chips.push(`<span class="badge" style="background: rgba(239, 68, 68, 0.12); color: var(--text-main); border: 1px solid var(--accent-primary); font-weight: 600;">⚠️ ${cName}</span>`);
+          }
+        }
+        if (chips.length === 0) {
+          boxChips.innerHTML = `
+            <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: var(--text-muted);">Active Conditions:</span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600;">Normal / Unhindered</span>
+          `;
+        } else {
+          boxChips.innerHTML = `
+            <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: var(--text-muted);">Active Conditions:</span>
+            ${chips.join(' ')}
+          `;
+        }
+      }
+
+      // 5. Custom Trackers
+      const listCustom = document.getElementById('listCustomTrackers');
+      if (listCustom) {
+        const trackers = localTracker.customPoints || [];
+        if (trackers.length === 0) {
+          listCustom.innerHTML = `<span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); font-style: italic;">No custom counters configured. Click + Add Counter above.</span>`;
+        } else {
+          listCustom.innerHTML = trackers.map(t => `
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px;">
+              <input type="text" value="${t.name || ''}" placeholder="Counter Name..." style="flex: 1; font-size: var(--font-size-secondary, 13px); font-weight: 600; border: 1px solid var(--border-color); background: var(--bg-panel); color: var(--text-main); padding: 4px 8px; border-radius: 3px; min-height: 28px;" oninput="window.updateCustomTrackerName('${t.id}', this.value)" onchange="window.updateCustomTrackerName('${t.id}', this.value)">
+              <div style="display: flex; align-items: center; gap: 4px;" class="tracker-stepper">
+                <button type="button" class="modifier-stepper-btn" onclick="window.stepCustomPoint('${t.id}', -1)" style="width: 28px; height: 28px;">−</button>
+                <input type="number" min="0" value="${t.current || 0}" style="width: 44px; height: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-secondary, 13px); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-main);" onchange="window.updateCustomTrackerCurrent('${t.id}', this.value)">
+                <button type="button" class="modifier-stepper-btn" onclick="window.stepCustomPoint('${t.id}', 1)" style="width: 28px; height: 28px;">+</button>
+                <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted); margin: 0 2px;">/</span>
+                <input type="number" min="1" value="${t.max !== undefined && t.max !== null ? t.max : ''}" placeholder="Max" title="Maximum Capacity (Optional)" style="width: 44px; height: 28px; text-align: center; font-size: var(--font-size-minor-controls, 13px); border: 1px solid var(--border-color); background: var(--bg-app); color: var(--text-muted);" onchange="window.updateCustomTrackerMax('${t.id}', this.value)">
+              </div>
+              <button type="button" class="btn-delete-power" style="padding: 2px 8px; font-size: var(--font-size-minor-controls, 13px); height: 28px;" onclick="window.deleteCustomTracker('${t.id}')" title="Delete Counter">✕</button>
+            </div>
+          `).join('');
+        }
+      }
+
+      // 6. Fades Trackers
+      const listFades = document.getElementById('listFadesTrackers');
+      if (listFades) {
+        const detectedFades = [];
+        const powers = localTracker.powers || [];
+        powers.forEach((power, pIdx) => {
+          (power.effects || []).forEach((eff, eIdx) => {
+            const isBoost = eff.effectName === 'Boost';
+            const fadesMod = (eff.modifiers || []).find(m => m.name && (m.name === 'Fades' || m.name.startsWith('Fades')));
+            if (isBoost || fadesMod) {
+              const effId = eff.id || `fade_${pIdx}_${eIdx}`;
+              const effName = (eff.name && eff.name !== 'New Effect') ? eff.name : (eff.effectName || 'Unnamed Power');
+              const containerName = power.name || 'Power Container';
+
+              const slowMod = (eff.modifiers || []).find(m => m.name && m.name.startsWith('Slow Fade'));
+              const totalFadeMod = (eff.modifiers || []).find(m => m.name && m.name.startsWith('Total Fade'));
+              const slowRanks = slowMod ? (parseInt(slowMod.ranks) || 1) : 0;
+
+              let intervalDesc = '1 round (fades each round)';
+              if (slowRanks === 1) intervalDesc = '1 minute / 10 rounds';
+              else if (slowRanks === 2) intervalDesc = '5 minutes / 50 rounds';
+              else if (slowRanks === 3) intervalDesc = '20 minutes / 200 rounds';
+              else if (slowRanks >= 4) intervalDesc = `${slowRanks - 3} hour(s)`;
+
+              const maxVal = parseInt(eff.rank) || 1;
+              const unit = isBoost ? 'PP' : (fadesMod?.costType === 'flat' ? 'PP' : 'Ranks');
+
+              if (localTracker.fadeStates[effId] === undefined) {
+                localTracker.fadeStates[effId] = maxVal;
+              }
+              const currentVal = localTracker.fadeStates[effId];
+
+              detectedFades.push({
+                effId, effName, containerName, isBoost, unit, maxVal, currentVal,
+                intervalDesc, hasTotalFade: !!totalFadeMod, pIdx, eIdx
+              });
+            }
+          });
+        });
+
+        if (detectedFades.length === 0) {
+          listFades.innerHTML = `<span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); font-style: italic;">No active powers with Fades or Boost detected.</span>`;
+        } else {
+          listFades.innerHTML = detectedFades.map(f => `
+            <div style="display: flex; flex-direction: column; gap: 4px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                <div>
+                  <strong style="font-size: var(--font-size-secondary, 13px); color: var(--accent-primary);">${f.effName}</strong>
+                  <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px);"> (${f.containerName})</span>
+                </div>
+                <span class="badge" style="font-size: var(--font-size-tags, 12px); background: ${f.currentVal > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${f.currentVal > 0 ? '#10b981' : '#ef4444'};">
+                  ${f.currentVal} / ${f.maxVal} ${f.unit}
+                </span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <div style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted);">
+                  Rate: 1 ${f.unit} per ${f.intervalDesc}${f.hasTotalFade ? ' | <strong>Total Fade</strong>' : ''}
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <div class="tracker-stepper">
+                    <button type="button" class="modifier-stepper-btn" onclick="window.stepFadeValue('${f.effId}', -1, ${f.maxVal}, ${f.pIdx}, ${f.eIdx})" style="width: 28px; height: 28px;">−</button>
+                    <span style="min-width: 28px; text-align: center; font-weight: bold; font-size: var(--font-size-secondary, 13px);">${f.currentVal}</span>
+                    <button type="button" class="modifier-stepper-btn" onclick="window.stepFadeValue('${f.effId}', 1, ${f.maxVal}, ${f.pIdx}, ${f.eIdx})" style="width: 28px; height: 28px;">+</button>
+                  </div>
+                  <button type="button" class="btn btn-secondary" style="font-size: var(--font-size-minor-controls, 13px); padding: 2px 8px; height: 28px;" onclick="window.resetFadeValue('${f.effId}', ${f.maxVal}, ${f.pIdx}, ${f.eIdx})" title="Reset to Full">↺ Reset</button>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+    }
+
+    function syncTrackerFromOpener() {
+      try {
+        if (window.opener && !window.opener.closed) {
+          // If opener exposes getTrackerPopoutData or direct char
+          if (typeof window.opener.getTrackerPopoutData === 'function') {
+            const data = window.opener.getTrackerPopoutData();
+            if (data) {
+              localTracker.heroName = data.heroName || 'Hero';
+              localTracker.initiativeRoll = data.initiativeRoll;
+              localTracker.initiativeModifier = data.initiativeModifier || { dexMod: 0, initFeat: 0, totalMod: 0 };
+              localTracker.generalD20Roll = data.generalD20Roll;
+              localTracker.generalD20Adj = data.generalD20Adj || 0;
+              localTracker.conditions = data.conditions || {};
+              localTracker.customPoints = data.customPoints || [];
+              localTracker.fadeStates = data.fadeStates || {};
+              localTracker.powers = data.powers || [];
+              renderAllTrackerUI();
+              return;
+            }
+          } else if (window.opener.char) {
+            const ch = window.opener.char;
+            localTracker.heroName = ch.name || 'Hero';
+            if (ch.trackerState) {
+              localTracker.initiativeRoll = ch.trackerState.initiativeRoll;
+              localTracker.generalD20Roll = ch.trackerState.generalD20Roll;
+              localTracker.generalD20Adj = ch.trackerState.generalD20Adj || 0;
+              localTracker.conditions = ch.trackerState.conditions || {};
+              localTracker.customPoints = ch.trackerState.customPoints || [];
+              localTracker.fadeStates = ch.trackerState.fadeStates || {};
+            }
+            localTracker.powers = ch.activePowers || ch.powers || [];
+            
+            // Calc init mod from opener
+            const dexMod = (typeof ch.getAbilityRank === 'function') 
+              ? (ch.getAbilityRank("DEX") !== null ? ch.getAbilityRank("DEX") : -5) 
+              : (ch.abilities?.DEX || 0);
+            const effFeats = ch.effectiveFeats || ch.feats || {};
+            const initFeat = effFeats["Improved Initiative"] || 0;
+            const totalMod = (ch.derivedStats && typeof ch.derivedStats.initiative === 'number')
+              ? ch.derivedStats.initiative
+              : (dexMod + (initFeat * 4));
+            localTracker.initiativeModifier = { dexMod, initFeat, totalMod };
+            renderAllTrackerUI();
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // Opener not directly accessible, render current localTracker
+      renderAllTrackerUI();
+    }
+    window.syncTrackerFromOpener = syncTrackerFromOpener;
+
+    // Initialize BroadcastChannel
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('mm2e_session_channel');
+      bc.addEventListener('message', (event) => {
+        if (!event.data) return;
+        if (event.data.type === 'TRACKER_SYNC_STATE' && event.data.state) {
+          const s = event.data.state;
+          Object.assign(localTracker, s);
+          renderAllTrackerUI();
+        } else if (event.data.type === 'THEME_CHANGE' && event.data.theme) {
+          localStorage.setItem('mm2e_theme', event.data.theme);
+          if (window.__applySavedThemeAndFonts) window.__applySavedThemeAndFonts();
+        }
+      });
+    }
+
+    // Initial render and interval sync
+    syncTrackerFromOpener();
+    setInterval(syncTrackerFromOpener, 2000);
+  </script>
+</body>
+</html>

@@ -2012,12 +2012,19 @@ function setupInfoModalHandlers() {
   });
 }
 
+let poppedOutPartyWindow = null;
+window.poppedOutPartyWindow = null;
+let poppedOutTrackerWindow = null;
+window.poppedOutTrackerWindow = null;
+
 // ================= STATUS & COMBAT TRACKER CONTROLLER =================
 function setupStatusTracker() {
     const modal = document.getElementById("statusTrackerModal");
     const btnOpen = document.getElementById("btnOpenTracker");
     const btnClose = document.getElementById("modalStatusTrackerClose");
     const btnClearAllConds = document.getElementById("btnClearAllConditions");
+    const btnPopoutTracker = document.getElementById("btnPopoutTracker");
+    const btnRedockTrackerBtn = document.getElementById("btnRedockTracker");
 
     // Initiative elements
     const lblInitMod = document.getElementById("lblTrackerInitMod");
@@ -2044,6 +2051,103 @@ function setupStatusTracker() {
     // Fades elements
     const listFades = document.getElementById("listFadesTrackers");
     const btnAdvanceAll = document.getElementById("btnAdvanceAllFades");
+
+    // Popout & Docking Management
+    function getSavedTrackerBounds() {
+      let bounds = { width: 880, height: 660, left: 140, top: 140 };
+      try {
+        const saved = localStorage.getItem("mm2e_tracker_bounds");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
+        }
+      } catch (e) {}
+      return bounds;
+    }
+    window.getSavedTrackerBounds = getSavedTrackerBounds;
+
+    function saveTrackerBoundsFromRef(win) {
+      if (!win) return;
+      try {
+        const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
+        const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+        const width = win.outerWidth || win.innerWidth;
+        const height = win.outerHeight || win.innerHeight;
+        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
+          localStorage.setItem("mm2e_tracker_bounds", JSON.stringify({ left, top, width, height }));
+        }
+      } catch (e) {}
+    }
+    window.saveTrackerBoundsFromRef = saveTrackerBoundsFromRef;
+
+    function updateTrackerDockMode(isPoppedOut) {
+      const boxNotice = document.getElementById("boxPoppedOutTrackerNotice");
+      const dockBody = document.getElementById("trackerDockableBody");
+      const btnPop = document.getElementById("btnPopoutTracker");
+
+      if (boxNotice) boxNotice.style.display = isPoppedOut ? "flex" : "none";
+      if (dockBody) dockBody.style.display = isPoppedOut ? "none" : "";
+      if (btnPop) btnPop.style.display = isPoppedOut ? "none" : "";
+
+      if (!isPoppedOut) {
+        syncStatusTrackerUI();
+      }
+    }
+    window.updateTrackerDockMode = updateTrackerDockMode;
+
+    function openTrackerPopout() {
+      const bounds = getSavedTrackerBounds();
+      const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
+      const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
+      poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}`, "MM2CG_TrackerWindow", features);
+      window.poppedOutTrackerWindow = poppedOutTrackerWindow;
+      updateTrackerDockMode(true);
+
+      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
+        SessionNetwork.initBroadcastChannel();
+      }
+
+      setTimeout(() => {
+        try {
+          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed && poppedOutTrackerWindow.document) {
+            poppedOutTrackerWindow.document.documentElement.setAttribute("data-theme", currentTheme);
+            if (poppedOutTrackerWindow.document.body) poppedOutTrackerWindow.document.body.setAttribute("data-theme", currentTheme);
+            if (typeof poppedOutTrackerWindow.__applySavedThemeAndFonts === 'function') {
+              poppedOutTrackerWindow.__applySavedThemeAndFonts();
+            }
+          }
+        } catch (e) {}
+        syncStatusTrackerUI();
+      }, 150);
+      setTimeout(() => {
+        syncStatusTrackerUI();
+      }, 350);
+    }
+    window.openTrackerPopout = openTrackerPopout;
+
+    function redockTracker() {
+      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+        saveTrackerBoundsFromRef(poppedOutTrackerWindow);
+        try { poppedOutTrackerWindow.close(); } catch (e) {}
+      }
+      poppedOutTrackerWindow = null;
+      window.poppedOutTrackerWindow = null;
+      updateTrackerDockMode(false);
+    }
+    window.redockTracker = redockTracker;
+
+    if (btnPopoutTracker) {
+      btnPopoutTracker.addEventListener("click", openTrackerPopout);
+    }
+    if (btnRedockTrackerBtn) {
+      btnRedockTrackerBtn.addEventListener("click", redockTracker);
+    }
+
+    window.addEventListener('focus', () => {
+      if (poppedOutTrackerWindow && poppedOutTrackerWindow.closed) {
+        redockTracker();
+      }
+    });
 
     if (!modal || !btnOpen) return;
 
@@ -2267,18 +2371,65 @@ function setupStatusTracker() {
     }
 
     // Window helper bindings for tracker
+    function broadcastTrackerSync() {
+      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+        try {
+          if (typeof poppedOutTrackerWindow.syncTrackerFromOpener === 'function') {
+            poppedOutTrackerWindow.syncTrackerFromOpener();
+          }
+        } catch (e) {}
+      }
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({
+            type: 'TRACKER_SYNC_STATE',
+            state: window.getTrackerPopoutData ? window.getTrackerPopoutData() : null
+          });
+        }
+      } catch (e) {}
+    }
+    window.broadcastTrackerSync = broadcastTrackerSync;
+
+    window.getTrackerPopoutData = function() {
+      ensureTrackerState();
+      const dexMod = (typeof char.getAbilityRank === 'function') 
+        ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5) 
+        : (char.abilities?.DEX || 0);
+      const effFeats = char.effectiveFeats || char.feats || {};
+      const initFeat = effFeats["Improved Initiative"] || 0;
+      const totalMod = (char.derivedStats && typeof char.derivedStats.initiative === 'number')
+        ? char.derivedStats.initiative
+        : (dexMod + (initFeat * 4));
+
+      return {
+        heroName: char.name || 'Hero',
+        initiativeRoll: char.trackerState.initiativeRoll,
+        initiativeModifier: { dexMod, initFeat, totalMod },
+        generalD20Roll: char.trackerState.generalD20Roll,
+        generalD20Adj: char.trackerState.generalD20Adj || 0,
+        conditions: char.trackerState.conditions || {},
+        customPoints: char.trackerState.customPoints || [],
+        fadeStates: char.trackerState.fadeStates || {},
+        powers: char.activePowers || char.powers || []
+      };
+    };
+
     window.stepConditionCount = function(condName, delta) {
       ensureTrackerState();
       const current = char.trackerState.conditions[condName] || 0;
       const nextVal = Math.max(0, current + delta);
       char.trackerState.conditions[condName] = nextVal;
       updateTrackerConditionsSummary();
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
     };
 
     window.toggleConditionDirect = function(condName, isChecked) {
       ensureTrackerState();
       char.trackerState.conditions[condName] = isChecked;
       updateTrackerConditionsSummary();
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
     };
 
     window.stepFadeValue = function(effId, delta, maxVal, pIdx, eIdx) {
@@ -2304,6 +2455,7 @@ function setupStatusTracker() {
       }
 
       renderFadesTrackers();
+      broadcastTrackerSync();
     };
 
     window.resetFadeValue = function(effId, maxVal, pIdx, eIdx) {
@@ -2319,6 +2471,7 @@ function setupStatusTracker() {
         }
       }
       renderFadesTrackers();
+      broadcastTrackerSync();
     };
 
     window.stepCustomPoint = function(trackerId, delta) {
@@ -2329,12 +2482,14 @@ function setupStatusTracker() {
       const maxVal = (t.max !== undefined && t.max !== null && t.max !== '' && !isNaN(Number(t.max))) ? Number(t.max) : Infinity;
       t.current = Math.max(0, Math.min(maxVal, cur + delta));
       renderCustomTrackers();
+      broadcastTrackerSync();
     };
 
     window.updateCustomTrackerName = function(trackerId, newName) {
       ensureTrackerState();
       const t = char.trackerState.customPoints.find(x => x.id === trackerId);
       if (t) t.name = newName;
+      broadcastTrackerSync();
     };
 
     window.updateCustomTrackerCurrent = function(trackerId, newVal) {
@@ -2345,6 +2500,7 @@ function setupStatusTracker() {
         const maxVal = (t.max !== undefined && t.max !== null && t.max !== '' && !isNaN(Number(t.max))) ? Number(t.max) : Infinity;
         t.current = Math.max(0, Math.min(maxVal, val));
         renderCustomTrackers();
+        broadcastTrackerSync();
       }
     };
 
@@ -2364,6 +2520,7 @@ function setupStatusTracker() {
           t.current = t.max;
         }
         renderCustomTrackers();
+        broadcastTrackerSync();
       }
     };
 
@@ -2371,6 +2528,7 @@ function setupStatusTracker() {
       ensureTrackerState();
       char.trackerState.customPoints = char.trackerState.customPoints.filter(x => x.id !== trackerId);
       renderCustomTrackers();
+      broadcastTrackerSync();
     };
 
     // Open & Close Handlers (Special Tab Controller)
@@ -2384,6 +2542,7 @@ function setupStatusTracker() {
       updateTrackerConditionsSummary();
       renderCustomTrackers();
       renderFadesTrackers();
+      broadcastTrackerSync();
     }
     window.syncStatusTrackerUI = syncStatusTrackerUI;
 
@@ -2391,6 +2550,12 @@ function setupStatusTracker() {
       const trackerContent = document.getElementById("tab-tracker");
       const btnBack = document.getElementById("btnBackFromTables");
       const btnTables = document.getElementById("btnOpenTables");
+
+      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+        try {
+          poppedOutTrackerWindow.focus();
+        } catch (e) {}
+      }
 
       // If tracker tab is already active, toggle back to previous view
       if (trackerContent && trackerContent.classList.contains("active")) {
@@ -2467,124 +2632,167 @@ function setupStatusTracker() {
       });
     }
 
+    window.clearAllTrackerConditions = function() {
+      ensureTrackerState();
+      char.trackerState.conditions = {};
+      updateTrackerConditionsSummary();
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
+    };
+
     if (btnClearAllConds) {
-      btnClearAllConds.addEventListener("click", () => {
-        ensureTrackerState();
-        char.trackerState.conditions = {};
-        updateTrackerConditionsSummary();
-      });
+      btnClearAllConds.addEventListener("click", () => window.clearAllTrackerConditions());
     }
 
     // Initiative Actions
+    window.rollTrackerInitiative = function() {
+      ensureTrackerState();
+      const { totalMod } = getInitiativeModifier();
+      const d20 = Math.floor(Math.random() * 20) + 1;
+      const total = d20 + totalMod;
+      char.trackerState.initiativeRoll = total;
+      if (numInitResult) numInitResult.value = total;
+      if (lblInitBreakdown) {
+        lblInitBreakdown.textContent = `Rolled: 1d20 (${d20}) + ${totalMod} = ${total}`;
+      }
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
+      return total;
+    };
+
+    window.stepTrackerInit = function(delta) {
+      ensureTrackerState();
+      const cur = (char.trackerState.initiativeRoll !== null && char.trackerState.initiativeRoll !== undefined)
+        ? parseInt(char.trackerState.initiativeRoll)
+        : (parseInt(numInitResult?.value) || 0);
+      const next = cur + delta;
+      char.trackerState.initiativeRoll = next;
+      if (numInitResult) numInitResult.value = next;
+      if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
+    };
+
+    window.setTrackerInit = function(val) {
+      ensureTrackerState();
+      const n = parseInt(val);
+      char.trackerState.initiativeRoll = isNaN(n) ? null : n;
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
+    };
+
+    window.clearTrackerInit = function() {
+      ensureTrackerState();
+      char.trackerState.initiativeRoll = null;
+      if (numInitResult) numInitResult.value = "";
+      if (lblInitBreakdown) lblInitBreakdown.textContent = "";
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      broadcastTrackerSync();
+    };
+
     if (btnRollInit) {
-      btnRollInit.addEventListener("click", () => {
-        ensureTrackerState();
-        const { totalMod } = getInitiativeModifier();
-        const d20 = Math.floor(Math.random() * 20) + 1;
-        const total = d20 + totalMod;
-        char.trackerState.initiativeRoll = total;
-        if (numInitResult) numInitResult.value = total;
-        if (lblInitBreakdown) {
-          lblInitBreakdown.textContent = `Rolled: 1d20 (${d20}) + ${totalMod} = ${total}`;
-        }
-        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
-      });
+      btnRollInit.addEventListener("click", () => window.rollTrackerInitiative());
     }
 
     if (btnStepInitDown) {
-      btnStepInitDown.addEventListener("click", () => {
-        ensureTrackerState();
-        const cur = parseInt(numInitResult?.value) || 0;
-        const next = cur - 1;
-        char.trackerState.initiativeRoll = next;
-        if (numInitResult) numInitResult.value = next;
-        if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
-        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
-      });
+      btnStepInitDown.addEventListener("click", () => window.stepTrackerInit(-1));
     }
 
     if (btnStepInitUp) {
-      btnStepInitUp.addEventListener("click", () => {
-        ensureTrackerState();
-        const cur = parseInt(numInitResult?.value) || 0;
-        const next = cur + 1;
-        char.trackerState.initiativeRoll = next;
-        if (numInitResult) numInitResult.value = next;
-        if (lblInitBreakdown) lblInitBreakdown.textContent = `Adjusted initiative to ${next}`;
-        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
-      });
+      btnStepInitUp.addEventListener("click", () => window.stepTrackerInit(1));
     }
 
     if (numInitResult) {
-      numInitResult.addEventListener("change", (e) => {
-        ensureTrackerState();
-        const val = parseInt(e.target.value);
-        char.trackerState.initiativeRoll = isNaN(val) ? null : val;
-        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
-      });
+      numInitResult.addEventListener("change", (e) => window.setTrackerInit(e.target.value));
     }
 
     if (btnClearInit) {
-      btnClearInit.addEventListener("click", () => {
-        ensureTrackerState();
-        char.trackerState.initiativeRoll = null;
-        if (numInitResult) numInitResult.value = "";
-        if (lblInitBreakdown) lblInitBreakdown.textContent = "";
-        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
-      });
+      btnClearInit.addEventListener("click", () => window.clearTrackerInit());
     }
 
     // General d20 & Custom Notation Actions
     const txtTrackerDice = document.getElementById("txtTrackerDiceNotation");
+
+    window.rollTrackerD20 = function(customNotation) {
+      ensureTrackerState();
+      const notation = (customNotation !== undefined && customNotation !== null && customNotation !== '')
+        ? String(customNotation).trim()
+        : (txtTrackerDice?.value?.trim() || '');
+      let total, breakdown, isNat20, isNat1, rollType;
+
+      if (notation && typeof DiceNotation !== 'undefined') {
+        const res = DiceNotation.roll(notation);
+        total = res.total;
+        breakdown = res.breakdown;
+        isNat20 = res.isNat20;
+        isNat1 = res.isNat1;
+        rollType = `Dice (${res.expression})`;
+      } else {
+        const adj = parseInt(numD20Adj?.value) || char.trackerState.generalD20Adj || 0;
+        const d20 = Math.floor(Math.random() * 20) + 1;
+        total = d20 + adj;
+        isNat20 = d20 === 20;
+        isNat1 = d20 === 1;
+        rollType = "General d20";
+        breakdown = `1d20 (${d20})${adj !== 0 ? (adj > 0 ? ' + ' + adj : ' - ' + Math.abs(adj)) : ''} = ${total}`;
+        char.trackerState.generalD20Roll = { d20, adj, total };
+      }
+
+      if (lblD20Result) {
+        let color = "var(--accent-primary)";
+        if (isNat20) color = "#10b981";
+        else if (isNat1) color = "#ef4444";
+        lblD20Result.innerHTML = `<span style="color: ${color};">Result: ${total}</span> ${isNat20 ? '🎉 (Nat 20!)' : (isNat1 ? '⚠️ (Nat 1)' : '')}`;
+      }
+      if (lblD20Breakdown) {
+        lblD20Breakdown.textContent = breakdown;
+      }
+
+      // Broadcast to session log & network
+      const entry = {
+        characterName: char?.name || "Hero",
+        rollType: rollType,
+        total: total,
+        breakdown: breakdown,
+        isNat20: !!isNat20,
+        isNat1: !!isNat1
+      };
+      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
+        SessionNetwork.sendRoll(entry);
+      } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+        CampaignManager.addLogEntry(entry);
+      }
+
+      broadcastTrackerSync();
+      return { total, breakdown, isNat20, isNat1 };
+    };
+
+    window.stepTrackerD20Adj = function(delta) {
+      ensureTrackerState();
+      const cur = parseInt(numD20Adj?.value) || char.trackerState.generalD20Adj || 0;
+      const next = cur + delta;
+      char.trackerState.generalD20Adj = next;
+      if (numD20Adj) numD20Adj.value = next;
+      broadcastTrackerSync();
+    };
+
+    window.setTrackerD20Adj = function(val) {
+      ensureTrackerState();
+      const n = parseInt(val) || 0;
+      char.trackerState.generalD20Adj = n;
+      if (numD20Adj) numD20Adj.value = n;
+      broadcastTrackerSync();
+    };
+
+    window.clearTrackerD20Adj = function() {
+      ensureTrackerState();
+      char.trackerState.generalD20Adj = 0;
+      if (numD20Adj) numD20Adj.value = 0;
+      broadcastTrackerSync();
+    };
+
     if (btnRollD20) {
-      btnRollD20.addEventListener("click", () => {
-        ensureTrackerState();
-        const customNotation = txtTrackerDice?.value?.trim();
-        let total, breakdown, isNat20, isNat1, rollType;
-
-        if (customNotation && typeof DiceNotation !== 'undefined') {
-          const res = DiceNotation.roll(customNotation);
-          total = res.total;
-          breakdown = res.breakdown;
-          isNat20 = res.isNat20;
-          isNat1 = res.isNat1;
-          rollType = `Dice (${res.expression})`;
-        } else {
-          const adj = parseInt(numD20Adj?.value) || 0;
-          const d20 = Math.floor(Math.random() * 20) + 1;
-          total = d20 + adj;
-          isNat20 = d20 === 20;
-          isNat1 = d20 === 1;
-          rollType = "General d20";
-          breakdown = `1d20 (${d20})${adj !== 0 ? (adj > 0 ? ' + ' + adj : ' - ' + Math.abs(adj)) : ''} = ${total}`;
-          char.trackerState.generalD20Roll = { d20, adj, total };
-        }
-
-        if (lblD20Result) {
-          let color = "var(--accent-primary)";
-          if (isNat20) color = "#10b981";
-          else if (isNat1) color = "#ef4444";
-          lblD20Result.innerHTML = `<span style="color: ${color};">Result: ${total}</span> ${isNat20 ? '🎉 (Nat 20!)' : (isNat1 ? '⚠️ (Nat 1)' : '')}`;
-        }
-        if (lblD20Breakdown) {
-          lblD20Breakdown.textContent = breakdown;
-        }
-
-        // Broadcast to session log & network
-        const entry = {
-          characterName: char?.name || "Hero",
-          rollType: rollType,
-          total: total,
-          breakdown: breakdown,
-          isNat20: !!isNat20,
-          isNat1: !!isNat1
-        };
-        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
-          SessionNetwork.sendRoll(entry);
-        } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
-          CampaignManager.addLogEntry(entry);
-        }
-      });
+      btnRollD20.addEventListener("click", () => window.rollTrackerD20());
     }
 
     if (txtTrackerDice) {
@@ -2596,65 +2804,55 @@ function setupStatusTracker() {
     }
 
     if (btnStepD20AdjDown) {
-      btnStepD20AdjDown.addEventListener("click", () => {
-        ensureTrackerState();
-        const cur = parseInt(numD20Adj?.value) || 0;
-        const next = cur - 1;
-        char.trackerState.generalD20Adj = next;
-        if (numD20Adj) numD20Adj.value = next;
-      });
+      btnStepD20AdjDown.addEventListener("click", () => window.stepTrackerD20Adj(-1));
     }
 
     if (btnStepD20AdjUp) {
-      btnStepD20AdjUp.addEventListener("click", () => {
-        ensureTrackerState();
-        const cur = parseInt(numD20Adj?.value) || 0;
-        const next = cur + 1;
-        char.trackerState.generalD20Adj = next;
-        if (numD20Adj) numD20Adj.value = next;
-      });
+      btnStepD20AdjUp.addEventListener("click", () => window.stepTrackerD20Adj(1));
     }
 
     if (btnClearD20Adj) {
-      btnClearD20Adj.addEventListener("click", () => {
-        ensureTrackerState();
-        char.trackerState.generalD20Adj = 0;
-        if (numD20Adj) numD20Adj.value = 0;
-      });
+      btnClearD20Adj.addEventListener("click", () => window.clearTrackerD20Adj());
     }
 
     // Custom Points Add Action
-    if (btnAddCustom) {
-      btnAddCustom.addEventListener("click", () => {
-        ensureTrackerState();
-        char.trackerState.customPoints.push({
-          id: "pool_" + Math.random().toString(36).substr(2, 7),
-          name: "",
-          current: 0,
-          max: null,
-          explicitMax: false
-        });
-        renderCustomTrackers();
+    window.addTrackerCustomCounter = function() {
+      ensureTrackerState();
+      char.trackerState.customPoints.push({
+        id: "pool_" + Math.random().toString(36).substr(2, 7),
+        name: "",
+        current: 0,
+        max: null,
+        explicitMax: false
       });
+      renderCustomTrackers();
+      broadcastTrackerSync();
+    };
+
+    if (btnAddCustom) {
+      btnAddCustom.addEventListener("click", () => window.addTrackerCustomCounter());
     }
 
     // Advance All Fades
-    if (btnAdvanceAll) {
-      btnAdvanceAll.addEventListener("click", () => {
-        ensureTrackerState();
-        const allPowers = char.activePowers || char.powers || [];
-        allPowers.forEach((power, pIdx) => {
-          (power.effects || []).forEach((eff, eIdx) => {
-            const isBoost = eff.effectName === "Boost";
-            const fadesMod = (eff.modifiers || []).find(m => m.name && (m.name === "Fades" || m.name.startsWith("Fades")));
-            if (isBoost || fadesMod) {
-              const effId = eff.id || `fade_${pIdx}_${eIdx}`;
-              const maxVal = parseInt(eff.rank) || 1;
-              window.stepFadeValue(effId, -1, maxVal, pIdx, eIdx);
-            }
-          });
+    window.advanceAllTrackerFades = function() {
+      ensureTrackerState();
+      const allPowers = char.activePowers || char.powers || [];
+      allPowers.forEach((power, pIdx) => {
+        (power.effects || []).forEach((eff, eIdx) => {
+          const isBoost = eff.effectName === "Boost";
+          const fadesMod = (eff.modifiers || []).find(m => m.name && (m.name === "Fades" || m.name.startsWith("Fades")));
+          if (isBoost || fadesMod) {
+            const effId = eff.id || `fade_${pIdx}_${eIdx}`;
+            const maxVal = parseInt(eff.rank) || 1;
+            window.stepFadeValue(effId, -1, maxVal, pIdx, eIdx);
+          }
         });
       });
+      broadcastTrackerSync();
+    };
+
+    if (btnAdvanceAll) {
+      btnAdvanceAll.addEventListener("click", () => window.advanceAllTrackerFades());
     }
 
     // Draggable Resizing & Reset Size Handlers
@@ -2917,6 +3115,17 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onPopoutDocked", () => {
       if (typeof redockPartyDisplay === 'function') redockPartyDisplay();
+      if (typeof redockTracker === 'function') redockTracker();
+    });
+
+    SessionNetwork.addEventListener("onTrackerAction", (packet) => {
+      if (packet && packet.action && typeof window[packet.action] === 'function') {
+        try {
+          window[packet.action](...(packet.args || []));
+        } catch (e) {
+          console.error("Error executing tracker action:", packet.action, e);
+        }
+      }
     });
 
     SessionNetwork.addEventListener("onPartyAction", (packet) => {
@@ -3828,7 +4037,7 @@ function setupSessionAndGMHub() {
     });
   }
 
-  let poppedOutPartyWindow = null;
+  poppedOutPartyWindow = null;
 
   function getSavedPartyDisplayBounds() {
     let bounds = { width: 840, height: 480, left: 120, top: 120 };
@@ -3860,6 +4069,7 @@ function setupSessionAndGMHub() {
     const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}`, "MM2CG_PartyDisplay", features);
+    window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
@@ -3888,6 +4098,7 @@ function setupSessionAndGMHub() {
       try { poppedOutPartyWindow.close(); } catch (e) {}
     }
     poppedOutPartyWindow = null;
+    window.poppedOutPartyWindow = null;
     updatePartyDisplayDockMode(false);
   }
   window.redockPartyDisplay = redockPartyDisplay;
@@ -5965,6 +6176,17 @@ function setupThemeAndFontControls() {
         if (poppedOutPartyWindow.document.body) poppedOutPartyWindow.document.body.setAttribute("data-theme", nextTheme);
         if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
           poppedOutPartyWindow.__applySavedThemeAndFonts();
+        }
+      }
+    } catch (e) {}
+
+    // Direct synchronization to popped out tracker window if open
+    try {
+      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed && poppedOutTrackerWindow.document) {
+        poppedOutTrackerWindow.document.documentElement.setAttribute("data-theme", nextTheme);
+        if (poppedOutTrackerWindow.document.body) poppedOutTrackerWindow.document.body.setAttribute("data-theme", nextTheme);
+        if (typeof poppedOutTrackerWindow.__applySavedThemeAndFonts === 'function') {
+          poppedOutTrackerWindow.__applySavedThemeAndFonts();
         }
       }
     } catch (e) {}

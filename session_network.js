@@ -48,6 +48,7 @@
     onPartyAction: [],
     onPartyRosterHtml: [],
     onPartyReqRoster: [],
+    onTrackerAction: [],
     onThemeChange: []
   };
 
@@ -158,11 +159,16 @@
 
       case 'POPOUT_DOCKED':
       case 'PARTY_DISPLAY_DOCKED':
+      case 'TRACKER_DOCKED':
         emit('onPopoutDocked', packet);
         break;
 
       case 'PARTY_ACTION':
         emit('onPartyAction', packet);
+        break;
+
+      case 'TRACKER_ACTION':
+        emit('onTrackerAction', packet);
         break;
 
       case 'PARTY_ROSTER_HTML':
@@ -177,6 +183,14 @@
         if (packet.bounds) {
           try {
             localStorage.setItem('mm2e_party_display_bounds', JSON.stringify(packet.bounds));
+          } catch (e) {}
+        }
+        break;
+
+      case 'TRACKER_BOUNDS_UPDATE':
+        if (packet.bounds) {
+          try {
+            localStorage.setItem('mm2e_tracker_bounds', JSON.stringify(packet.bounds));
           } catch (e) {}
         }
         break;

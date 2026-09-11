@@ -691,8 +691,17 @@
   }
 
   function sendLocalBroadcast(packet) {
+    if (!broadcastChannel) {
+      initBroadcastChannel();
+    }
     if (broadcastChannel) {
       try { broadcastChannel.postMessage(packet); } catch (e) {}
+    } else if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+        bc.postMessage(packet);
+        bc.close();
+      } catch (e) {}
     }
   }
 

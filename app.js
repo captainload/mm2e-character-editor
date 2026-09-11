@@ -3706,6 +3706,14 @@ function setupSessionAndGMHub() {
     tableRoster.innerHTML = rowsHtml;
     try {
       if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
+        const activeTheme = document.documentElement.getAttribute("data-theme") || "light";
+        if (poppedOutPartyWindow.document.documentElement.getAttribute("data-theme") !== activeTheme) {
+          poppedOutPartyWindow.document.documentElement.setAttribute("data-theme", activeTheme);
+          if (poppedOutPartyWindow.document.body) poppedOutPartyWindow.document.body.setAttribute("data-theme", activeTheme);
+          if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
+            poppedOutPartyWindow.__applySavedThemeAndFonts();
+          }
+        }
         const popTable = poppedOutPartyWindow.document.getElementById("tbodySessionPartyRoster");
         if (popTable) popTable.innerHTML = rowsHtml;
       }
@@ -3850,11 +3858,27 @@ function setupSessionAndGMHub() {
   function openPartyDisplayPopout() {
     const bounds = getSavedPartyDisplayBounds();
     const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
-    poppedOutPartyWindow = window.open("party_window.html", "MM2CG_PartyDisplay", features);
+    const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
+    poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}`, "MM2CG_PartyDisplay", features);
     updatePartyDisplayDockMode(true);
+    if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
+      SessionNetwork.initBroadcastChannel();
+    }
+    setTimeout(() => {
+      try {
+        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
+          poppedOutPartyWindow.document.documentElement.setAttribute("data-theme", currentTheme);
+          if (poppedOutPartyWindow.document.body) poppedOutPartyWindow.document.body.setAttribute("data-theme", currentTheme);
+          if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
+            poppedOutPartyWindow.__applySavedThemeAndFonts();
+          }
+        }
+      } catch (e) {}
+      syncPartyRosterUI();
+    }, 150);
     setTimeout(() => {
       syncPartyRosterUI();
-    }, 250);
+    }, 350);
   }
   window.openPartyDisplayPopout = openPartyDisplayPopout;
 
@@ -4277,13 +4301,13 @@ function setupSessionAndGMHub() {
 
     boxJoinReqs.style.display = "block";
     listJoinReqs.innerHTML = reqs.map(r => `
-      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
+      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border-color); font-size: var(--font-size-controls, 14px);">
         <div>
-          <strong>${escapeHtml(r.playerName)}</strong> playing <span class="badge" style="color: var(--accent-primary);">${escapeHtml(r.characterName)}</span>
+          <strong style="font-size: var(--font-size-controls, 14px);">${escapeHtml(r.playerName)}</strong> playing <span class="badge" style="color: var(--accent-primary); font-size: var(--font-size-fine-print, 12px);">${escapeHtml(r.characterName)}</span>
         </div>
         <div style="display: flex; gap: 6px;">
-          <button type="button" class="btn btn-primary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>
-          <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 12px;" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
+          <button type="button" class="btn btn-primary" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>
+          <button type="button" class="btn btn-secondary" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls, 13px);" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
         </div>
       </div>
     `).join('');
@@ -4324,7 +4348,7 @@ function setupSessionAndGMHub() {
     const timeline = CampaignManager.getSnapshotTimeline();
     if (timeline.length === 0) {
       container.innerHTML = `
-        <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 16px; font-style: italic;">
+        <div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary, 14px); padding: 16px; font-style: italic;">
           No Save Points recorded yet. Click "📸 Create Save Point" above to create an instant snapshot checkpoint.
         </div>
       `;
@@ -4334,16 +4358,16 @@ function setupSessionAndGMHub() {
     container.innerHTML = timeline.map(s => {
       const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
       return `
-        <div class="gm-timeline-item">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
-            <span style="font-family: monospace; font-size: 11px; color: var(--text-muted);">[${dateStr}]</span>
-            <strong style="font-size: 12px; color: var(--text-main);">${escapeHtml(s.label)}</strong>
-            <span class="badge" style="font-size: 10px; background: rgba(2, 132, 199, 0.15); color: #0284c7;">${s.characterCount || 0} characters</span>
+        <div class="gm-timeline-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;">
+            <span style="font-family: monospace; font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">[${dateStr}]</span>
+            <strong style="font-size: var(--font-size-controls, 14px); color: var(--text-main);">${escapeHtml(s.label)}</strong>
+            <span class="badge" style="font-size: var(--font-size-fine-print, 12px); background: rgba(2, 132, 199, 0.15); color: #0284c7;">${s.characterCount || 0} characters</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button type="button" class="btn btn-primary" style="height: 22px; padding: 0 8px; font-size: 11px;" onclick="window.gmRollbackClick('${s.id}')" title="Roll back campaign to this save point">⏪ Roll Back</button>
-            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 8px; font-size: 11px;" onclick="window.openCharExtractionModal('${s.id}')" title="Extract individual character from this snapshot">📦 Extract</button>
-            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmDeleteSnapshotClick('${s.id}')" title="Delete snapshot">🗑</button>
+            <button type="button" class="btn btn-primary" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" onclick="window.gmRollbackClick('${s.id}')" title="Roll back campaign to this save point">⏪ Roll Back</button>
+            <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" onclick="window.openCharExtractionModal('${s.id}')" title="Extract individual character from this snapshot">📦 Extract</button>
+            <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" onclick="window.gmDeleteSnapshotClick('${s.id}')" title="Delete snapshot">🗑</button>
           </div>
         </div>
       `;
@@ -4511,20 +4535,20 @@ function setupSessionAndGMHub() {
     const npcs = camp?.npcs || [];
 
     if (npcs.length === 0) {
-      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 12px; font-style: italic;">No friendly party NPCs attached.</div>`;
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary, 14px); padding: 14px; font-style: italic;">No friendly party NPCs attached.</div>`;
       return;
     }
 
     list.innerHTML = npcs.map(n => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 10px;">
-        <div>
-          <strong style="font-size: 12px; color: #0284c7;">${escapeHtml(n.name)}</strong>
-          <span style="font-size: 11px; color: var(--text-muted); margin-left: 6px;">PL ${n.powerLevel || 10}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 12px; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <strong style="font-size: var(--font-size-controls, 14px); color: #0284c7;">${escapeHtml(n.name)}</strong>
+          <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">PL ${n.powerLevel || 10}</span>
         </div>
-        <div style="display: flex; gap: 4px;">
-          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmLoadNpcToEditor('${n.id}')">👁️ Load</button>
-          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmExportCharSheet('${n.id}')">💾 .mm2e</button>
-          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveNPC('${n.id}')">✕</button>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmLoadNpcToEditor('${n.id}')">👁️ Load</button>
+          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmExportCharSheet('${n.id}')">💾 .mm2e</button>
+          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" onclick="window.gmRemoveNPC('${n.id}')">✕</button>
         </div>
       </div>
     `).join('');
@@ -4536,22 +4560,22 @@ function setupSessionAndGMHub() {
     const enemies = CampaignManager.getEncounterEnemies();
 
     if (enemies.length === 0) {
-      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 12px; font-style: italic;">No encounter adversaries or enemies added.</div>`;
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary, 14px); padding: 14px; font-style: italic;">No encounter adversaries or enemies added.</div>`;
       return;
     }
 
     list.innerHTML = enemies.map(e => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 10px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <strong style="font-size: 12px; color: #ef4444;">${escapeHtml(e.name)}</strong>
-          <span style="font-size: 11px; color: var(--text-muted);">PL ${e.powerLevel || 10}</span>
-          <span style="font-size: 11px; color: ${e.currentBruises > 0 ? '#f59e0b' : 'var(--text-muted)'};">B: ${e.currentBruises || 0}</span>
-          <span style="font-size: 11px; color: ${e.currentInjured > 0 ? '#ef4444' : 'var(--text-muted)'};">I: ${e.currentInjured || 0}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 12px; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <strong style="font-size: var(--font-size-controls, 14px); color: #ef4444;">${escapeHtml(e.name)}</strong>
+          <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">PL ${e.powerLevel || 10}</span>
+          <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: ${e.currentBruises > 0 ? '#f59e0b' : 'var(--text-muted)'};">B: ${e.currentBruises || 0}</span>
+          <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: ${e.currentInjured > 0 ? '#ef4444' : 'var(--text-muted)'};">I: ${e.currentInjured || 0}</span>
         </div>
-        <div style="display: flex; gap: 4px;">
-          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmQuickRollEnemy('${e.id}')" title="Quick Roll 1d20 Attack">🎲 Roll</button>
-          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmStepEnemyBruise('${e.id}', 1)" title="+1 Bruised">+B</button>
-          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveEnemy('${e.id}')">✕</button>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmQuickRollEnemy('${e.id}')" title="Quick Roll 1d20 Attack">🎲 Roll</button>
+          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmStepEnemyBruise('${e.id}', 1)" title="+1 Bruised">+B</button>
+          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" onclick="window.gmRemoveEnemy('${e.id}')">✕</button>
         </div>
       </div>
     `).join('');
@@ -5000,7 +5024,7 @@ function setupSessionAndGMHub() {
 
     if (users.length === 0) {
       const emptyHtml = `
-        <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 18px; font-style: italic;">
+        <div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary, 14px); padding: 18px; font-style: italic;">
           No authorized user names added yet.<br>
           Enter player user names above to allow them to log into this campaign.
         </div>
@@ -5018,42 +5042,42 @@ function setupSessionAndGMHub() {
       const isOnline = matchingAccepted && connectedClients.some(c => c.peerId === matchingAccepted.id);
       const isLocalUser = char && char.playerName && char.playerName.toLowerCase() === u.userName.toLowerCase();
 
-      let statusBadge = `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: 10px;">⚪ Offline</span>`;
+      let statusBadge = `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: var(--font-size-fine-print, 12px);">⚪ Offline</span>`;
       if (isOnline || isLocalUser) {
-        statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 10px;">🟢 Logged In</span>`;
+        statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: var(--font-size-fine-print, 12px);">🟢 Logged In</span>`;
       } else if (matchingAccepted) {
-        statusBadge = `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid #0284c7; font-size: 10px;">🟡 Known</span>`;
+        statusBadge = `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid #0284c7; font-size: var(--font-size-fine-print, 12px);">🟡 Known</span>`;
       }
 
       // Account Token status badge
       let tokenBadge = '';
       if (u.userToken) {
         const shortTok = escapeHtml(u.userToken.substring(0, 10)) + '...';
-        tokenBadge = `<span class="token-badge token-bound" title="Bound P2P Account Key: ${escapeHtml(u.userToken)}">🛡️ ${shortTok}</span>`;
+        tokenBadge = `<span class="token-badge token-bound" style="font-size: var(--font-size-fine-print, 12px);" title="Bound P2P Account Key: ${escapeHtml(u.userToken)}">🛡️ ${shortTok}</span>`;
       } else {
-        tokenBadge = `<span class="token-badge token-unclaimed" title="Unclaimed: Player's first login will automatically bind their unique account token">⏳ Unclaimed Key</span>`;
+        tokenBadge = `<span class="token-badge token-unclaimed" style="font-size: var(--font-size-fine-print, 12px);" title="Unclaimed: Player's first login will automatically bind their unique account token">⏳ Unclaimed Key</span>`;
       }
 
       const charName = u.lastCharacter || matchingAccepted?.characterName || '—';
       const safeUserName = u.userName.replace(/'/g, "\\'");
 
       return `
-        <div class="campaign-user-row" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 6px 10px; border-bottom: 1px solid var(--border-color); gap: 8px; font-size: 12px;">
+        <div class="campaign-user-row" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-bottom: 1px solid var(--border-color); gap: 8px; font-size: var(--font-size-controls, 14px);">
           <div style="display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;">
-            <strong style="color: var(--accent-primary); font-size: 12px; min-width: 90px;">
+            <strong style="color: var(--accent-primary); font-size: var(--font-size-controls, 14px); min-width: 90px;">
               👤 ${escapeHtml(u.userName)}
             </strong>
             ${tokenBadge}
             ${statusBadge}
-            <span style="font-size: 11px; color: var(--text-muted);">
+            <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">
               Character: <span style="color: var(--text-main); font-weight: 600;">${escapeHtml(charName)}</span>
             </span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             ${u.userToken ? `
-              <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" title="Reset Account Key (allows user to re-bind from a new device)" onclick="window.gmResetUserTokenClick('${safeUserName}')">🔄 Reset Key</button>
+              <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" title="Reset Account Key (allows user to re-bind from a new device)" onclick="window.gmResetUserTokenClick('${safeUserName}')">🔄 Reset Key</button>
             ` : ''}
-            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" title="Remove this authorized user" onclick="window.gmRemoveAuthorizedUserClick('${safeUserName}')">✕</button>
+            <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" title="Remove this authorized user" onclick="window.gmRemoveAuthorizedUserClick('${safeUserName}')">✕</button>
           </div>
         </div>
       `;
@@ -5932,7 +5956,27 @@ function setupThemeAndFontControls() {
     const nextTheme = themes[(currentIndex + 1) % themes.length];
     root.setAttribute("data-theme", nextTheme);
     updateThemeBtnUI(nextTheme);
-    localStorage.setItem("mm2e_theme", nextTheme);
+    try { localStorage.setItem("mm2e_theme", nextTheme); } catch (e) {}
+
+    // Direct synchronization to popped out party window if open
+    try {
+      if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
+        poppedOutPartyWindow.document.documentElement.setAttribute("data-theme", nextTheme);
+        if (poppedOutPartyWindow.document.body) poppedOutPartyWindow.document.body.setAttribute("data-theme", nextTheme);
+        if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
+          poppedOutPartyWindow.__applySavedThemeAndFonts();
+        }
+      }
+    } catch (e) {}
+
+    // Direct broadcast over mm2e_session_channel
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('mm2e_session_channel');
+        bc.postMessage({ type: 'THEME_CHANGE', theme: nextTheme });
+      }
+    } catch (e) {}
+
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
       SessionNetwork.sendLocalBroadcast({ type: 'THEME_CHANGE', theme: nextTheme });
     }

@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=41">
+  <link rel="stylesheet" href="styles.css?v=42">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -1324,74 +1324,74 @@
               <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px;">❤️ Conditions &amp; Damage Track</strong>
             </div>
 
-            <div id="trackerConditionsScrollContainer" class="tracker-conditions-container" style="overflow-y: auto; overflow-x: hidden; max-height: 720px; padding-right: 4px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;">
+            <div id="trackerConditionsScrollContainer" class="tracker-conditions-container" style="overflow-x: hidden; padding-right: 2px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
               
               <!-- Damage Track Section -->
-              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
-                <div style="font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary); margin-bottom: 8px;">💥 Damage Track (Toughness Saves)</div>
+              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
+                <div style="font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary); margin-bottom: 6px;">💥 Damage Track (Toughness Saves)</div>
                 
-                <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
                     <div>
-                      <strong style="font-size: var(--font-size-labels); display: block;">Bruised</strong>
-                      <span class="secondary-text" style="font-size: var(--font-size-fine-print);">-1 save vs non-lethal</span>
+                      <strong style="font-size: var(--font-size-controls, 14px); display: block;">Bruised</strong>
+                      <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px);">-1 non-lethal</span>
                     </div>
                     <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
                       <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Bruised', -1)">−</button>
-                      <span id="valBruisedCount" style="min-width: 24px; text-align: center; font-weight: bold; font-size: var(--font-size-controls);">0</span>
+                      <span id="valBruisedCount" style="min-width: 22px; text-align: center; font-weight: bold; font-size: var(--font-size-controls);">0</span>
                       <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Bruised', 1)">+</button>
                     </div>
                   </div>
 
-                  <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 4px;">
                     <div>
-                      <strong style="font-size: var(--font-size-labels); display: block;">Injured</strong>
-                      <span class="secondary-text" style="font-size: var(--font-size-fine-print);">-1 save vs lethal</span>
+                      <strong style="font-size: var(--font-size-controls, 14px); display: block;">Injured</strong>
+                      <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px);">-1 lethal</span>
                     </div>
                     <div class="tracker-stepper" style="display: inline-flex; align-items: center;">
                       <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Injured', -1)">−</button>
-                      <span id="valInjuredCount" style="min-width: 24px; text-align: center; font-weight: bold; font-size: var(--font-size-controls);">0</span>
+                      <span id="valInjuredCount" style="min-width: 22px; text-align: center; font-weight: bold; font-size: var(--font-size-controls);">0</span>
                       <button type="button" class="modifier-stepper-btn" onclick="stepConditionCount('Injured', 1)">+</button>
                     </div>
                   </div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px;">
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Dazed" onchange="toggleConditionDirect('Dazed', this.checked)"> <strong>Dazed</strong> (Std action only)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Staggered" onchange="toggleConditionDirect('Staggered', this.checked)"> <strong>Staggered</strong> (Half speed &amp; Dazed)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Disabled" onchange="toggleConditionDirect('Disabled', this.checked)"> <strong>Disabled</strong> (-5 all checks, 1/2 speed)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Disabled" onchange="toggleConditionDirect('Disabled', this.checked)"> <strong>Disabled</strong> (-5 checks, 1/2 spd)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Unconscious" onchange="toggleConditionDirect('Unconscious', this.checked)"> <strong>Unconscious</strong> (Helpless)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Dying" onchange="toggleConditionDirect('Dying', this.checked)"> <strong>Dying</strong> (Fort save each round)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Dying" onchange="toggleConditionDirect('Dying', this.checked)"> <strong>Dying</strong> (Fort save/round)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Dead" onchange="toggleConditionDirect('Dead', this.checked)"> <strong>Dead</strong></label>
                 </div>
               </div>
 
               <!-- Sensory, Movement & Tactical Conditions -->
-              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
-                <div style="font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary); margin-bottom: 8px;">🎯 Tactical &amp; Impairment Conditions</div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
+                <div style="font-weight: bold; font-size: var(--font-size-labels); color: var(--accent-primary); margin-bottom: 6px;">🎯 Tactical &amp; Impairment Conditions</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px;">
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Blind" onchange="toggleConditionDirect('Blind', this.checked)"> <strong>Blind</strong> (-4 Search/Str/Dex)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Deaf" onchange="toggleConditionDirect('Deaf', this.checked)"> <strong>Deaf</strong> (-4 Init, no auditory)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Entangled" onchange="toggleConditionDirect('Entangled', this.checked)"> <strong>Entangled</strong> (-2 Atk, -4 Dex, 1/2 spd)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Entangled" onchange="toggleConditionDirect('Entangled', this.checked)"> <strong>Entangled</strong> (-2 Atk, -4 Dex)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Exhausted" onchange="toggleConditionDirect('Exhausted', this.checked)"> <strong>Exhausted</strong> (-6 Str/Dex, 1/2 spd)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Fascinated" onchange="toggleConditionDirect('Fascinated', this.checked)"> <strong>Fascinated</strong> (No actions)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Fatigued" onchange="toggleConditionDirect('Fatigued', this.checked)"> <strong>Fatigued</strong> (-2 Str/Dex, no all-out)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Flat-Footed" onchange="toggleConditionDirect('Flat-Footed', this.checked)"> <strong>Flat-Footed</strong> (No Dodge bonus)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Fatigued" onchange="toggleConditionDirect('Fatigued', this.checked)"> <strong>Fatigued</strong> (-2 Str/Dex)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Flat-Footed" onchange="toggleConditionDirect('Flat-Footed', this.checked)"> <strong>Flat-Footed</strong> (No Dodge)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Helpless" onchange="toggleConditionDirect('Helpless', this.checked)"> <strong>Helpless</strong> (Def 5 or 0 melee)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Hindered" onchange="toggleConditionDirect('Hindered', this.checked)"> <strong>Hindered</strong> (Move 1/2 speed)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Immobile" onchange="toggleConditionDirect('Immobile', this.checked)"> <strong>Immobile</strong> (Speed effectively 0)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Nauseated" onchange="toggleConditionDirect('Nauseated', this.checked)"> <strong>Nauseated</strong> (Move action only)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Panicked" onchange="toggleConditionDirect('Panicked', this.checked)"> <strong>Panicked</strong> (-2 checks, must flee)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Paralyzed" onchange="toggleConditionDirect('Paralyzed', this.checked)"> <strong>Paralyzed</strong> (Helpless, Str/Dex 0)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Pinned" onchange="toggleConditionDirect('Pinned', this.checked)"> <strong>Pinned</strong> (Helpless in grapple)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Prone" onchange="toggleConditionDirect('Prone', this.checked)"> <strong>Prone</strong> (-4 melee, +4 ranged def)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Immobile" onchange="toggleConditionDirect('Immobile', this.checked)"> <strong>Immobile</strong> (Speed 0)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Nauseated" onchange="toggleConditionDirect('Nauseated', this.checked)"> <strong>Nauseated</strong> (Move only)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Panicked" onchange="toggleConditionDirect('Panicked', this.checked)"> <strong>Panicked</strong> (-2, must flee)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Paralyzed" onchange="toggleConditionDirect('Paralyzed', this.checked)"> <strong>Paralyzed</strong> (Helpless, 0 Dex)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Pinned" onchange="toggleConditionDirect('Pinned', this.checked)"> <strong>Pinned</strong> (Grapple helpless)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Prone" onchange="toggleConditionDirect('Prone', this.checked)"> <strong>Prone</strong> (-4 melee, +4 ranged)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Shaken" onchange="toggleConditionDirect('Shaken', this.checked)"> <strong>Shaken</strong> (-2 checks &amp; saves)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Stunned" onchange="toggleConditionDirect('Stunned', this.checked)"> <strong>Stunned</strong> (No actions, -2 def)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Vulnerable" onchange="toggleConditionDirect('Vulnerable', this.checked)"> <strong>Vulnerable</strong> (No Dodge bonus)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Defenseless" onchange="toggleConditionDirect('Defenseless', this.checked)"> <strong>Defenseless</strong> (Active Def is 0)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Vulnerable" onchange="toggleConditionDirect('Vulnerable', this.checked)"> <strong>Vulnerable</strong> (No Dodge)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Defenseless" onchange="toggleConditionDirect('Defenseless', this.checked)"> <strong>Defenseless</strong> (Active Def 0)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Compelled" onchange="toggleConditionDirect('Compelled', this.checked)"> <strong>Compelled</strong> (Chosen action)</label>
                   <label class="tracker-condition-label"><input type="checkbox" data-cond="Controlled" onchange="toggleConditionDirect('Controlled', this.checked)"> <strong>Controlled</strong> (Dictated actions)</label>
-                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Unaware" onchange="toggleConditionDirect('Unaware', this.checked)"> <strong>Unaware</strong> (Auto-fail awareness)</label>
+                  <label class="tracker-condition-label"><input type="checkbox" data-cond="Unaware" onchange="toggleConditionDirect('Unaware', this.checked)"> <strong>Unaware</strong> (Auto-fail senses)</label>
                 </div>
               </div>
 
@@ -1429,62 +1429,62 @@
             <strong style="font-size: var(--font-size-labels); color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
               👤 User Identity &amp; Campaign Access Management
             </strong>
-            <span class="secondary-text" style="font-size: 11px;">(Your user name &amp; P2P account token • Authorized player whitelist)</span>
+            <span class="secondary-text" style="font-size: var(--font-size-fine-print, 13px);">(Your user name &amp; P2P account token • Authorized player whitelist)</span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span id="lblLocalAccountStatusBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; font-size: 11px; padding: 2px 8px;">🛡️ P2P Authenticated</span>
+            <span id="lblLocalAccountStatusBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; font-size: var(--font-size-fine-print, 12px); padding: 2px 8px;">🛡️ P2P Authenticated</span>
           </div>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; align-items: start;">
           
           <!-- Left Side: Your Local User Profile & P2P Token (For All Users: GMs & Players) -->
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;">
-            <div style="font-weight: 700; font-size: 13px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-weight: 700; font-size: var(--font-size-labels, 15px); color: var(--text-main); display: flex; align-items: center; gap: 6px;">
               <span>🔑 Your User Identity &amp; Account Key</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtLocalAccountUserName">Your User Name:</label>
+              <label style="font-size: var(--font-size-controls, 14px); font-weight: 600; color: var(--text-muted);" for="txtLocalAccountUserName">Your User Name:</label>
               <div style="display: flex; gap: 6px;">
-                <input type="text" id="txtLocalAccountUserName" placeholder="Enter your user name" maxlength="45" style="flex: 1; height: 28px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
-                <button type="button" class="btn btn-secondary" id="btnSaveLocalAccountUserName" style="height: 28px; padding: 0 10px; font-size: 11px;">Save</button>
+                <input type="text" id="txtLocalAccountUserName" placeholder="Enter your user name" maxlength="45" style="flex: 1; height: 30px; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+                <button type="button" class="btn btn-secondary" id="btnSaveLocalAccountUserName" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">Save</button>
               </div>
             </div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Unique P2P Account Key:</label>
+              <label style="font-size: var(--font-size-controls, 14px); font-weight: 600; color: var(--text-muted);">Unique P2P Account Key:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <code id="lblLocalAccountToken" style="flex: 1; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 8px; font-size: 11px; color: var(--accent-primary); word-break: break-all; user-select: all;">usr_...</code>
-                <button type="button" class="btn btn-secondary" id="btnCopyLocalAccountToken" style="height: 28px; padding: 0 8px; font-size: 11px;" title="Copy account key to clipboard">📋 Copy</button>
-                <button type="button" class="btn btn-secondary" id="btnImportLocalAccountToken" style="height: 28px; padding: 0 8px; font-size: 11px;" title="Import or set your account key for another device">🔑 Import</button>
+                <code id="lblLocalAccountToken" style="flex: 1; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px 8px; font-size: 13px; color: var(--accent-primary); word-break: break-all; user-select: all;">usr_...</code>
+                <button type="button" class="btn btn-secondary" id="btnCopyLocalAccountToken" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" title="Copy account key to clipboard">📋 Copy</button>
+                <button type="button" class="btn btn-secondary" id="btnImportLocalAccountToken" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" title="Import or set your account key for another device">🔑 Import</button>
               </div>
-              <span style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">
+              <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted); line-height: 1.4;">
                 This cryptographic token authenticates your user identity across peer-to-peer campaigns without central servers.
               </span>
             </div>
           </div>
 
           <!-- Right Side: Campaign Authorized Users Whitelist (GM Controls) -->
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-              <div style="font-weight: 700; font-size: 13px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+              <div style="font-weight: 700; font-size: var(--font-size-labels, 15px); color: var(--text-main); display: flex; align-items: center; gap: 6px;">
                 <span>👥 Campaign Player Whitelist</span>
-                <span id="lblGMInlineUserCount" class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: 11px;">0 users</span>
+                <span id="lblGMInlineUserCount" class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: var(--font-size-fine-print, 12px);">0 users</span>
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <label style="font-size: 11px; color: var(--text-muted);">GM Name:</label>
-                <input type="text" id="txtInlineGMName" placeholder="GM Name" style="width: 100px; height: 24px; font-size: 11px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
-                <button type="button" class="btn btn-secondary" id="btnSaveInlineGMName" style="height: 24px; padding: 0 6px; font-size: 11px;">Save</button>
+                <label style="font-size: var(--font-size-controls, 14px); color: var(--text-muted);">GM Name:</label>
+                <input type="text" id="txtInlineGMName" placeholder="GM Name" style="width: 120px; height: 30px; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
+                <button type="button" class="btn btn-secondary" id="btnSaveInlineGMName" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;">Save</button>
               </div>
             </div>
 
             <!-- Add User input row -->
             <div style="display: flex; gap: 6px; align-items: center;">
-              <input type="text" id="txtInlineNewUserName" placeholder="Enter player user name (e.g. Alice, Bob)..." style="flex: 1; height: 26px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
-              <button type="button" class="btn btn-primary" id="btnInlineAddNewUser" style="height: 26px; padding: 0 10px; font-size: 11px; font-weight: 600;">+ Authorize User</button>
+              <input type="text" id="txtInlineNewUserName" placeholder="Enter player user name (e.g. Alice, Bob)..." style="flex: 1; height: 30px; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+              <button type="button" class="btn btn-primary" id="btnInlineAddNewUser" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ Authorize User</button>
             </div>
 
             <!-- Authorized Users Table Container -->
-            <div id="campaignInlineUsersTableContainer" style="max-height: 155px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel);">
+            <div id="campaignInlineUsersTableContainer" style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel);">
               <!-- Dynamically rendered -->
             </div>
           </div>
@@ -1494,32 +1494,32 @@
 
 
       <!-- Active Campaign & Backup Controls Bar -->
-      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <label style="font-weight: 600; font-size: 12px; color: var(--text-muted);">Campaign:</label>
-          <select id="selGMCampaigns" style="height: 28px; font-weight: bold; font-size: 12px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; min-width: 180px;">
+          <label style="font-weight: 600; font-size: var(--font-size-controls, 14px); color: var(--text-muted);">Campaign:</label>
+          <select id="selGMCampaigns" style="height: 30px; font-weight: bold; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; min-width: 180px;">
             <!-- Populated dynamically -->
           </select>
-          <button type="button" class="btn btn-secondary" id="btnGMNewCampaign" style="height: 26px; padding: 0 10px; font-size: 12px;">+ New Campaign</button>
-          <div style="display: inline-flex; align-items: center; gap: 4px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 8px; height: 26px; box-sizing: border-box;">
-            <span style="font-size: 11px; color: var(--text-muted);">Code:</span>
-            <code id="lblGMActiveCampCode" style="font-weight: bold; color: var(--accent-primary); font-size: 12px;">campaign-1</code>
+          <button type="button" class="btn btn-secondary" id="btnGMNewCampaign" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ New Campaign</button>
+          <div style="display: inline-flex; align-items: center; gap: 4px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 8px; height: 30px; box-sizing: border-box;">
+            <span style="font-size: 12px; color: var(--text-muted);">Code:</span>
+            <code id="lblGMActiveCampCode" style="font-weight: bold; color: var(--accent-primary); font-size: 13px;">campaign-1</code>
           </div>
-          <button type="button" class="btn btn-secondary" id="btnGMCopyPlayerLink" style="height: 26px; padding: 0 10px; font-size: 12px;" title="Copy campaign invite link or code for players">📋 Copy Link</button>
-          <button type="button" class="btn btn-secondary" id="btnGMManageUsers" style="height: 26px; padding: 0 10px; font-size: 12px;" title="Manage Authorized Users / Players for this Campaign">👥 Users (<span id="lblGMUserCount">0</span>)</button>
+          <button type="button" class="btn btn-secondary" id="btnGMCopyPlayerLink" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Copy campaign invite link or code for players">📋 Copy Link</button>
+          <button type="button" class="btn btn-secondary" id="btnGMManageUsers" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Manage Authorized Users / Players for this Campaign">👥 Users (<span id="lblGMUserCount">0</span>)</button>
         </div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-          <button type="button" class="btn btn-secondary" id="btnGMExportCampaign" style="height: 26px; padding: 0 10px; font-size: 12px;" title="Export campaign as JSON backup">📥 Backup JSON</button>
-          <button type="button" class="btn btn-secondary" id="btnGMImportCampaign" style="height: 26px; padding: 0 10px; font-size: 12px;" title="Restore campaign from JSON">📤 Restore JSON</button>
+          <button type="button" class="btn btn-secondary" id="btnGMExportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Export campaign as JSON backup">📥 Backup JSON</button>
+          <button type="button" class="btn btn-secondary" id="btnGMImportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Restore campaign from JSON">📤 Restore JSON</button>
           <input type="file" id="fileGMImportCampaign" accept=".json" style="display: none;">
-          <button type="button" class="btn btn-secondary" id="btnGMFileLog" style="height: 26px; padding: 0 10px; font-size: 12px;" title="View Campaign File Operations Log">📋 Operations Log</button>
-          <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 26px; padding: 0 10px; font-size: 12px; color: #ef4444;" title="Delete current campaign">🗑</button>
+          <button type="button" class="btn btn-secondary" id="btnGMFileLog" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="View Campaign File Operations Log">📋 Operations Log</button>
+          <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); color: #ef4444;" title="Delete current campaign">🗑</button>
         </div>
       </div>
 
       <!-- Pending Join Requests Banner -->
-      <div id="gmJoinRequestsBox" style="display: none; background: rgba(2, 132, 199, 0.1); border: 1px solid #0284c7; border-radius: 6px; padding: 8px 14px;">
-        <div style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+      <div id="gmJoinRequestsBox" style="display: none; background: rgba(2, 132, 199, 0.1); border: 1px solid #0284c7; border-radius: 6px; padding: 10px 14px;">
+        <div style="font-weight: 600; font-size: var(--font-size-controls, 14px); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
           👥 Pending Player Join Requests:
         </div>
         <div id="gmJoinRequestsList" style="display: flex; flex-direction: column; gap: 4px;">
@@ -1528,21 +1528,21 @@
       </div>
 
       <!-- SAVE POINT TIMELINE & ROLLBACK CARD -->
-      <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px;">
+      <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
               📸 Save Point Timeline &amp; State Rollback
             </strong>
-            <span class="secondary-text" style="font-size: 11px;">(Instant rollback to any save point • Selective character extraction)</span>
+            <span class="secondary-text" style="font-size: var(--font-size-fine-print, 13px);">(Instant rollback to any save point • Selective character extraction)</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: var(--font-size-controls, 14px); font-weight: 600; cursor: pointer; user-select: none;">
               <input type="checkbox" id="chkGMAutoBackupChars" checked style="cursor: pointer;">
               Auto-backup Campaign Characters
             </label>
-            <button type="button" class="btn btn-primary" id="btnGMCreateSavePoint" style="height: 26px; padding: 0 10px; font-size: 12px;">📸 Create Save Point</button>
-            <button type="button" class="btn btn-secondary" id="btnGMExtractCharacter" style="height: 26px; padding: 0 10px; font-size: 12px;" title="Extract individual character from campaign or save point">📦 Extract Character...</button>
+            <button type="button" class="btn btn-primary" id="btnGMCreateSavePoint" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">📸 Create Save Point</button>
+            <button type="button" class="btn btn-secondary" id="btnGMExtractCharacter" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px);" title="Extract individual character from campaign or save point">📦 Extract Character...</button>
           </div>
         </div>
 
@@ -1556,14 +1556,14 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         
         <!-- Friendly Party NPCs -->
-        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px;">
+        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-            <strong style="font-size: 13px; color: #0284c7; display: flex; align-items: center; gap: 6px;">
+            <strong style="font-size: var(--font-size-labels, 15px); font-weight: 700; color: #0284c7; display: flex; align-items: center; gap: 6px;">
               🛡️ Friendly Party NPCs
             </strong>
             <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn btn-primary" id="btnGMAttachNPC" style="height: 24px; padding: 0 8px; font-size: 11px;">+ Attach From Editor</button>
-              <button type="button" class="btn btn-secondary" id="btnGMAttachNPCFile" style="height: 24px; padding: 0 8px; font-size: 11px;">📂 From File</button>
+              <button type="button" class="btn btn-primary" id="btnGMAttachNPC" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ Attach From Editor</button>
+              <button type="button" class="btn btn-secondary" id="btnGMAttachNPCFile" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px);">📂 From File</button>
               <input type="file" id="fileGMAttachNPC" accept=".mm2e,.por,.json" style="display: none;">
             </div>
           </div>
@@ -1573,14 +1573,14 @@
         </div>
 
         <!-- Encounter Enemies & Adversaries -->
-        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px;">
+        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-            <strong style="font-size: 13px; color: #ef4444; display: flex; align-items: center; gap: 6px;">
+            <strong style="font-size: var(--font-size-labels, 15px); font-weight: 700; color: #ef4444; display: flex; align-items: center; gap: 6px;">
               ⚔️ Encounter Adversaries &amp; Enemies
             </strong>
             <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn btn-primary" id="btnGMAddEnemy" style="height: 24px; padding: 0 8px; font-size: 11px; background: #dc2626; border-color: #dc2626;">+ Add Adversary</button>
-              <button type="button" class="btn btn-secondary" id="btnGMAddEnemyFile" style="height: 24px; padding: 0 8px; font-size: 11px;">📂 From File</button>
+              <button type="button" class="btn btn-primary" id="btnGMAddEnemy" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600; background: #dc2626; border-color: #dc2626;">+ Add Adversary</button>
+              <button type="button" class="btn btn-secondary" id="btnGMAddEnemyFile" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px);">📂 From File</button>
               <input type="file" id="fileGMAddEnemy" accept=".mm2e,.por,.json" style="display: none;">
             </div>
           </div>
@@ -2085,15 +2085,17 @@
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=8"></script>
+  <script src="session_network.js?v=9"></script>
+  <script src="session_tracker.js?v=1"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=102"></script>
+  <script src="app.js?v=103"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
-    if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
+    // Service Worker Registration for Offline PWA Capabilities
+    if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=48').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=49').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

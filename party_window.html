@@ -4,20 +4,49 @@
   <meta charset="UTF-8">
   <title>MM2CG — Party Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=41">
+  <link rel="stylesheet" href="styles.css?v=42">
   <script>
     (function() {
+      function getActiveTheme() {
+        // 1. Check URL query parameters (?theme=dark)
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlTheme = urlParams.get("theme");
+          if (urlTheme) return urlTheme;
+        } catch (e) {}
+
+        // 2. Check opener document directly
+        try {
+          if (window.opener && !window.opener.closed && window.opener.document && window.opener.document.documentElement) {
+            const openerTheme = window.opener.document.documentElement.getAttribute("data-theme");
+            if (openerTheme) return openerTheme;
+          }
+        } catch (e) {}
+
+        // 3. Check localStorage
+        try {
+          const savedTheme = localStorage.getItem("mm2e_theme");
+          if (savedTheme) return savedTheme;
+        } catch (e) {}
+
+        return "light";
+      }
+
       function applySavedThemeAndFonts() {
         const root = document.documentElement;
-        const savedTheme = localStorage.getItem("mm2e_theme") || "light";
-        root.setAttribute("data-theme", savedTheme);
+        const theme = getActiveTheme();
+        root.setAttribute("data-theme", theme);
+        if (document.body) document.body.setAttribute("data-theme", theme);
 
-        const savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
-        const savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
-        const savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
-        const savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
-        const savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
-        const savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+        let savedLabelFont = 16, savedControlFont = 14, savedTagFont = 13, savedSecondaryFont = 14, savedMinorControlFont = 15, savedFinePrintFont = 13;
+        try {
+          savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
+          savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
+          savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
+          savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
+          savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
+          savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+        } catch (e) {}
 
         root.style.setProperty("--font-size-labels", savedLabelFont + "px");
         root.style.setProperty("--font-size-controls", savedControlFont + "px");
@@ -29,11 +58,28 @@
       }
       applySavedThemeAndFonts();
       window.__applySavedThemeAndFonts = applySavedThemeAndFonts;
-      window.addEventListener("storage", function(e) {
-        if (!e.key || e.key.startsWith("mm2e_") || e.key.startsWith("mm4e_")) {
-          applySavedThemeAndFonts();
+      window.addEventListener("DOMContentLoaded", applySavedThemeAndFonts);
+      window.addEventListener("load", applySavedThemeAndFonts);
+
+      try {
+        window.addEventListener("storage", function(e) {
+          if (!e.key || e.key.startsWith("mm2e_") || e.key.startsWith("mm4e_")) {
+            applySavedThemeAndFonts();
+          }
+        });
+      } catch (e) {}
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const directBc = new BroadcastChannel('mm2e_session_channel');
+          directBc.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'THEME_CHANGE' && event.data.theme) {
+              try { localStorage.setItem('mm2e_theme', event.data.theme); } catch (e) {}
+              applySavedThemeAndFonts();
+            }
+          });
         }
-      });
+      } catch (e) {}
     })();
   </script>
   <style>
@@ -110,7 +156,7 @@
   <!-- Scripts -->
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=6"></script>
+  <script src="session_network.js?v=9"></script>
   <script>
     const STORAGE_KEY_BOUNDS = 'mm2e_party_display_bounds';
 

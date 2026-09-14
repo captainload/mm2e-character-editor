@@ -344,9 +344,9 @@
           <button type="button" class="btn btn-secondary" id="btnTogglePPBreakdown" style="height: 28px; padding: 0 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Power Points Breakdown">
             <span id="lblPointTypePrefix">⚡ PP:</span> <span class="badge" id="lblTotalPP">0 / 150 PP</span>
           </button>
+          <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="GM Campaign Hub, Characters &amp; Encounters">👑 GM</button>
           <button type="button" class="btn btn-secondary" id="btnOpenTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; box-sizing: border-box;" title="View Reference Tables">📊 Tables</button>
           <button type="button" class="btn btn-secondary" id="btnOpenTracker" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Status &amp; Combat Tracker">⏱ Tracker</button>
-          <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="GM Campaign Hub, Characters &amp; Encounters">👑 GM</button>
           <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="visibility: hidden; pointer-events: none; min-width: 72px; height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; color: #2563eb;" title="Return to previous view">⬅ Back</button>
         </div>
       </div>
@@ -2362,7 +2362,7 @@
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=109').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=110').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

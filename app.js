@@ -4,6 +4,17 @@ window.primaryHero = null;
 window.activeCompanionId = null;
 char.powers = [];
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+window.escapeHtml = escapeHtml;
+
 let skillSort = { col: "name", asc: true };
 let advSort = { col: "name", asc: true };
 
@@ -708,11 +719,129 @@ window.stepVal = function(elemId, delta, minVal, maxVal) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 };
 
+window.isSessionRollAllowed = function() {
+  const isLocalGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
+  if (isLocalGM) return true; // GM can always roll
+
+  const s = (typeof CampaignManager !== 'undefined') 
+    ? CampaignManager.getSessionState() 
+    : (window.__lastSyncedSessionState || null);
+
+  if (s && s.status === 'paused') {
+    if (typeof showToast === 'function') {
+      showToast("⚠️ Game session is paused by the GM. Player rolls are currently on hold.", "warning");
+    }
+    return false;
+  }
+  return true;
+};
+
+window.performD20RollWithHP = function(baseMod, targetHero = null, rollType = 'general') {
+  const activeChar = targetHero || (typeof char !== 'undefined' ? char : null);
+  let hpBonus = 0;
+  let isHPRerolled = false;
+
+  if (activeChar) {
+    if (activeChar._pendingHPOption) {
+      const pending = activeChar._pendingHPOption;
+      const req = (pending.requiredType || 'any').toLowerCase();
+      const current = (rollType || 'general').toLowerCase();
+
+      let isMatch = false;
+      if (req === 'any' || req === current || current === 'check' || current === 'general') {
+        isMatch = true;
+      } else if (req === 'power' && (current === 'power' || current === 'power_attack')) {
+        isMatch = true;
+      } else if (req === 'attack' && (current === 'attack' || current === 'power_attack' || current === 'power')) {
+        isMatch = true;
+      } else if (req === 'save' && (current === 'save' || current === 'toughness')) {
+        isMatch = true;
+      } else if (req === 'ability' && current === 'ability') {
+        isMatch = true;
+      } else if (req === 'initiative' && current === 'initiative') {
+        isMatch = true;
+      } else if (req === 'skill' && current === 'skill') {
+        isMatch = true;
+      }
+
+      if (isMatch) {
+        if (!pending.spent) {
+          const targetId = pending.targetCharId || (activeChar.name ? activeChar.name : 'local_hero');
+          if (typeof window.sessionSpendHeroPoint === 'function') {
+            window.sessionSpendHeroPoint(targetId, `Hero Point spent: ${pending.label || 'Improve Roll'}`);
+          }
+        }
+        if (pending.isReroll) {
+          isHPRerolled = true;
+        } else {
+          hpBonus = pending.bonus || 5;
+        }
+        activeChar._pendingHPOption = null;
+        activeChar._pendingHPRollBonus = 0;
+        if (typeof window.updateHeroPointsUseButtonState === 'function') {
+          window.updateHeroPointsUseButtonState();
+        }
+      }
+      // Note: On mismatch, do NOT clear _pendingHPOption so it remains available for the designated roll!
+    } else {
+      if (activeChar._pendingHPRollBonus > 0) {
+        hpBonus = activeChar._pendingHPRollBonus;
+        activeChar._pendingHPRollBonus = 0;
+        if (typeof window.updateHeroPointsUseButtonState === 'function') {
+          window.updateHeroPointsUseButtonState();
+        }
+      }
+      if (activeChar._pendingHPReroll) {
+        isHPRerolled = true;
+        activeChar._pendingHPReroll = false;
+        if (typeof window.updateHeroPointsUseButtonState === 'function') {
+          window.updateHeroPointsUseButtonState();
+        }
+      }
+    }
+  }
+
+  const rawD20 = Math.floor(Math.random() * 20) + 1;
+  let d20 = rawD20;
+  if (isHPRerolled && rawD20 <= 10) {
+    d20 = rawD20 + 10;
+  }
+
+  const mod = (Number(baseMod) || 0) + hpBonus;
+  const total = d20 + mod;
+  const isNat20 = (!isHPRerolled && rawD20 === 20);
+  const isNat1 = (!isHPRerolled && rawD20 === 1);
+
+  let hpAnnouncement = '';
+  if (hpBonus > 0) {
+    hpAnnouncement = `+${hpBonus} (Improve Roll)`;
+  } else if (isHPRerolled) {
+    hpAnnouncement = `HP Reroll (min 11–20 floor)`;
+  }
+
+  return {
+    rawD20,
+    d20,
+    baseMod: Number(baseMod) || 0,
+    hpBonus,
+    isHPRerolled,
+    hpAnnouncement,
+    mod,
+    total,
+    isNat20,
+    isNat1
+  };
+};
+
 window.showDiceRollModal = function(config) {
+  if (typeof window.isSessionRollAllowed === 'function' && !window.isSessionRollAllowed()) return;
   const modal = document.getElementById("diceRollModal");
   const titleEl = document.getElementById("diceRollModalTitle");
   const bodyEl = document.getElementById("diceRollModalBody");
   if (!modal || !titleEl || !bodyEl) return;
+
+  // Track the most recent roll so "Use Hero Point -> Reroll" can immediately act on it
+  window.lastRollConfig = config;
 
   titleEl.textContent = config.title || "🎲 Check Result";
 
@@ -724,7 +853,36 @@ window.showDiceRollModal = function(config) {
   } else if (config.isNat1) {
     resultColor = "#ef4444";
     badgeHtml = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-weight: bold; padding: 4px 10px; font-size: var(--font-size-secondary);">⚠️ Natural 1! Automatic Failure!</span>`;
+  } else if (config.isHPRerolled) {
+    resultColor = "#b45309";
+    badgeHtml = `<span class="badge" style="background: rgba(180, 83, 9, 0.15); color: #b45309; border: 1px solid #b45309; font-weight: bold; padding: 4px 10px; font-size: var(--font-size-secondary);">✨ HP Reroll (Min 11–20)</span>`;
+  } else if (config.hpBonus > 0) {
+    resultColor = "#b45309";
+    badgeHtml = `<span class="badge" style="background: rgba(180, 83, 9, 0.15); color: #b45309; border: 1px solid #b45309; font-weight: bold; padding: 4px 10px; font-size: var(--font-size-secondary);">✨ +${config.hpBonus} HP Bonus Applied</span>`;
   }
+
+  let currentHP = 0;
+  if (typeof char !== 'undefined' && char) {
+    if (typeof char.heroPoints === 'number' && !isNaN(char.heroPoints)) {
+      currentHP = char.heroPoints;
+    } else {
+      const hpEl = document.getElementById("heroPointsInput");
+      const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+      const rawVal = hpEl ? parseInt(hpEl.value) : NaN;
+      currentHP = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+      char.heroPoints = currentHP;
+    }
+  }
+  const canHPReroll = currentHP > 0 && !config.isNat1 && !config.isNat20 && !config.isHPRerolled;
+
+  const baseModVal = (config.baseMod !== undefined) ? config.baseMod : (config.mod - (config.hpBonus || 0));
+  const mathFormula = (config.hpBonus > 0)
+    ? `1d20 (${config.d20}) ${baseModVal >= 0 ? '+ ' + baseModVal : '- ' + Math.abs(baseModVal)} [Base] + ${config.hpBonus} [✨ HP] = <strong>${config.total}</strong>`
+    : (config.isHPRerolled && config.rawD20 && config.rawD20 <= 10
+       ? `1d20 (${config.rawD20} + 10 floor = ${config.d20}) ${config.mod >= 0 ? '+ ' + config.mod : '- ' + Math.abs(config.mod)} [✨ HP Reroll] = <strong>${config.total}</strong>`
+       : (config.isHPRerolled
+          ? `1d20 (${config.d20}) ${config.mod >= 0 ? '+ ' + config.mod : '- ' + Math.abs(config.mod)} [✨ HP Reroll] = <strong>${config.total}</strong>`
+          : `1d20 (${config.d20}) ${config.mod >= 0 ? '+ ' + config.mod : '- ' + Math.abs(config.mod)} = <strong>${config.total}</strong>`));
 
   bodyEl.innerHTML = `
     <div style="text-align: center; padding: 8px 0;">
@@ -732,7 +890,7 @@ window.showDiceRollModal = function(config) {
         ${config.total}
       </div>
       <div style="font-size: var(--font-size-secondary); color: var(--text-muted); margin-top: 4px;">
-        1d20 (${config.d20}) ${config.mod >= 0 ? '+ ' + config.mod : '- ' + Math.abs(config.mod)} = <strong>${config.total}</strong>
+        ${mathFormula}
       </div>
       ${badgeHtml ? `<div style="margin-top: 8px;">${badgeHtml}</div>` : ''}
     </div>
@@ -743,28 +901,139 @@ window.showDiceRollModal = function(config) {
       </div>
     ` : ''}
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-      ${config.rerollCode ? `
-        <button type="button" class="btn btn-primary" onclick="${config.rerollCode}" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls); display: inline-flex; align-items: center; gap: 6px;">
-          🎲 Re-roll
-        </button>
-      ` : '<div></div>'}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 6px;">
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+        ${canHPReroll ? `
+          <button type="button" class="btn btn-primary" id="btnHPReroll" style="padding: 6px 14px; font-weight: bold; font-size: var(--font-size-controls); display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #d97706; color: #fff;">
+            ✨ Reroll (1 HP)
+          </button>
+        ` : ''}
+        ${config.rerollCode ? `
+          <button type="button" class="btn btn-secondary" onclick="${config.rerollCode}" style="padding: 6px 14px; font-size: var(--font-size-controls); display: inline-flex; align-items: center; gap: 6px;">
+            🎲 Re-roll Check
+          </button>
+        ` : ''}
+      </div>
       <button type="button" class="btn btn-secondary" onclick="document.getElementById('diceRollModal').classList.remove('active')" style="padding: 6px 16px; font-size: var(--font-size-controls);">
         Close
       </button>
     </div>
   `;
 
+  // Attach Hero Point Reroll click handler
+  const btnHPReroll = document.getElementById("btnHPReroll");
+  if (btnHPReroll) {
+    btnHPReroll.onclick = function() {
+      // 1. Spend 1 Hero Point explicitly for Reroll (do not queue +5 Improve Roll bonus)
+      if (typeof window.sessionSpendHeroPoint === 'function') {
+        window.sessionSpendHeroPoint('local_hero', 'Hero Point spent for Reroll');
+      } else if (typeof char !== 'undefined' && char) {
+        char.heroPoints = Math.max(0, (char.heroPoints || 0) - 1);
+        const hpInput = document.getElementById("heroPointsInput");
+        if (hpInput) hpInput.value = char.heroPoints;
+        if (typeof window.updateHeroPointsUseButtonState === 'function') window.updateHeroPointsUseButtonState();
+      }
+
+      // 2. M&M 2E floor rule (p. 120): If new roll is 1-10, add 10 (giving 11-20). Take better of two results.
+      const rawD20 = Math.floor(Math.random() * 20) + 1;
+      const wasFloored = rawD20 <= 10;
+      const flooredD20 = wasFloored ? rawD20 + 10 : rawD20;
+      const baseMod = (config.baseMod !== undefined) ? config.baseMod : ((config.mod || 0) - (config.hpBonus || 0));
+      const priorHpBonus = config.hpBonus || 0;
+      const newTotal = flooredD20 + baseMod + priorHpBonus;
+      const originalTotal = config.total;
+      const finalTotal = Math.max(originalTotal, newTotal);
+      const keptOriginal = originalTotal > newTotal;
+
+      config.isHPRerolled = true;
+      config.rawD20 = rawD20;
+      config.d20 = flooredD20;
+      config.baseMod = baseMod;
+      config.mod = baseMod + priorHpBonus;
+      config.total = finalTotal;
+      config.isNat1 = false;
+      config.isNat20 = (!wasFloored && rawD20 === 20);
+
+      const rerollDesc = wasFloored 
+        ? `Rolled ${rawD20} (+10 floor bonus = ${flooredD20})` 
+        : `Rolled ${flooredD20}`;
+      
+      const outcomeDesc = keptOriginal
+        ? `${rerollDesc} -> ${newTotal} (Original ${originalTotal} kept)`
+        : `${rerollDesc} -> ${newTotal} (Kept)`;
+
+      config.rerollInfo = outcomeDesc;
+      config.hpAnnouncement = `HP Reroll: ${outcomeDesc}`;
+
+      const cleanBaseTitle = (config.rollType || config.title || 'Check')
+        .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+        .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+        .replace(/^🎲\s*/, '')
+        .trim();
+      const rerollTitle = `🎲 ${cleanBaseTitle} (✨ HP Reroll)`;
+      config.rollType = rerollTitle;
+      config.title = rerollTitle;
+
+      if (!config.detailsHtml) config.detailsHtml = "";
+      config.detailsHtml += `
+        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color); color: #b45309; font-size: var(--font-size-secondary);">
+          <strong>✨ HP Reroll:</strong> ${outcomeDesc}
+        </div>
+      `;
+
+      // Re-invoke showDiceRollModal to render the updated result and broadcast to session feed
+      window.showDiceRollModal(config);
+
+      if (typeof showToast === 'function') {
+        showToast(`✨ HP Reroll: Kept result is ${finalTotal}!`, "info");
+      }
+    };
+  }
+
   modal.classList.add("active");
 
+  // Clean title: remove any previously stacked (✨ ... HP) or (✨ HP Reroll) tags
+  const cleanTitle = (config.title || "Roll")
+    .replace(/^🎲\s*/, '')
+    .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+    .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+    .trim();
+
   // Broadcast roll event to Session Log & Multiplayer network
+  const hpSuffix = (config.hpBonus > 0 ? ` (✨ +${config.hpBonus} HP)` : '') + (config.isHPRerolled ? ' (✨ HP Reroll)' : '');
+  const rollTitle = cleanTitle + hpSuffix;
+  const breakdownText = (config.hpBonus > 0)
+    ? `1d20 (${config.d20}) ${baseModVal >= 0 ? '+' + baseModVal : baseModVal} [Base] + ${config.hpBonus} [✨ HP] = ${config.total}`
+    : (config.isHPRerolled && config.rawD20 && config.rawD20 <= 10
+       ? `1d20 (${config.rawD20} + 10 floor = ${config.d20}) ${config.mod >= 0 ? '+' + config.mod : config.mod} = ${config.total}${config.rerollInfo && config.rerollInfo.includes('Original') ? ' (Kept ' + config.total + ')' : ''}`
+       : `1d20 (${config.d20}) ${config.mod >= 0 ? '+' + config.mod : config.mod} = ${config.total}`);
+
+  let hpAnnouncementText = (config.hpAnnouncement || '').replace(/\bHero Point\b/g, 'HP');
+  if (!hpAnnouncementText) {
+    if (config.hpBonus > 0) {
+      hpAnnouncementText = `HP: +${config.hpBonus} (Improve Roll)`;
+    } else if (config.isHPRerolled) {
+      if (config.rerollInfo) {
+        hpAnnouncementText = `HP Reroll: ${config.rerollInfo.replace(/\bHero Point\b/g, 'HP')}`;
+      } else {
+        hpAnnouncementText = `HP Reroll (min 11–20 floor)`;
+      }
+    }
+  }
+
   const rollEntry = {
+    type: 'ROLL',
     characterName: char?.name || "Hero",
-    rollType: config.title ? config.title.replace(/^🎲\s*/, '') : "Roll",
+    playerName: char?.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : "") || "Player",
+    rollType: rollTitle,
     total: config.total,
-    breakdown: `1d20 (${config.d20}) ${config.mod >= 0 ? '+' + config.mod : config.mod} = ${config.total}`,
+    breakdown: breakdownText,
     isNat20: !!config.isNat20,
     isNat1: !!config.isNat1,
+    hpBonus: config.hpBonus || 0,
+    isHPRerolled: !!config.isHPRerolled,
+    hpAnnouncement: hpAnnouncementText,
+    rerollInfo: config.rerollInfo || "",
     result: config.resultOutcome || ""
   };
   if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
@@ -789,19 +1058,19 @@ window.rollAbilityCheck = function(abilId) {
     showToast(`${name} is absent / disabled. Check cannot be made.`, "error");
     return;
   }
-  const mod = val;
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const total = d20 + mod;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(val, char, 'ability');
 
   window.showDiceRollModal({
     title: `🎲 ${name} Check`,
-    d20,
-    mod,
-    total,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: `
       <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
         <span style="color: var(--text-muted); font-weight: 600;">Ability:</span>
@@ -809,8 +1078,14 @@ window.rollAbilityCheck = function(abilId) {
       </div>
       <div style="display: flex; justify-content: space-between;">
         <span style="color: var(--text-muted); font-weight: 600;">Effective Modifier:</span>
-        <span class="badge" style="font-size: var(--font-size-tags);">${mod >= 0 ? '+' : ''}${mod}</span>
+        <span class="badge" style="font-size: var(--font-size-tags);">${roll.mod >= 0 ? '+' : ''}${roll.mod}</span>
       </div>
+      ${roll.hpBonus > 0 ? `
+        <div style="display: flex; justify-content: space-between; margin-top: 4px; color: #b45309; font-weight: bold;">
+          <span>✨ Hero Point Bonus:</span>
+          <span>+${roll.hpBonus}</span>
+        </div>
+      ` : ''}
     `,
     rerollCode: `window.rollAbilityCheck('${abilId}')`
   });
@@ -870,10 +1145,7 @@ window.rollEffectCheck = function(pIdx, eIdx) {
     bonusDesc = `Melee Attack (+${atkBonus})`;
   }
 
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const total = d20 + atkBonus;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(atkBonus, char, (checkType === "Power Check" ? "power" : "power_attack"));
 
   let details = `
     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -884,6 +1156,12 @@ window.rollEffectCheck = function(pIdx, eIdx) {
       <span style="color: var(--text-muted); font-weight: 600;">Check Type:</span>
       <span>${checkType} (${bonusDesc})</span>
     </div>
+    ${roll.hpBonus > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #b45309; font-weight: bold;">
+        <span>✨ Hero Point Bonus:</span>
+        <span>+${roll.hpBonus}</span>
+      </div>
+    ` : ''}
   `;
 
   if (saveDcDisplay && saveDcDisplay !== "None" && saveDcDisplay !== "—") {
@@ -895,7 +1173,7 @@ window.rollEffectCheck = function(pIdx, eIdx) {
     `;
   }
 
-  if (isNat20 && checkType.includes("Attack")) {
+  if (roll.isNat20 && checkType.includes("Attack")) {
     details += `
       <div style="margin-top: 6px; color: #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">
         ✦ Critical Hit: +5 to the save DC or adds an additional degree of effect!
@@ -905,11 +1183,15 @@ window.rollEffectCheck = function(pIdx, eIdx) {
 
   window.showDiceRollModal({
     title: `🎲 ${effName} ${checkType}`,
-    d20,
-    mod: atkBonus,
-    total,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: details,
     rerollCode: `window.rollEffectCheck(${pIdx}, ${eIdx})`
   });
@@ -932,11 +1214,7 @@ window.rollSaveCheck = function(saveKey) {
     return;
   }
 
-  const mod = saveVal;
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const total = d20 + mod;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(saveVal, char, 'save');
 
   let baseAbil = "";
   if (key === "reflex") baseAbil = "DEX";
@@ -971,23 +1249,34 @@ window.rollSaveCheck = function(saveKey) {
     ` : ''}
     <div style="display: flex; justify-content: space-between;">
       <span style="color: var(--text-muted); font-weight: 600;">Total Save Bonus:</span>
-      <span class="badge" style="font-size: var(--font-size-tags);">${mod >= 0 ? '+' : ''}${mod}</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${roll.mod >= 0 ? '+' : ''}${roll.mod}</span>
     </div>
+    ${roll.hpBonus > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-top: 4px; color: #b45309; font-weight: bold;">
+        <span>✨ Hero Point Bonus:</span>
+        <span>+${roll.hpBonus}</span>
+      </div>
+    ` : ''}
   `;
 
   window.showDiceRollModal({
     title: `🎲 ${saveKey} Save`,
-    d20,
-    mod,
-    total,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: details,
     rerollCode: `window.rollSaveCheck('${saveKey}')`
   });
 };
 
 window.rollInitiativeCheck = function() {
+  if (typeof window.isSessionRollAllowed === 'function' && !window.isSessionRollAllowed()) return;
   const dexMod = (typeof char.getAbilityRank === 'function') 
     ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5) 
     : (char.abilities?.DEX || 0);
@@ -997,19 +1286,17 @@ window.rollInitiativeCheck = function() {
     ? char.derivedStats.initiative
     : (dexMod + initFeat * 4);
 
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const total = d20 + totalMod;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(totalMod, char, 'initiative');
 
   if (char.trackerState) {
-    char.trackerState.initiativeRoll = total;
+    char.trackerState.initiativeRoll = roll.total;
     const numInitResult = document.getElementById("numInitiativeResult");
-    if (numInitResult) numInitResult.value = total;
+    if (numInitResult) numInitResult.value = roll.total;
     const lblInitBreakdown = document.getElementById("lblInitiativeRollBreakdown");
     if (lblInitBreakdown) {
       const featStr = initFeat > 0 ? ` + Imp. Init (${initFeat * 4})` : "";
-      lblInitBreakdown.textContent = `Rolled 1d20 (${d20}) + DEX (${dexMod >= 0 ? "+" : ""}${dexMod})${featStr} = ${total}`;
+      const hpStr = roll.hpBonus > 0 ? ` + HP (${roll.hpBonus})` : (roll.isHPRerolled ? ` [✨ HP Reroll]` : '');
+      lblInitBreakdown.textContent = `Rolled 1d20 (${roll.d20}) + DEX (${dexMod >= 0 ? "+" : ""}${dexMod})${featStr}${hpStr} = ${roll.total}`;
     }
     if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
   }
@@ -1017,7 +1304,7 @@ window.rollInitiativeCheck = function() {
   const details = `
     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
       <span style="color: var(--text-muted); font-weight: 600;">Initiative Check:</span>
-      <strong>1d20 + ${totalMod}</strong>
+      <strong>1d20 + ${roll.mod}</strong>
     </div>
     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
       <span style="color: var(--text-muted); font-weight: 600;">DEX Modifier:</span>
@@ -1029,19 +1316,29 @@ window.rollInitiativeCheck = function() {
         <span>+${initFeat * 4}</span>
       </div>
     ` : ''}
+    ${roll.hpBonus > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-top: 4px; color: #b45309; font-weight: bold;">
+        <span>✨ Hero Point Bonus:</span>
+        <span>+${roll.hpBonus}</span>
+      </div>
+    ` : ''}
     <div style="display: flex; justify-content: space-between;">
       <span style="color: var(--text-muted); font-weight: 600;">Total Modifier:</span>
-      <span class="badge" style="font-size: var(--font-size-tags);">${totalMod >= 0 ? '+' : ''}${totalMod}</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${roll.mod >= 0 ? '+' : ''}${roll.mod}</span>
     </div>
   `;
 
   window.showDiceRollModal({
     title: `🎲 Initiative Check`,
-    d20,
-    mod: totalMod,
-    total,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: details,
     rerollCode: `window.rollInitiativeCheck()`
   });
@@ -1054,10 +1351,7 @@ window.rollAttackCheck = function(attackMode) {
     ? ((char.derivedStats && typeof char.derivedStats.rangedAttack === 'number') ? char.derivedStats.rangedAttack : (char.combat?.baseAttack || 0))
     : ((char.derivedStats && typeof char.derivedStats.meleeAttack === 'number') ? char.derivedStats.meleeAttack : (char.combat?.baseAttack || 0));
 
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const total = d20 + atkBonus;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(atkBonus, char, 'attack');
 
   let details = `
     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -1068,6 +1362,12 @@ window.rollAttackCheck = function(attackMode) {
       <span style="color: var(--text-muted); font-weight: 600;">Attack Bonus:</span>
       <span>${atkBonus >= 0 ? '+' : ''}${atkBonus}</span>
     </div>
+    ${roll.hpBonus > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #b45309; font-weight: bold;">
+        <span>✨ Hero Point Bonus:</span>
+        <span>+${roll.hpBonus}</span>
+      </div>
+    ` : ''}
   `;
 
   if (isUnarmed) {
@@ -1082,7 +1382,7 @@ window.rollAttackCheck = function(attackMode) {
     `;
   }
 
-  if (isNat20) {
+  if (roll.isNat20) {
     details += `
       <div style="margin-top: 6px; color: #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">
         ✦ Critical Hit: +5 to the save DC or adds an additional degree of effect!
@@ -1092,11 +1392,15 @@ window.rollAttackCheck = function(attackMode) {
 
   window.showDiceRollModal({
     title: `🎲 ${attackMode} Roll`,
-    d20,
-    mod: atkBonus,
-    total,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: details,
     rerollCode: `window.rollAttackCheck('${attackMode}')`
   });
@@ -1115,13 +1419,10 @@ window.rollSkillCheck = function(skillName) {
   }
   const bought = (char.skills && char.skills[skillName]) || 0;
   const enhancedSkill = (char.enhancedTraits?.skills?.[skillName]) || 0;
-  const total = base + bought + enhancedSkill;
+  const totalSkillBonus = base + bought + enhancedSkill;
   const isTrainedOnly = !meta.untrained && (bought + enhancedSkill) === 0;
 
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const rollTotal = d20 + total;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(totalSkillBonus, char, 'skill');
 
   let details = `
     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -1142,15 +1443,21 @@ window.rollSkillCheck = function(skillName) {
         <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">+${enhancedSkill}</span>
       </div>
     ` : ''}
+    ${roll.hpBonus > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #b45309; font-weight: bold;">
+        <span>✨ Hero Point Bonus:</span>
+        <span>+${roll.hpBonus}</span>
+      </div>
+    ` : ''}
     <div style="display: flex; justify-content: space-between;">
       <span style="color: var(--text-muted); font-weight: 600;">Total Skill Bonus:</span>
-      <span class="badge" style="font-size: var(--font-size-tags);">${total >= 0 ? '+' : ''}${total}</span>
+      <span class="badge" style="font-size: var(--font-size-tags);">${roll.mod >= 0 ? '+' : ''}${roll.mod}</span>
     </div>
   `;
 
   if (isTrainedOnly) {
     details += `
-      <div style="margin-top: 6px; padding: 4px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.12); color: #f59e0b; font-size: var(--font-size-fine-print); font-weight: 600;">
+      <div style="margin-top: 6px; padding-back: 4px 8px; border-radius: 4px; background: rgba(180, 83, 9, 0.12); color: #b45309; font-size: var(--font-size-fine-print); font-weight: 600;">
         ⚠️ Trained Only: Character has 0 ranks in this skill. Check requires GM permission.
       </div>
     `;
@@ -1158,11 +1465,15 @@ window.rollSkillCheck = function(skillName) {
 
   window.showDiceRollModal({
     title: `🎲 ${skillName} Check`,
-    d20,
-    mod: total,
-    total: rollTotal,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: details,
     rerollCode: `window.rollSkillCheck('${skillName.replace(/'/g, "\\'")}')`
   });
@@ -1183,10 +1494,7 @@ window.rollFeatCheck = function(featName) {
   const enhFeat = (char.enhancedTraits?.feats?.[featName]) || 0;
   const effVal = val + enhFeat;
 
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const total = d20 + effVal;
-  const isNat20 = d20 === 20;
-  const isNat1 = d20 === 1;
+  const roll = window.performD20RollWithHP(effVal, char, 'feat');
 
   let desc = baseFeat.description || "";
   if (!desc && baseFeat.fullText) {
@@ -1203,6 +1511,12 @@ window.rollFeatCheck = function(featName) {
       <span style="color: var(--text-muted); font-weight: 600;">Effective Rank / Bonus:</span>
       <span class="badge" style="font-size: var(--font-size-tags);">${effVal >= 0 ? '+' : ''}${effVal}</span>
     </div>
+    ${roll.hpBonus > 0 ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #b45309; font-weight: bold;">
+        <span>✨ Hero Point Bonus:</span>
+        <span>+${roll.hpBonus}</span>
+      </div>
+    ` : ''}
   `;
 
   if (desc) {
@@ -1215,11 +1529,15 @@ window.rollFeatCheck = function(featName) {
 
   window.showDiceRollModal({
     title: `🎲 ${featName} Check / Roll`,
-    d20,
-    mod: effVal,
-    total,
-    isNat20,
-    isNat1,
+    d20: roll.d20,
+    rawD20: roll.rawD20,
+    baseMod: roll.baseMod,
+    hpBonus: roll.hpBonus,
+    isHPRerolled: roll.isHPRerolled,
+    mod: roll.mod,
+    total: roll.total,
+    isNat20: roll.isNat20,
+    isNat1: roll.isNat1,
     detailsHtml: details,
     rerollCode: `window.rollFeatCheck('${featName.replace(/'/g, "\\'")}')`
   });
@@ -1416,7 +1734,8 @@ document.addEventListener("DOMContentLoaded", () => {
     :root[data-theme="parchment"] .btn-add-option { background-color: #8b5a2b !important; color: #ffffff !important; border-color: #6b4423 !important; font-weight: 600; }
     :root[data-theme="parchment"] .btn-add-option:hover { background-color: #6b4423 !important; }
     
-    .power-card { border: 2px solid var(--border-color) !important; }
+    .power-card { border: 2px solid var(--border-power, #64748b) !important; }
+    .power-card:not(.collapsed) .power-card-header { border-bottom: 2px solid var(--border-power, #64748b) !important; }
     
     #lblAbilPP, #lblCombatPP, #lblResistPP, #lblSkillPP, #lblAdvPP, #lblPowerPP, #lblTotalPP, #lblHeroicLimit, #lblCommandLimit, .power-card-header .badge, .effect-cost-badge {
         background-color: #333333 !important;
@@ -1445,6 +1764,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.isCharacterLoading = true;
   buildAbilitiesUI();
+  setupHeroPointsSystem();
   buildSkillsUI();
   buildAdvantagesUI();
   buildPowersUI();
@@ -1472,6 +1792,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (typeof FileManager !== 'undefined' && FileManager.clearDirty) {
     FileManager.clearDirty();
   }
+  if (typeof window.updateGMEditorStateUI === 'function') {
+    window.updateGMEditorStateUI();
+  }
 });
 
 let previousActiveTab = "tab-basics";
@@ -1484,6 +1807,24 @@ function updatePersistentHeaderHeight() {
   }
 }
 window.updatePersistentHeaderHeight = updatePersistentHeaderHeight;
+
+function showSpecialTabBackButton(label) {
+  const btnBack = document.getElementById("btnBackFromTables");
+  if (!btnBack) return;
+  btnBack.style.visibility = "visible";
+  btnBack.style.pointerEvents = "auto";
+  btnBack.classList.add("visible");
+  if (label) btnBack.title = `Return to ${label}`;
+}
+function hideSpecialTabBackButton() {
+  const btnBack = document.getElementById("btnBackFromTables");
+  if (!btnBack) return;
+  btnBack.style.visibility = "hidden";
+  btnBack.style.pointerEvents = "none";
+  btnBack.classList.remove("visible");
+}
+window.showSpecialTabBackButton = showSpecialTabBackButton;
+window.hideSpecialTabBackButton = hideSpecialTabBackButton;
 
 function setupTabs() {
   window.addEventListener("resize", updatePersistentHeaderHeight);
@@ -1510,7 +1851,6 @@ function setupTabs() {
         previousActiveTab = "tab-gm";
       }
 
-      const btnBack = document.getElementById("btnBackFromTables");
       const btnTables = document.getElementById("btnOpenTables");
       const btnTracker = document.getElementById("btnOpenTracker");
       const btnGM = document.getElementById("btnOpenGM");
@@ -1537,20 +1877,18 @@ function setupTabs() {
       if (trackerModal) trackerModal.classList.remove("active");
       if (tablesContent) tablesContent.classList.remove("active");
       if (gmContent) gmContent.classList.remove("active");
+      if (typeof closeCampaignUsersModal === 'function') closeCampaignUsersModal();
 
       // If user came from a special tab (tracker, tables, or gm), keep the back button visible so they can return!
       if (previousActiveTab === "tab-tracker" || previousActiveTab === "tab-tables" || previousActiveTab === "tab-gm") {
-        if (btnBack) {
-          btnBack.style.display = "inline-flex";
-          const label = previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-tables" ? "Tables" : "GM Hub");
-          btnBack.title = `Return to ${label}`;
-        }
+        const label = previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-tables" ? "Tables" : "GM Hub");
+        showSpecialTabBackButton(label);
       } else {
-        if (btnBack) btnBack.style.display = "none";
+        hideSpecialTabBackButton();
       }
       
-      // Manage session-tab-active class for whole-window vertical fit
-      if (btn.dataset.tab === "tab-session") {
+      // Manage session-tab-active class for whole-window vertical fit (Session and GM tabs)
+      if (btn.dataset.tab === "tab-session" || btn.dataset.tab === "tab-gm") {
         document.documentElement.classList.add("session-tab-active");
         document.body.classList.add("session-tab-active");
         updatePersistentHeaderHeight();
@@ -1626,12 +1964,9 @@ function setupTabs() {
         btnGM.classList.add("btn-secondary");
       }
 
-      if (btnBackFromTables) {
-        btnBackFromTables.style.display = "inline-flex";
-        const prevBtn = document.querySelector(`.tab-btn[data-tab="${previousActiveTab}"]`);
-        const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-gm" ? "GM Hub" : "Previous View"));
-        btnBackFromTables.title = `Return to ${prevName}`;
-      }
+      const prevBtn = document.querySelector(`.tab-btn[data-tab="${previousActiveTab}"]`);
+      const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-tracker" ? "Tracker" : (previousActiveTab === "tab-gm" ? "GM Hub" : "Previous View"));
+      showSpecialTabBackButton(prevName);
     });
   }
 
@@ -1659,7 +1994,7 @@ function setupTabs() {
         document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
         const targetContent = document.getElementById(targetTab);
         if (targetContent) targetContent.classList.add("active");
-        btnBackFromTables.style.display = "none";
+        hideSpecialTabBackButton();
       }
 
       if (btnOpenTables) {
@@ -2008,6 +2343,14 @@ function setupInfoModalHandlers() {
       if (adjModal && adjModal.classList.contains("active")) {
         adjModal.classList.remove("active");
       }
+      const hpModal = document.getElementById("useHeroPointModal");
+      if (hpModal && hpModal.classList.contains("active")) {
+        if (typeof window.closeUseHeroPointModal === 'function') {
+          window.closeUseHeroPointModal();
+        } else {
+          hpModal.classList.remove("active");
+        }
+      }
     }
   });
 }
@@ -2099,7 +2442,8 @@ function setupStatusTracker() {
       const bounds = getSavedTrackerBounds();
       const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-      poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}`, "MM2CG_TrackerWindow", features);
+      const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
+      poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}`, "MM2CG_TrackerWindow", features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
@@ -2115,11 +2459,31 @@ function setupStatusTracker() {
             if (typeof poppedOutTrackerWindow.__applySavedThemeAndFonts === 'function') {
               poppedOutTrackerWindow.__applySavedThemeAndFonts();
             }
+            if (poppedOutTrackerWindow.localTracker) {
+              poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
+            }
+            const lblPop = poppedOutTrackerWindow.document.getElementById('lblTrackerHeroName');
+            if (lblPop) lblPop.textContent = activeHeroName;
+            if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
+              poppedOutTrackerWindow.renderAllTrackerUI();
+            }
           }
         } catch (e) {}
         syncStatusTrackerUI();
       }, 150);
       setTimeout(() => {
+        try {
+          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed && poppedOutTrackerWindow.document) {
+            if (poppedOutTrackerWindow.localTracker) {
+              poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
+            }
+            const lblPop = poppedOutTrackerWindow.document.getElementById('lblTrackerHeroName');
+            if (lblPop) lblPop.textContent = activeHeroName;
+            if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
+              poppedOutTrackerWindow.renderAllTrackerUI();
+            }
+          }
+        } catch (e) {}
         syncStatusTrackerUI();
       }, 350);
     }
@@ -2148,6 +2512,18 @@ function setupStatusTracker() {
         redockTracker();
       }
     });
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'mm2e_tracker_docked') {
+        redockTracker();
+      }
+    });
+
+    setInterval(() => {
+      if (poppedOutTrackerWindow && poppedOutTrackerWindow.closed) {
+        redockTracker();
+      }
+    }, 300);
 
     if (!modal || !btnOpen) return;
 
@@ -2372,10 +2748,18 @@ function setupStatusTracker() {
 
     // Window helper bindings for tracker
     function broadcastTrackerSync() {
+      const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : 'Hero';
       if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
         try {
+          if (poppedOutTrackerWindow.localTracker) {
+            poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
+          }
+          const lblPop = poppedOutTrackerWindow.document?.getElementById('lblTrackerHeroName');
+          if (lblPop) lblPop.textContent = activeHeroName;
           if (typeof poppedOutTrackerWindow.syncTrackerFromOpener === 'function') {
             poppedOutTrackerWindow.syncTrackerFromOpener();
+          } else if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
+            poppedOutTrackerWindow.renderAllTrackerUI();
           }
         } catch (e) {}
       }
@@ -2384,6 +2768,10 @@ function setupStatusTracker() {
           SessionNetwork.sendLocalBroadcast({
             type: 'TRACKER_SYNC_STATE',
             state: window.getTrackerPopoutData ? window.getTrackerPopoutData() : null
+          });
+          SessionNetwork.sendLocalBroadcast({
+            type: 'HERO_NAME_CHANGE',
+            name: activeHeroName
           });
         }
       } catch (e) {}
@@ -2552,17 +2940,20 @@ function setupStatusTracker() {
       const btnTables = document.getElementById("btnOpenTables");
 
       if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-        try {
-          poppedOutTrackerWindow.focus();
-        } catch (e) {}
-      }
-
-      // If tracker tab is already active, toggle back to previous view
-      if (trackerContent && trackerContent.classList.contains("active")) {
-        if (btnBack) {
-          btnBack.click();
+        // When Tracker is popped out and the Tracker button is clicked, redock the Tracker!
+        redockTracker();
+        if (trackerContent && trackerContent.classList.contains("active")) {
+          syncStatusTrackerUI();
+          return;
         }
-        return;
+      } else {
+        // If tracker tab is already active, toggle back to previous view
+        if (trackerContent && trackerContent.classList.contains("active")) {
+          if (btnBack) {
+            btnBack.click();
+          }
+          return;
+        }
       }
 
       // Record which tab was active before opening tracker (if not currently on tables)
@@ -2604,13 +2995,10 @@ function setupStatusTracker() {
       // Populate tracker UI
       syncStatusTrackerUI();
 
-      if (btnBack) {
-        btnBack.style.display = "inline-flex";
-        const targetTab = (typeof previousActiveTab !== 'undefined') ? previousActiveTab : "tab-basics";
-        const prevBtn = (typeof document.querySelector === 'function') ? document.querySelector(`.tab-btn[data-tab="${targetTab}"]`) : null;
-        const prevName = prevBtn ? prevBtn.textContent.trim() : "Previous View";
-        btnBack.title = `Return to ${prevName}`;
-      }
+      const targetTab = (typeof previousActiveTab !== 'undefined') ? previousActiveTab : "tab-basics";
+      const prevBtn = (typeof document.querySelector === 'function') ? document.querySelector(`.tab-btn[data-tab="${targetTab}"]`) : null;
+      const prevName = prevBtn ? prevBtn.textContent.trim() : "Previous View";
+      showSpecialTabBackButton(prevName);
     }
     window.openTrackerTab = openTrackerTab;
 
@@ -2648,15 +3036,47 @@ function setupStatusTracker() {
     window.rollTrackerInitiative = function() {
       ensureTrackerState();
       const { totalMod } = getInitiativeModifier();
-      const d20 = Math.floor(Math.random() * 20) + 1;
-      const total = d20 + totalMod;
+      const roll = (typeof window.performD20RollWithHP === 'function')
+        ? window.performD20RollWithHP(totalMod, char, 'initiative')
+        : { d20: Math.floor(Math.random() * 20) + 1, total: Math.floor(Math.random() * 20) + 1 + totalMod, isNat20: false, isNat1: false, hpBonus: 0, isHPRerolled: false, baseMod: totalMod, mod: totalMod, rawD20: 10 };
+      const total = roll.total;
       char.trackerState.initiativeRoll = total;
       if (numInitResult) numInitResult.value = total;
+      const hpTag = (roll.hpBonus > 0 ? ` + ${roll.hpBonus} [✨ HP]` : '') + (roll.isHPRerolled ? ' [✨ Reroll]' : '');
       if (lblInitBreakdown) {
-        lblInitBreakdown.textContent = `Rolled: 1d20 (${d20}) + ${totalMod} = ${total}`;
+        lblInitBreakdown.textContent = `Rolled: 1d20 (${roll.d20}) + ${totalMod}${hpTag} = ${total}`;
       }
       if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
       broadcastTrackerSync();
+
+      const hpSuffix = (roll.hpBonus > 0 ? ` (✨ +${roll.hpBonus} HP)` : '') + (roll.isHPRerolled ? ' (✨ HP Reroll)' : '');
+      const entry = {
+        characterName: char?.name || "Hero",
+        playerName: char?.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : "") || "Player",
+        rollType: `Initiative${hpSuffix}`,
+        total: total,
+        breakdown: `1d20 (${roll.d20}) + ${totalMod}${hpTag} = ${total}`,
+        isNat20: !!roll.isNat20,
+        isNat1: !!roll.isNat1,
+        hpBonus: roll.hpBonus || 0,
+        isHPRerolled: !!roll.isHPRerolled,
+        hpAnnouncement: roll.hpAnnouncement || (roll.hpBonus > 0 ? `HP: +${roll.hpBonus} (Improve Roll)` : (roll.isHPRerolled ? 'HP Reroll (min 11–20 floor)' : ''))
+      };
+
+      window.lastRollConfig = {
+        ...entry,
+        d20: roll.d20,
+        rawD20: roll.rawD20,
+        mod: roll.mod,
+        baseMod: roll.baseMod,
+        title: "Initiative Check"
+      };
+
+      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
+        SessionNetwork.sendRoll(entry);
+      } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+        CampaignManager.addLogEntry(entry);
+      }
       return total;
     };
 
@@ -2718,9 +3138,11 @@ function setupStatusTracker() {
       const notation = (customNotation !== undefined && customNotation !== null && customNotation !== '')
         ? String(customNotation).trim()
         : (txtTrackerDice?.value?.trim() || '');
-      let total, breakdown, isNat20, isNat1, rollType;
+      let total, breakdown, isNat20, isNat1, rollType, hpBonus = 0, isHPRerolled = false;
+      let rollObj = null;
 
-      if (notation && typeof DiceNotation !== 'undefined') {
+      const d20Match = notation ? notation.match(/^1?d20(?:\s*([+-]\s*\d+))?$/i) : null;
+      if (notation && !d20Match && typeof DiceNotation !== 'undefined') {
         const res = DiceNotation.roll(notation);
         total = res.total;
         breakdown = res.breakdown;
@@ -2728,21 +3150,29 @@ function setupStatusTracker() {
         isNat1 = res.isNat1;
         rollType = `Dice (${res.expression})`;
       } else {
-        const adj = parseInt(numD20Adj?.value) || char.trackerState.generalD20Adj || 0;
-        const d20 = Math.floor(Math.random() * 20) + 1;
-        total = d20 + adj;
-        isNat20 = d20 === 20;
-        isNat1 = d20 === 1;
-        rollType = "General d20";
-        breakdown = `1d20 (${d20})${adj !== 0 ? (adj > 0 ? ' + ' + adj : ' - ' + Math.abs(adj)) : ''} = ${total}`;
-        char.trackerState.generalD20Roll = { d20, adj, total };
+        const parsedMod = d20Match && d20Match[1] ? parseInt(d20Match[1].replace(/\s+/g, '')) : (parseInt(numD20Adj?.value) || char.trackerState.generalD20Adj || 0);
+        const roll = (typeof window.performD20RollWithHP === 'function')
+          ? window.performD20RollWithHP(parsedMod, char, 'check')
+          : { d20: Math.floor(Math.random() * 20) + 1, total: Math.floor(Math.random() * 20) + 1 + parsedMod, isNat20: false, isNat1: false, hpBonus: 0, isHPRerolled: false, baseMod: parsedMod, mod: parsedMod, rawD20: 10 };
+        rollObj = roll;
+        total = roll.total;
+        isNat20 = roll.isNat20;
+        isNat1 = roll.isNat1;
+        hpBonus = roll.hpBonus;
+        isHPRerolled = roll.isHPRerolled;
+        const hpSuffix = (hpBonus > 0 ? ` (✨ +${hpBonus} HP)` : '') + (isHPRerolled ? ' (✨ HP Reroll)' : '');
+        rollType = notation ? `Dice (${notation})${hpSuffix}` : `General d20${hpSuffix}`;
+        const hpTag = (hpBonus > 0 ? ` + ${hpBonus} [✨ HP]` : '') + (isHPRerolled ? ' [✨ Reroll]' : '');
+        breakdown = `1d20 (${roll.d20})${parsedMod !== 0 ? (parsedMod > 0 ? ' + ' + parsedMod : ' - ' + Math.abs(parsedMod)) : ''}${hpTag} = ${total}`;
+        char.trackerState.generalD20Roll = { d20: roll.d20, adj: parsedMod, total };
       }
 
       if (lblD20Result) {
         let color = "var(--accent-primary)";
         if (isNat20) color = "#10b981";
         else if (isNat1) color = "#ef4444";
-        lblD20Result.innerHTML = `<span style="color: ${color};">Result: ${total}</span> ${isNat20 ? '🎉 (Nat 20!)' : (isNat1 ? '⚠️ (Nat 1)' : '')}`;
+        else if (hpBonus > 0 || isHPRerolled) color = "#b45309";
+        lblD20Result.innerHTML = `<span style="color: ${color};">Result: ${total}</span> ${isNat20 ? '🎉 (Nat 20!)' : (isNat1 ? '⚠️ (Nat 1)' : '')} ${(hpBonus > 0 || isHPRerolled) ? '✨' : ''}`;
       }
       if (lblD20Breakdown) {
         lblD20Breakdown.textContent = breakdown;
@@ -2751,12 +3181,26 @@ function setupStatusTracker() {
       // Broadcast to session log & network
       const entry = {
         characterName: char?.name || "Hero",
+        playerName: char?.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : "") || "Player",
         rollType: rollType,
         total: total,
         breakdown: breakdown,
         isNat20: !!isNat20,
-        isNat1: !!isNat1
+        isNat1: !!isNat1,
+        hpBonus: hpBonus || 0,
+        isHPRerolled: !!isHPRerolled,
+        hpAnnouncement: (hpBonus > 0 ? `HP: +${hpBonus} (Improve Roll)` : (isHPRerolled ? 'HP Reroll (min 11–20 floor)' : ''))
       };
+
+      window.lastRollConfig = {
+        ...entry,
+        d20: rollObj ? rollObj.d20 : total,
+        rawD20: rollObj ? rollObj.rawD20 : total,
+        mod: rollObj ? rollObj.mod : 0,
+        baseMod: rollObj ? rollObj.baseMod : 0,
+        title: rollType.replace(/\s*\(\s*✨.*?\)/gi, '').trim()
+      };
+
       if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
         SessionNetwork.sendRoll(entry);
       } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
@@ -2972,10 +3416,45 @@ function setupSessionAndGMHub() {
   const popoverMention = document.getElementById("chatMentionPopover");
   const listMention = document.getElementById("chatMentionList");
   const lblLiveClock = document.getElementById("lblSessionLiveClock");
+  const lblGameSessionStatusBadge = document.getElementById("lblGameSessionStatusBadge");
+  const gmSessionActionButtons = document.getElementById("gmSessionActionButtons");
+  const btnGMStartSession = document.getElementById("btnGMStartSession");
+  const btnGMPauseSession = document.getElementById("btnGMPauseSession");
+  const btnGMEndSession = document.getElementById("btnGMEndSession");
+  const boxSessionPausedBanner = document.getElementById("boxSessionPausedBanner");
+  const lblPausedBannerClock = document.getElementById("lblPausedBannerClock");
   const lblGMInfo = document.getElementById("lblSessionGMInfo");
   const lblPlayerInfo = document.getElementById("lblSessionPlayerInfo");
   const btnToggleLogin = document.getElementById("btnToggleLoginBar");
   const sessionLoginBar = document.getElementById("sessionLoginBar");
+  const lblToggleGMIncludeChar = document.getElementById("lblToggleGMIncludeChar");
+  const chkGMIncludeCharInParty = document.getElementById("chkGMIncludeCharInParty");
+
+  // DOM Elements - Session Top Control Row
+  const sessionTopControlRow = document.getElementById("sessionTopControlRow");
+  const lblSessionUserRoleBadge = document.getElementById("lblSessionUserRoleBadge");
+  const lblSessionCampaignName = document.getElementById("lblSessionCampaignName");
+  const lblSessionNumberBadge = document.getElementById("lblSessionNumberBadge");
+  const lblSessionDateTime = document.getElementById("lblSessionDateTime");
+  const boxSessionGMCommandsDropdown = document.getElementById("boxSessionGMCommandsDropdown");
+  const btnSessionGMCommands = document.getElementById("btnSessionGMCommands");
+  const menuSessionGMCommands = document.getElementById("menuSessionGMCommands");
+  const btnPlayerSubmitSheet = document.getElementById("btnPlayerSubmitSheet");
+  const btnSessionCopyInviteLink = document.getElementById("btnSessionCopyInviteLink");
+  const btnSessionOpenUsersFromMenu = document.getElementById("btnSessionOpenUsersFromMenu");
+  const btnOpenUsers = document.getElementById("btnOpenUsers");
+  const gmCampaignCharactersCard = document.getElementById("gmCampaignCharactersCard");
+  const gmCampaignCharactersList = document.getElementById("gmCampaignCharactersList");
+  const btnGMRefreshCharacters = document.getElementById("btnGMRefreshCharacters");
+
+  // DOM Elements - Dedicated GM Tab Session Controls
+  const lblGMCampaignSessionBadge = document.getElementById("lblGMCampaignSessionBadge");
+  const lblGMCampaignSessionClock = document.getElementById("lblGMCampaignSessionClock");
+  const btnGMCampTabStartSession = document.getElementById("btnGMCampTabStartSession");
+  const btnGMCampTabPauseSession = document.getElementById("btnGMCampTabPauseSession");
+  const btnGMCampTabEndSession = document.getElementById("btnGMCampTabEndSession");
+  const btnGMCampTabCancelSession = document.getElementById("btnGMCampTabCancelSession");
+  const btnGMCancelSession = document.getElementById("btnGMCancelSession");
 
   // DOM Elements - Dedicated GM Tab
   const btnOpenGM = document.getElementById("btnOpenGM");
@@ -3018,7 +3497,7 @@ function setupSessionAndGMHub() {
   // Local state for Session feed
   let sessionSearchQuery = "";
   let sessionCurrentFilter = "all";
-  const sessionLocalLog = [];
+  let sessionLocalLog = [];
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -3091,6 +3570,7 @@ function setupSessionAndGMHub() {
     SessionNetwork.addEventListener("onChat", (packet) => {
       if (!packet) return;
       if (packet.id && sessionLocalLog.some(x => x.id === packet.id)) return;
+      if (sessionLocalLog.some(x => x.text === packet.text && x.author === packet.author && Math.abs(new Date(x.timestamp) - new Date(packet.timestamp)) < 1500)) return;
       sessionLocalLog.push(packet);
       renderSessionFeed();
       if (typeof CampaignManager !== 'undefined') {
@@ -3100,11 +3580,36 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onHeroPointSpent", (packet) => {
       if (!packet) return;
-      if (packet.id && sessionLocalLog.some(x => x.id === packet.id)) return;
-      sessionLocalLog.push(packet);
-      renderSessionFeed();
+      // Note: Standalone "expended a Hero Point" messages are omitted per user request.
+      // Roll effects are announced on the roll itself. We only sync HP state here.
       if (typeof CampaignManager !== 'undefined') {
-        CampaignManager.addLogEntry(packet);
+        const camp = CampaignManager.getActiveCampaign();
+        if (camp) {
+          const player = (camp.acceptedPlayers || []).find(p => p.characterName === packet.characterName || (packet.senderPlayerId && p.id === packet.senderPlayerId));
+          if (player && packet.remainingHP !== undefined) {
+            CampaignManager.updatePlayerConditions(player.id, player.currentBruises, player.conditions, packet.remainingHP, player.currentInjured);
+          }
+          const npc = (camp.npcs || []).find(n => n.name === packet.characterName || n.characterName === packet.characterName);
+          if (npc && packet.remainingHP !== undefined) {
+            npc.heroPoints = Math.max(0, Number(packet.remainingHP) || 0);
+            if (npc.characterData) {
+              npc.characterData.heroPoints = npc.heroPoints;
+            }
+            if (typeof CampaignManager.saveToStorage === 'function') {
+              CampaignManager.saveToStorage();
+            }
+          }
+        }
+      }
+      if (typeof char !== 'undefined' && char && char.name && packet.characterName === char.name) {
+        if (packet.remainingHP !== undefined) {
+          char.heroPoints = Math.max(0, Number(packet.remainingHP) || 0);
+          const hpInput = document.getElementById("heroPointsInput");
+          if (hpInput) hpInput.value = char.heroPoints;
+          const lblHP = document.getElementById("lblModalCurrentHP");
+          if (lblHP) lblHP.textContent = char.heroPoints;
+          if (typeof updateHeroPointsUseButtonState === 'function') updateHeroPointsUseButtonState();
+        }
       }
       syncPartyRosterUI();
     });
@@ -3154,6 +3659,11 @@ function setupSessionAndGMHub() {
         }
         if (packet.heroPoints !== undefined) {
           char.heroPoints = packet.heroPoints;
+          const hpInput = document.getElementById("heroPointsInput");
+          if (hpInput) hpInput.value = char.heroPoints;
+          const lblHP = document.getElementById("lblModalCurrentHP");
+          if (lblHP) lblHP.textContent = char.heroPoints;
+          if (typeof updateHeroPointsUseButtonState === 'function') updateHeroPointsUseButtonState();
         }
 
         if (typeof updateTrackerConditionsSummary === 'function') updateTrackerConditionsSummary();
@@ -3168,7 +3678,17 @@ function setupSessionAndGMHub() {
         renderGMJoinRequests();
         syncPartyRosterUI();
         if (typeof renderCampaignUsersList === 'function') renderCampaignUsersList();
-        if (res && res.tokenMismatch) {
+        if (res && res.status === 'already_accepted' && !res.tokenMismatch) {
+          const activeCamp = CampaignManager.getActiveCampaign();
+          SessionNetwork.acceptJoin(req.id, activeCamp);
+          if (typeof showToast === 'function') {
+            showToast(`Player "${req.playerName}" connected automatically.`, "info");
+          }
+        } else if (res && res.isNewDevice) {
+          if (typeof showToast === 'function') {
+            showToast(`📱 New device connection request from "${req.playerName}"!`, "warning");
+          }
+        } else if (res && res.tokenMismatch) {
           if (typeof showToast === 'function') {
             showToast(`⚠️ Auth Alert: "${req.playerName}" joined with an unrecognized account key!`, "warning");
           }
@@ -3204,7 +3724,7 @@ function setupSessionAndGMHub() {
             <div>
               <strong>Account Token Match:</strong>
               ${evt.isSameToken 
-                ? '<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold;">✓ Identical Account Key (Legitimate reconnect)</span>' 
+                ? '<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold;">✓ Trusted Device Key (Legitimate reconnect / device switch)</span>' 
                 : '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold;">⚠️ Different Account Key (Potential imposter or name collision!)</span>'}
             </div>
           </div>
@@ -3237,6 +3757,21 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onStatusChange", (info) => {
       updateSessionConnectionUI(info);
+      if (typeof updateSessionRowUI === 'function') updateSessionRowUI();
+      if (info && info.status === "connected") {
+        const netStatus = (typeof SessionNetwork !== 'undefined') ? SessionNetwork.getStatus() : null;
+        if (netStatus && netStatus.role === 'CLIENT') {
+          // Auto-submit character sheet upon verified connection
+          if (typeof char !== 'undefined' && char && char.name) {
+            const hero = window.primaryHero || char;
+            const serialized = (typeof hero.serialize === 'function') ? hero.serialize() : hero;
+            SessionNetwork.sendCharacterSheetData(serialized);
+            if (typeof showToast === 'function') {
+              showToast(`Connected! Character sheet "${char.name}" submitted to GM.`, "success");
+            }
+          }
+        }
+      }
     });
 
     SessionNetwork.addEventListener("onForcedMode", (info) => {
@@ -3254,10 +3789,37 @@ function setupSessionAndGMHub() {
 
     SessionNetwork.addEventListener("onCharacterSheetData", (packet) => {
       if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.saveCampaignCharacter(packet.sheet, packet.playerName, packet.playerId);
         CampaignManager.ingestCharacterSheet(packet.playerId, packet.sheet, packet.playerName, packet.characterName);
         syncPartyRosterUI();
+        if (typeof renderGMCampaignCharacters === 'function') {
+          renderGMCampaignCharacters();
+        }
         if (typeof showToast === 'function') {
-          showToast(`Received character sheet for "${packet.characterName}" (${packet.playerName})!`, "success");
+          showToast(`📥 Received and saved character sheet for "${packet.characterName}" (${packet.playerName})!`, "success");
+        }
+        if (typeof appendChatMessage === 'function') {
+          appendChatMessage({
+            sender: "System",
+            text: `📥 GM received and saved character sheet for "${packet.characterName}" (${packet.playerName}).`,
+            timestamp: new Date().toISOString(),
+            isSystem: true
+          });
+        }
+      }
+    });
+
+    SessionNetwork.addEventListener("onPlayerLeaveParty", (packet) => {
+      if (typeof CampaignManager !== 'undefined') {
+        if (packet.characterId) CampaignManager.removeCharacterFromParty(packet.characterId);
+        if (packet.characterName) CampaignManager.removeCharacterFromParty(packet.characterName);
+        syncPartyRosterUI();
+        if (typeof renderGMCampaignCharacters === 'function') {
+          renderGMCampaignCharacters();
+        }
+        const camp = CampaignManager.getActiveCampaign();
+        if (camp && typeof SessionNetwork !== 'undefined' && SessionNetwork.getStatus().role === 'HOST') {
+          SessionNetwork.broadcastStateSync(camp);
         }
       }
     });
@@ -3278,6 +3840,54 @@ function setupSessionAndGMHub() {
         }
         syncGMUI();
         syncPartyRosterUI();
+      }
+    });
+
+    SessionNetwork.addEventListener("onSessionStatus", (sessionState) => {
+      if (typeof updateGameSessionUI === 'function') {
+        updateGameSessionUI(sessionState);
+      }
+    });
+
+    SessionNetwork.addEventListener("onStateSync", (campState) => {
+      if (campState && campState.sessionState && typeof updateGameSessionUI === 'function') {
+        updateGameSessionUI(campState.sessionState);
+      }
+    });
+
+    SessionNetwork.addEventListener("onSessionCancel", (packet) => {
+      if (!packet) return;
+      if (typeof CampaignManager !== 'undefined') {
+        const camp = CampaignManager.getActiveCampaign();
+        if (camp) {
+          camp.sessionState = packet.sessionState;
+          if (Array.isArray(camp.sessionLog) && packet.sessionStartedAt) {
+            camp.sessionLog = camp.sessionLog.filter(entry => {
+              if (!entry.timestamp) return false;
+              const entryTime = new Date(entry.timestamp).getTime();
+              return !isNaN(entryTime) && entryTime < packet.sessionStartedAt;
+            });
+          }
+          if (Array.isArray(camp.log) && packet.sessionStartedAt) {
+            camp.log = camp.log.filter(entry => {
+              if (!entry.timestamp) return false;
+              const entryTime = new Date(entry.timestamp).getTime();
+              return !isNaN(entryTime) && entryTime < packet.sessionStartedAt;
+            });
+          }
+          CampaignManager.updateActiveCampaign({ sessionState: camp.sessionState, sessionLog: camp.sessionLog, log: camp.log });
+        }
+      }
+      sessionLocalLog.length = 0;
+      renderSessionFeed();
+      if (typeof updateGameSessionUI === 'function') {
+        updateGameSessionUI(packet.sessionState);
+      }
+      if (typeof updateSessionRowUI === 'function') {
+        updateSessionRowUI(packet.sessionState);
+      }
+      if (typeof showToast === 'function') {
+        showToast(`Game Session #${packet.sessionNum || ''} was canceled by the GM.`, "warning");
       }
     });
   }
@@ -3373,6 +3983,9 @@ function setupSessionAndGMHub() {
       }
       if (lblMsg) lblMsg.textContent = info?.detail || "";
     }
+    if (typeof window.updateHeroPointsUseButtonState === 'function') {
+      window.updateHeroPointsUseButtonState();
+    }
   }
 
   // --- Search Engine Expression Parser ---
@@ -3434,7 +4047,14 @@ function setupSessionAndGMHub() {
       if (tagT === 'check' && !typeStr.includes('check')) return false;
       if (tagT === 'chat' && item.type !== 'CHAT') return false;
       if (tagT === 'whisper' && (!item.isPrivate || item.type !== 'CHAT')) return false;
-      if (tagT === 'hp' && item.type !== 'HERO_POINT_SPENT') return false;
+      if (tagT === 'hp') {
+        const hasHp = (typeof item.hpBonus === 'number' && item.hpBonus > 0) ||
+                      !!item.isHPRerolled ||
+                      !!(item.hpAnnouncement && item.hpAnnouncement.trim()) ||
+                      !!(item.rollType && (item.rollType.includes('+5 HP') || item.rollType.includes('HP Reroll') || item.rollType.includes('✨ HP'))) ||
+                      item.type === 'HERO_POINT_SPENT';
+        if (!hasHp) return false;
+      }
     }
 
     // Check excludes
@@ -3464,19 +4084,20 @@ function setupSessionAndGMHub() {
     const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
     const isLocalGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
 
-    // 1. HERO POINT SPENT
-    if (item.type === 'HERO_POINT_SPENT') {
-      const charName = item.characterName || 'Hero';
-      const rem = item.remainingHP !== undefined ? ` (Remaining: ${item.remainingHP})` : '';
-      const det = item.details ? ` — ${escapeHtml(item.details)}` : '';
+    // 0. SYSTEM ANNOUNCEMENTS & GAME SESSION EVENTS
+    if (item.type === 'SYSTEM' || item.type === 'SESSION_EVENT') {
       return `
-        <div class="session-log-line log-type-hp">
+        <div class="session-log-line log-type-system">
           <span class="log-time">[${time}]</span>
-          <span class="badge log-hp-badge">⭐ Hero Point</span>
-          <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(charName)}')">${escapeHtml(charName)}:</span>
-          <span class="log-content">expended a Hero Point!${rem}${det}</span>
+          <span class="badge" style="background: rgba(2, 132, 199, 0.2); color: var(--accent-primary); font-size: var(--font-size-fine-print, 12px); font-weight: bold;">📢 System</span>
+          <span class="log-content">${escapeHtml(item.text || item.message || '')}</span>
         </div>
       `;
+    }
+
+    // 1. HERO POINT SPENT (Suppressed per user request: announced on rolls or not spent)
+    if (item.type === 'HERO_POINT_SPENT') {
+      return '';
     }
 
     // 2. CHAT & WHISPERS
@@ -3511,10 +4132,21 @@ function setupSessionAndGMHub() {
 
     // 3. DICE ROLLS & MECHANICS (Attacks, Checks, Saves)
     const author = item.characterName || 'Hero';
-    const subPlayer = item.playerName ? ` (${item.playerName})` : '';
+    const cleanSubPlayer = item.playerName ? item.playerName.replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim() : '';
+    const subPlayer = cleanSubPlayer ? ` (${cleanSubPlayer})` : '';
     const natClass = item.isNat20 ? 'log-nat20' : (item.isNat1 ? 'log-nat1' : '');
     const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold; font-size: var(--font-size-fine-print, 12px);">★ Nat 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold; font-size: var(--font-size-fine-print, 12px);">⚠️ Nat 1</span>` : '');
     const silentBadge = item.isSilent ? `<span class="badge log-silent-badge">🔇 Silent</span>` : '';
+
+    const hasHpBonus = typeof item.hpBonus === 'number' && item.hpBonus > 0;
+    const isHpReroll = !!item.isHPRerolled;
+    const isHpType = !!(item.rollType && (item.rollType.includes('+5 HP') || item.rollType.includes('HP Reroll') || item.rollType.includes('✨ HP')));
+    const isHpEnhanced = hasHpBonus || isHpReroll || isHpType;
+    const hpClass = isHpEnhanced ? 'log-hp-enhanced' : '';
+    let hpBadge = '';
+    if (isHpReroll || (item.rollType && item.rollType.includes('HP Reroll'))) {
+      hpBadge = `<span class="badge log-hp-roll-badge">✨ HP Reroll</span>`;
+    }
 
     let resultHtml = '';
     if (item.result) {
@@ -3524,17 +4156,59 @@ function setupSessionAndGMHub() {
       resultHtml = ` — <span class="${resClass}">${escapeHtml(item.result)}</span>`;
     }
 
-    const mathSnippet = item.breakdown ? `<span class="log-math">${escapeHtml(item.breakdown)}</span>` : `<span class="log-math">${item.total}</span>`;
-    const rollLabel = item.rollType ? `<strong>${escapeHtml(item.rollType)}:</strong>` : '';
+    // Clean rollType title (remove trailing "(+5 HP)" or "(HP Reroll)" so title isn't cluttered)
+    const cleanRollType = (item.rollType || '')
+      .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+      .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+      .trim();
+    const rollLabel = cleanRollType ? `<strong>${escapeHtml(cleanRollType)}:</strong>` : '';
+
+    // Shortened HP effect announcement appended directly after the roll message without "HP +" prefix
+    let hpAnnouncementText = '';
+    if (item.hpAnnouncement) {
+      hpAnnouncementText = item.hpAnnouncement.replace(/\bHero Point\b/g, 'HP').replace(/^HP:\s*\+/i, '+').replace(/^HP\s*\+/i, '+');
+    } else if (hasHpBonus) {
+      hpAnnouncementText = `+${item.hpBonus} (Improve Roll)`;
+    } else if (isHpReroll) {
+      if (item.rerollInfo) {
+        hpAnnouncementText = `HP Reroll: ${item.rerollInfo.replace(/\bHero Point\b/g, 'HP')}`;
+      } else {
+        hpAnnouncementText = `HP Reroll (min 11–20 floor)`;
+      }
+    } else if (item.rollType && item.rollType.includes('+5 HP')) {
+      hpAnnouncementText = `+5 (Improve Roll)`;
+    } else if (item.rollType && item.rollType.includes('HP Reroll')) {
+      hpAnnouncementText = `HP Reroll (min 11–20 floor)`;
+    }
+
+    const hpAnnouncementHtml = hpAnnouncementText
+      ? ` <span class="log-hp-announcement">[✨ ${escapeHtml(hpAnnouncementText)}]</span>`
+      : '';
+
+    let mathSnippet = '';
+    if (item.breakdown) {
+      const rawBreakdown = String(item.breakdown);
+      const eqIdx = rawBreakdown.lastIndexOf('=');
+      if (eqIdx !== -1) {
+        const formulaPart = rawBreakdown.substring(0, eqIdx).trim();
+        const totalPart = rawBreakdown.substring(eqIdx + 1).trim();
+        mathSnippet = `<span class="log-roll-formula">${escapeHtml(formulaPart)}</span> <span style="font-weight: 600; color: var(--text-muted);">=</span> <strong class="log-total-result">${escapeHtml(totalPart)}</strong>`;
+      } else {
+        mathSnippet = `<span class="log-roll-formula">${escapeHtml(rawBreakdown)}</span>`;
+      }
+    } else {
+      mathSnippet = `<strong class="log-total-result">${item.total !== undefined ? item.total : ''}</strong>`;
+    }
 
     return `
-      <div class="session-log-line ${natClass}">
+      <div class="session-log-line ${natClass} ${hpClass}">
         <span class="log-time">[${time}]</span>
         ${silentBadge}
         ${natBadge}
+        ${hpBadge}
         <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${escapeHtml(author)}${escapeHtml(subPlayer)}:</span>
         <span class="log-content">
-          ${rollLabel} ${mathSnippet}${resultHtml}
+          ${rollLabel} ${mathSnippet} ${hpAnnouncementHtml}${resultHtml}
         </span>
       </div>
     `;
@@ -3553,6 +4227,22 @@ function setupSessionAndGMHub() {
     const filtered = items.filter(item => {
       if (sessionCurrentFilter === "attack" && !item.rollType?.toLowerCase().includes("attack")) return false;
       if (sessionCurrentFilter === "save" && !item.rollType?.toLowerCase().includes("save") && !item.rollType?.toLowerCase().includes("toughness")) return false;
+      if (sessionCurrentFilter === "check") {
+        if (item.type !== "ROLL" && item.type !== "roll") return false;
+        const rt = (item.rollType || "").toLowerCase();
+        const tt = (item.title || "").toLowerCase();
+        if (rt.includes("attack") || rt.includes("save") || rt.includes("toughness")) return false;
+        const isCheck = rt.includes("check") || rt.includes("skill") || rt.includes("ability") || rt.includes("init") || tt.includes("check") || tt.includes("skill") || tt.includes("ability") || tt.includes("init") || rt.includes("dice") || (!rt && !tt);
+        if (!isCheck) return false;
+      }
+      if (sessionCurrentFilter === "hp") {
+        if (item.type !== "ROLL" && item.type !== "roll") return false;
+        const hasHp = (typeof item.hpBonus === 'number' && item.hpBonus > 0) ||
+                      !!item.isHPRerolled ||
+                      !!(item.hpAnnouncement && item.hpAnnouncement.trim()) ||
+                      !!(item.rollType && (item.rollType.includes('+5 HP') || item.rollType.includes('HP Reroll') || item.rollType.includes('✨ HP')));
+        if (!hasHp) return false;
+      }
       if (sessionCurrentFilter === "chat" && item.type !== "CHAT") return false;
       if (sessionCurrentFilter === "whisper" && (!item.isPrivate || item.type !== "CHAT")) return false;
 
@@ -3572,7 +4262,32 @@ function setupSessionAndGMHub() {
 
   // --- Spend Hero Point Handling ---
   window.sessionSpendHeroPoint = function(charId, details = '') {
-    if (charId === 'local_hero' || !charId) {
+    const spendDetail = details || 'Hero Point spent';
+
+    // If spending for an NPC from campaign, automatically load into editor
+    if (typeof CampaignManager !== 'undefined' && charId && charId !== 'local_hero' && charId !== 'local_player') {
+      const camp = CampaignManager.getActiveCampaign();
+      const npc = (camp?.npcs || []).find(n => n.id === charId || n.name === charId) ||
+                  (camp?.encounterEnemies || []).find(e => e.id === charId || e.name === charId);
+      if (npc && window.activeEditorNpcId !== npc.id && typeof window.gmLoadNpcToEditor === 'function') {
+        window.gmLoadNpcToEditor(npc.id);
+      }
+    }
+    const isRerollSpend = details && (details.toLowerCase().includes('reroll') || details.toLowerCase().includes('re-roll'));
+
+    const isLocal = charId === 'local_hero' || charId === 'local_player' || !charId ||
+      (typeof char !== 'undefined' && char && char.name && (
+        (typeof charId === 'string' && charId.toLowerCase() === char.name.toLowerCase()) ||
+        (char.id && charId === char.id)
+      ));
+
+    if (isLocal) {
+      if (typeof char !== 'undefined' && char && (typeof char.heroPoints !== 'number' || isNaN(char.heroPoints))) {
+        const hpInput = document.getElementById("heroPointsInput");
+        const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+        const rawVal = hpInput ? parseInt(hpInput.value) : NaN;
+        char.heroPoints = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+      }
       const currentHP = (typeof char !== 'undefined' && char) ? (char.heroPoints || 0) : 0;
       if (currentHP <= 0) {
         if (typeof showToast === 'function') showToast("No Hero Points remaining to spend!", "warning");
@@ -3582,60 +4297,190 @@ function setupSessionAndGMHub() {
       char.heroPoints = Math.max(0, currentHP - 1);
       const hpInput = document.getElementById("heroPointsInput");
       if (hpInput) hpInput.value = char.heroPoints;
+      const lblHP = document.getElementById("lblModalCurrentHP");
+      if (lblHP) lblHP.textContent = char.heroPoints;
+      if (typeof window.updateHeroPointsUseButtonState === 'function') {
+        window.updateHeroPointsUseButtonState();
+      }
+
+      // If spending generically or for improve roll (and NOT for a reroll), queue +5 Improve Roll bonus for next check
+      if (!isRerollSpend && !char._pendingHPReroll && (!char._pendingHPRollBonus || char._pendingHPRollBonus <= 0)) {
+        if (!details || details === 'Hero Point spent' || details.includes('Improve Roll') || details.includes('+5')) {
+          char._pendingHPRollBonus = 5;
+        }
+      }
+
+      // Sync to active hero cache in localStorage
+      try {
+        const rawHero = localStorage.getItem('mm2e_active_editor_hero');
+        const heroObj = rawHero ? JSON.parse(rawHero) : {};
+        heroObj.name = char.name || 'Hero';
+        heroObj.heroPoints = char.heroPoints;
+        localStorage.setItem('mm2e_active_editor_hero', JSON.stringify(heroObj));
+      } catch (e) {}
+
+      // Sync to CampaignManager acceptedPlayers & savedCharacters
+      if (typeof CampaignManager !== 'undefined') {
+        const camp = CampaignManager.getActiveCampaign();
+        if (camp) {
+          if (Array.isArray(camp.acceptedPlayers)) {
+            const p = camp.acceptedPlayers.find(pl => pl.id === 'local_hero' || pl.id === 'local_player' || (char && pl.characterName === char.name));
+            if (p) {
+              p.heroPoints = char.heroPoints;
+              if (p.characterSummary) p.characterSummary.heroPoints = char.heroPoints;
+              CampaignManager.updatePlayerConditions(p.id, p.currentBruises, p.conditions, char.heroPoints, p.currentInjured);
+            }
+          }
+          if (Array.isArray(camp.savedCharacters)) {
+            const sc = camp.savedCharacters.find(s => s.characterName === char.name || s.id === 'local_hero');
+            if (sc) {
+              sc.heroPoints = char.heroPoints;
+              if (sc.characterData) sc.characterData.heroPoints = char.heroPoints;
+              if (typeof CampaignManager.saveToStorage === 'function') CampaignManager.saveToStorage();
+            }
+          }
+        }
+      }
 
       const heroName = char.name || 'Hero';
-      const eventPkt = {
-        type: 'HERO_POINT_SPENT',
-        id: 'hp_' + Date.now(),
-        characterName: heroName,
-        playerName: char.playerName || localStorage.getItem("mm2e_player_name") || "Player",
-        remainingHP: char.heroPoints,
-        details: details || 'Hero Point spent',
-        timestamp: new Date().toISOString()
-      };
+      const isLocalGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
+      const gmName = (typeof CampaignManager !== 'undefined' && CampaignManager.getGMUserName) ? CampaignManager.getGMUserName() : 'GM';
+      const pName = isLocalGM && gmName !== 'GM' 
+        ? gmName 
+        : (char.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : null) || (isLocalGM ? gmName : "Player"));
+      const packetId = 'hp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      const isConnected = (typeof SessionNetwork !== 'undefined' && SessionNetwork.getStatus().status === 'connected');
 
-      if (typeof SessionNetwork !== 'undefined') {
-        SessionNetwork.sendHeroPointSpent(heroName, char.heroPoints, details);
-      } else {
-        if (typeof CampaignManager !== 'undefined') {
-          CampaignManager.addLogEntry(eventPkt);
-        }
-        sessionLocalLog.push(eventPkt);
-        renderSessionFeed();
-        syncPartyRosterUI();
+      if (isConnected) {
+        SessionNetwork.sendHeroPointSpent(heroName, char.heroPoints, spendDetail, packetId, pName);
       }
-      if (typeof showToast === 'function') showToast(`Expended 1 Hero Point! (${char.heroPoints} remaining)`, "info");
+
+      // If it's a non-roll action (Surge, Recovery, Escape, Inspiration, Avoid Death, etc.), announce in session log!
+      const isRollSpend = spendDetail && (
+        spendDetail.includes('Improve') || spendDetail.includes('+5') || spendDetail.includes('Roll') ||
+        spendDetail.includes('Skill') || spendDetail.includes('Attack') || spendDetail.includes('Save') ||
+        spendDetail.includes('Ability') || spendDetail.includes('Initiative')
+      );
+      if (!isRollSpend && !isRerollSpend) {
+        const logItem = {
+          type: 'SESSION_EVENT',
+          timestamp: Date.now(),
+          characterName: heroName,
+          playerName: pName,
+          message: `${heroName} expended 1 Hero Point: ${spendDetail} (${char.heroPoints} HP remaining)`
+        };
+        if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+          CampaignManager.addLogEntry(logItem);
+        }
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'SESSION_LOG_ENTRY', entry: logItem });
+        }
+      }
+
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      if (typeof showToast === 'function') {
+        if (char._pendingHPRollBonus > 0) {
+          showToast(`🎯 Expended 1 Hero Point! +5 bonus queued for your next check (${char.heroPoints} HP remaining)`, "info");
+        } else if (isRerollSpend) {
+          showToast(`Expended 1 Hero Point for Reroll! (${char.heroPoints} remaining)`, "info");
+        } else {
+          showToast(`Expended 1 Hero Point! (${char.heroPoints} remaining)`, "info");
+        }
+      }
     } else {
-      // GM spending on behalf of player or NPC
+      // GM or Session spending on behalf of player, saved character, or NPC
       if (typeof CampaignManager === 'undefined') return;
       const camp = CampaignManager.getActiveCampaign();
-      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId);
-      if (player) {
-        const hp = Math.max(0, (player.heroPoints !== undefined ? player.heroPoints : 1) - 1);
-        CampaignManager.updatePlayerConditions(charId, player.currentBruises, player.conditions, hp, player.currentInjured);
-        const eventPkt = {
-          type: 'HERO_POINT_SPENT',
-          id: 'hp_' + Date.now(),
-          characterName: player.characterName,
-          playerName: player.playerName,
-          remainingHP: hp,
-          details: details || 'Hero Point spent by GM',
-          timestamp: new Date().toISOString()
-        };
-        if (typeof SessionNetwork !== 'undefined') {
-          SessionNetwork.sendHeroPointSpent(player.characterName, hp, details);
-          SessionNetwork.sendGMStatusOverride(charId, {
-            characterName: player.characterName,
-            bruises: player.currentBruises,
-            injured: player.currentInjured,
-            conditions: player.conditions,
-            heroPoints: hp
-          });
-        } else {
-          CampaignManager.addLogEntry(eventPkt);
-          sessionLocalLog.push(eventPkt);
-          renderSessionFeed();
-          syncPartyRosterUI();
+      const player = (camp?.acceptedPlayers || []).find(p => p.id === charId || p.characterName === charId);
+      const npc = (camp?.npcs || []).find(n => n.id === charId || n.name === charId);
+      const savedChar = (camp?.savedCharacters || []).find(sc => sc.id === charId || sc.characterName === charId);
+      const target = player || npc || savedChar;
+      if (target) {
+        const currentTargetHP = target.heroPoints !== undefined 
+          ? target.heroPoints 
+          : (target.characterData?.heroPoints !== undefined ? target.characterData.heroPoints : 1);
+        if (currentTargetHP <= 0) {
+          const cName = target.characterName || target.name || 'Character';
+          if (typeof showToast === 'function') showToast(`No Hero Points remaining for ${cName}!`, "warning");
+          return;
+        }
+        const hp = Math.max(0, currentTargetHP - 1);
+        target.heroPoints = hp;
+
+        if (player) {
+          if (player.characterSummary) player.characterSummary.heroPoints = hp;
+          CampaignManager.updatePlayerConditions(player.id, player.currentBruises, player.conditions, hp, player.currentInjured);
+          if (typeof char !== 'undefined' && char && (char.name === player.characterName || player.id === 'local_player')) {
+            char.heroPoints = hp;
+            const hpInput = document.getElementById("heroPointsInput");
+            if (hpInput) hpInput.value = hp;
+            if (typeof window.updateHeroPointsUseButtonState === 'function') window.updateHeroPointsUseButtonState();
+            if (!isRerollSpend && !char._pendingHPReroll && (!char._pendingHPRollBonus || char._pendingHPRollBonus <= 0)) {
+              if (!details || details === 'Hero Point spent' || details.includes('Improve Roll') || details.includes('+5')) {
+                char._pendingHPRollBonus = 5;
+              }
+            }
+          }
+        } else if (npc) {
+          npc.heroPoints = hp;
+          if (npc.characterData) {
+            npc.characterData.heroPoints = hp;
+          }
+          if (window.activeEditorNpcId === npc.id && typeof char !== 'undefined' && char) {
+            char.heroPoints = hp;
+            const hpInput = document.getElementById("heroPointsInput");
+            if (hpInput) hpInput.value = hp;
+            if (typeof window.updateHeroPointsUseButtonState === 'function') window.updateHeroPointsUseButtonState();
+          }
+          if (!isRerollSpend && !npc._pendingHPReroll && (!npc._pendingHPRollBonus || npc._pendingHPRollBonus <= 0)) {
+            if (!details || details === 'Hero Point spent' || details.includes('Improve Roll') || details.includes('+5')) {
+              npc._pendingHPRollBonus = 5;
+              if (npc.characterData) npc.characterData._pendingHPRollBonus = 5;
+            }
+          }
+          if (typeof CampaignManager.saveToStorage === 'function') {
+            CampaignManager.saveToStorage();
+          }
+        } else if (savedChar) {
+          savedChar.heroPoints = hp;
+          if (savedChar.characterData) {
+            savedChar.characterData.heroPoints = hp;
+          }
+          if (typeof char !== 'undefined' && char && char.name === savedChar.characterName) {
+            char.heroPoints = hp;
+            const hpInput = document.getElementById("heroPointsInput");
+            if (hpInput) hpInput.value = hp;
+            if (typeof window.updateHeroPointsUseButtonState === 'function') window.updateHeroPointsUseButtonState();
+          }
+          if (typeof CampaignManager.saveToStorage === 'function') {
+            CampaignManager.saveToStorage();
+          }
+        }
+
+        const lblHP = document.getElementById("lblModalCurrentHP");
+        if (lblHP && (window.activeHPTargetCharId === charId || !window.activeHPTargetCharId)) lblHP.textContent = hp;
+
+        const charName = target.characterName || target.name || 'Character';
+        const gmName = (typeof CampaignManager !== 'undefined' && CampaignManager.getGMUserName) ? CampaignManager.getGMUserName() : 'GM';
+        const pName = target.playerName || (player ? 'Player' : gmName);
+        const packetId = 'hp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+        const isConnected = (typeof SessionNetwork !== 'undefined' && SessionNetwork.getStatus().status === 'connected');
+
+        if (isConnected) {
+          SessionNetwork.sendHeroPointSpent(charName, hp, spendDetail, packetId, pName);
+          if (player) {
+            SessionNetwork.sendGMStatusOverride(player.id, {
+              characterName: player.characterName,
+              bruises: player.currentBruises,
+              injured: player.currentInjured,
+              conditions: player.conditions,
+              heroPoints: hp
+            });
+          }
+        }
+        if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+        if (typeof showToast === 'function') {
+          showToast(`Expended 1 Hero Point for ${charName}! (${hp} remaining)`, "info");
         }
       }
     }
@@ -3650,102 +4495,252 @@ function setupSessionAndGMHub() {
 
     const roster = [];
     const designatedGMId = CampaignManager.getGMPlayerId();
-    const isLocalGM = CampaignManager.isDesignatedGM('local_player');
+    const isNetworkClient = (typeof SessionNetwork !== 'undefined') && SessionNetwork.getStatus().role === 'CLIENT';
+    const isLocalGM = !isNetworkClient && CampaignManager.isDesignatedGM('local_player');
+
+    const includeGmChar = (typeof CampaignManager.isGmCharIncludedInParty === 'function' && CampaignManager.isGmCharIncludedInParty())
+      || ((typeof localStorage !== 'undefined') && localStorage.getItem("mm2e_include_gm_char_in_party") === "true");
+
+    if (lblToggleGMIncludeChar) {
+      lblToggleGMIncludeChar.style.display = isLocalGM ? "inline-flex" : "none";
+    }
+    if (chkGMIncludeCharInParty) {
+      chkGMIncludeCharInParty.checked = includeGmChar;
+    }
+
+    const partyIds = (typeof CampaignManager.getPartyCharacterIds === 'function') ? CampaignManager.getPartyCharacterIds() : [];
+    const hasExplicitParty = partyIds && partyIds.length > 0;
+
+    // Check if local hero is in party
+    const isEditingNpc = !!window.activeEditorNpcId;
+    const hasExternalPartyMembers = ((camp.acceptedPlayers || []).length > 0) || ((camp.npcs || []).length > 0);
+    const isLocalHeroInParty = hasExplicitParty
+      ? (partyIds.includes('local_hero') || (char && partyIds.includes(char.name)) || includeGmChar || (!isLocalGM))
+      : (!isLocalGM || includeGmChar || !hasExternalPartyMembers);
+
+    const shouldIncludeLocalHero = isLocalHeroInParty && !!(char && char.name);
+
+    const configuredGM = (typeof CampaignManager !== 'undefined' && CampaignManager.getGMUserName) ? CampaignManager.getGMUserName() : null;
+    const accountObj = (typeof CampaignManager !== 'undefined' && CampaignManager.getUserAccount) ? CampaignManager.getUserAccount() : null;
+    const localSavedName = (typeof localStorage !== 'undefined') ? localStorage.getItem("mm2e_player_name") : null;
+    const localCharPlayer = (typeof char !== 'undefined' && char && char.playerName) ? char.playerName : null;
+
+    let resolvedGMName = 'GM';
+    if (configuredGM && configuredGM.trim() && configuredGM.trim() !== 'GM') {
+      resolvedGMName = configuredGM.trim();
+    } else if (accountObj && accountObj.userName && accountObj.userName.trim() && accountObj.userName.trim() !== 'GM') {
+      resolvedGMName = accountObj.userName.trim();
+    } else if (localSavedName && localSavedName.trim() && localSavedName.trim() !== 'GM') {
+      resolvedGMName = localSavedName.trim();
+    } else if (localCharPlayer && localCharPlayer.trim() && localCharPlayer.trim() !== 'GM') {
+      resolvedGMName = localCharPlayer.trim();
+    }
 
     // 1. Current local hero
-    if (char && char.name) {
-      const localUserName = (char.playerName && char.playerName.trim()) || localStorage.getItem("mm2e_player_name") || (isLocalGM ? (CampaignManager.getGMUserName() || "GM") : "You");
-      const isSilenced = (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char.name)));
-      const effFeats = char.effectiveFeats || char.feats || {};
-      const impInit = effFeats["Improved Initiative"] || 0;
-      const dexMod = (typeof char.getAbilityRank === 'function')
-        ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5)
-        : (char.abilities?.DEX || 0);
-      const localInitMod = (char.derivedStats && typeof char.derivedStats.initiative === 'number')
-        ? char.derivedStats.initiative
-        : (dexMod + (impInit * 4));
-      const localInitRoll = (char.trackerState && char.trackerState.initiativeRoll !== null && char.trackerState.initiativeRoll !== undefined)
-        ? char.trackerState.initiativeRoll
-        : null;
+    if (shouldIncludeLocalHero) {
+      if (isEditingNpc) {
+        // When editing an NPC, never push that NPC as a local hero (prevents duplicate roster entries).
+        // If the GM's primary sheet was stashed and includeGmChar is true, push the GM hero.
+        if (includeGmChar && window.__gmPrimaryHeroSheet) {
+          const gmSheet = window.__gmPrimaryHeroSheet.character || window.__gmPrimaryHeroSheet;
+          if (gmSheet && gmSheet.name) {
+            const effFeats = gmSheet.effectiveFeats || gmSheet.feats || {};
+            const impInit = effFeats["Improved Initiative"] || 0;
+            const dexMod = (gmSheet.abilities?.DEX || 0);
+            const localInitMod = (gmSheet.derivedStats && typeof gmSheet.derivedStats.initiative === 'number')
+              ? gmSheet.derivedStats.initiative
+              : (dexMod + (impInit * 4));
+            const localInitRoll = gmSheet.trackerState?.initiativeRoll ?? null;
 
-      roster.push({
-        id: "local_hero",
-        isLocal: true,
-        isNPC: false,
-        isGM: isLocalGM,
-        sheetHistoryCount: 1,
-        playerName: `${localUserName} (Local Sheet)`,
-        characterName: char.name,
-        initiativeMod: localInitMod,
-        initiativeRoll: localInitRoll,
-        powerLevel: char.powerLevel || 10,
-        defense: char.combat?.DEF || 0,
-        toughness: (char.purchasedResistances?.Toughness || 0) + (char.abilities?.CON || 0),
-        bruises: char.trackerState?.conditions?.Bruised || 0,
-        injured: char.trackerState?.conditions?.Injured || 0,
-        conditions: char.trackerState?.conditions || {},
-        heroPoints: char.heroPoints || 1,
-        isSilent: isSilenced
-      });
+            roster.push({
+              id: "local_hero",
+              isLocal: true,
+              isNPC: false,
+              isGM: isLocalGM,
+              sheetHistoryCount: 1,
+              playerName: `${resolvedGMName} (GM Hero)`,
+              characterName: gmSheet.name,
+              initiativeMod: localInitMod,
+              initiativeRoll: localInitRoll,
+              powerLevel: gmSheet.powerLevel || 10,
+              defense: gmSheet.combat?.DEF || 0,
+              toughness: (gmSheet.derivedStats && typeof gmSheet.derivedStats.toughness === 'number')
+                ? gmSheet.derivedStats.toughness
+                : ((gmSheet.purchasedResistances?.Toughness || 0) + (gmSheet.abilities?.CON || 0)),
+              bruises: gmSheet.trackerState?.conditions?.Bruised || 0,
+              injured: gmSheet.trackerState?.conditions?.Injured || 0,
+              conditions: gmSheet.trackerState?.conditions || {},
+              heroPoints: (typeof gmSheet.heroPoints === 'number' && !isNaN(gmSheet.heroPoints)) ? gmSheet.heroPoints : 1,
+              isSilent: false
+            });
+          }
+        }
+      } else {
+        let localUserName;
+        if (isLocalGM) {
+          localUserName = resolvedGMName;
+        } else {
+          localUserName = (char.playerName && char.playerName.trim())
+            || accountObj?.userName
+            || localStorage.getItem("mm2e_player_name")
+            || "You";
+        }
+        const isSilenced = (typeof SessionNetwork !== 'undefined' ? SessionNetwork.isSilent() : (CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(char.name)));
+        const effFeats = char.effectiveFeats || char.feats || {};
+        const impInit = effFeats["Improved Initiative"] || 0;
+        const dexMod = (typeof char.getAbilityRank === 'function')
+          ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5)
+          : (char.abilities?.DEX || 0);
+        const localInitMod = (char.derivedStats && typeof char.derivedStats.initiative === 'number')
+          ? char.derivedStats.initiative
+          : (dexMod + (impInit * 4));
+        const localInitRoll = (char.trackerState && char.trackerState.initiativeRoll !== null && char.trackerState.initiativeRoll !== undefined)
+          ? char.trackerState.initiativeRoll
+          : null;
+
+        roster.push({
+          id: "local_hero",
+          isLocal: true,
+          isNPC: false,
+          isGM: isLocalGM,
+          sheetHistoryCount: 1,
+          playerName: `${localUserName} (Local Sheet)`,
+          characterName: char.name,
+          initiativeMod: localInitMod,
+          initiativeRoll: localInitRoll,
+          powerLevel: char.powerLevel || 10,
+          defense: char.combat?.DEF || 0,
+          toughness: (char.derivedStats && typeof char.derivedStats.toughness === 'number')
+            ? char.derivedStats.toughness
+            : ((char.purchasedResistances?.Toughness || 0) + (typeof char.getAbilityRank === 'function' ? (char.getAbilityRank("CON") || 0) : 0)),
+          bruises: char.trackerState?.conditions?.Bruised || 0,
+          injured: char.trackerState?.conditions?.Injured || 0,
+          conditions: char.trackerState?.conditions || {},
+          heroPoints: (typeof char.heroPoints === 'number' && !isNaN(char.heroPoints)) ? char.heroPoints : (1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0)),
+          isSilent: isSilenced
+        });
+      }
     }
 
     // 2. Connected/Approved Players
     (camp.acceptedPlayers || []).forEach(p => {
-      if (p.characterName !== char?.name) {
-        const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
-        const isSilenced = CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName);
-        const pInitMod = p.characterSummary?.initiative !== undefined
-          ? p.characterSummary.initiative
-          : (p.characterSheet?.derivedStats?.initiative ?? ((p.characterSheet?.abilities?.DEX || 0) + ((p.characterSheet?.feats?.['Improved Initiative'] || 0) * 4)));
-        const pInitRoll = p.characterSummary?.initiativeRoll !== undefined ? p.characterSummary.initiativeRoll : (p.initiativeRoll ?? null);
+      const isAlreadyRepresentedByLocalHero = shouldIncludeLocalHero && !isLocalGM && (p.characterName === char?.name || p.id === 'local_hero');
+      if (!isAlreadyRepresentedByLocalHero) {
+        const isPlayerInParty = hasExplicitParty
+          ? (partyIds.includes(p.id) || partyIds.includes(p.characterName) || (p.playerName && partyIds.includes(p.playerName)))
+          : true;
 
-        roster.push({
-          id: p.id,
-          isLocal: false,
-          isNPC: false,
-          isGM: designatedGMId === p.id,
-          sheetHistoryCount: histCount,
-          playerName: p.playerName,
-          characterName: p.characterName,
-          initiativeMod: pInitMod,
-          initiativeRoll: pInitRoll,
-          powerLevel: p.characterSummary?.powerLevel || 10,
-          defense: p.characterSummary?.defense || 10,
-          toughness: p.characterSummary?.toughness || 10,
-          bruises: p.currentBruises || 0,
-          injured: p.currentInjured || 0,
-          conditions: p.conditions || {},
-          heroPoints: p.heroPoints !== undefined ? p.heroPoints : 1,
-          isSilent: isSilenced
-        });
+        if (isPlayerInParty) {
+          const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
+          const isSilenced = CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName);
+          const pInitMod = p.characterSummary?.initiative !== undefined
+            ? p.characterSummary.initiative
+            : (p.characterSheet?.derivedStats?.initiative ?? ((p.characterSheet?.abilities?.DEX || 0) + ((p.characterSheet?.feats?.['Improved Initiative'] || 0) * 4)));
+          const pInitRoll = p.characterSummary?.initiativeRoll !== undefined ? p.characterSummary.initiativeRoll : (p.initiativeRoll ?? null);
+
+          roster.push({
+            id: p.id,
+            isLocal: false,
+            isNPC: false,
+            isGM: designatedGMId === p.id,
+            sheetHistoryCount: histCount,
+            playerName: (p.playerName && p.playerName !== 'GM' ? p.playerName : (designatedGMId === p.id ? resolvedGMName : (p.playerName || 'Player'))).replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim(),
+            characterName: p.characterName,
+            initiativeMod: pInitMod,
+            initiativeRoll: pInitRoll,
+            powerLevel: p.characterSummary?.powerLevel || 10,
+            defense: p.characterSummary?.defense || 10,
+            toughness: p.characterSummary?.toughness || 10,
+            bruises: p.currentBruises || 0,
+            injured: p.currentInjured || 0,
+            conditions: p.conditions || {},
+            heroPoints: p.heroPoints !== undefined ? p.heroPoints : 1,
+            isSilent: isSilenced
+          });
+        }
       }
     });
 
-    // 3. Attached Party NPCs
+    // 3. Saved Campaign Characters in party (if not online)
+    if (hasExplicitParty) {
+      (camp.savedCharacters || []).forEach(sc => {
+        const isInParty = partyIds.includes(sc.id) || partyIds.includes(sc.characterName);
+        if (isInParty) {
+          const alreadyInRoster = roster.some(r => r.characterName === sc.characterName || r.id === sc.id || (sc.ownerPlayerId && r.id === sc.ownerPlayerId));
+          if (!alreadyInRoster) {
+            const isSilenced = CampaignManager.isCharacterSilent(sc.id) || CampaignManager.isCharacterSilent(sc.characterName);
+            const scInitMod = sc.characterData?.derivedStats?.initiative !== undefined
+              ? sc.characterData.derivedStats.initiative
+              : ((sc.characterData?.abilities?.DEX || 0) + ((sc.characterData?.feats?.['Improved Initiative'] || 0) * 4));
+            
+            roster.push({
+              id: sc.id,
+              isLocal: false,
+              isNPC: false,
+              isGM: false,
+              isSavedOffline: true,
+              sheetHistoryCount: 1,
+              playerName: `${sc.playerName} (Offline)`,
+              characterName: sc.characterName,
+              initiativeMod: scInitMod,
+              initiativeRoll: null,
+              powerLevel: sc.powerLevel || sc.characterData?.powerLevel || 10,
+              defense: sc.characterData?.combat?.DEF || 10,
+              toughness: (sc.characterData?.purchasedResistances?.Toughness || 0) + (sc.characterData?.abilities?.CON || 0),
+              bruises: sc.characterData?.trackerState?.conditions?.Bruised || 0,
+              injured: sc.characterData?.trackerState?.conditions?.Injured || 0,
+              conditions: sc.characterData?.trackerState?.conditions || {},
+              heroPoints: (typeof sc.characterData?.heroPoints === 'number') ? sc.characterData.heroPoints : (sc.heroPoints !== undefined ? sc.heroPoints : 1),
+              isSilent: isSilenced
+            });
+          }
+        }
+      });
+    }
+
+    // 4. Attached Party NPCs
     (camp.npcs || []).forEach(n => {
+      const isCurrentlyInEditor = isEditingNpc && (n.id === window.activeEditorNpcId);
+      const liveChar = isCurrentlyInEditor ? char : null;
+
       const isSilenced = CampaignManager.isCharacterSilent(n.id);
-      const nInitMod = n.characterData?.derivedStats?.initiative !== undefined
-        ? n.characterData.derivedStats.initiative
-        : ((n.characterData?.abilities?.DEX || 0) + ((n.characterData?.feats?.['Improved Initiative'] || 0) * 4));
-      const nInitRoll = n.characterData?.trackerState?.initiativeRoll ?? (n.initiativeRoll ?? null);
+      const nInitMod = liveChar
+        ? ((liveChar.derivedStats && typeof liveChar.derivedStats.initiative === 'number')
+            ? liveChar.derivedStats.initiative
+            : (((typeof liveChar.getAbilityRank === 'function' ? liveChar.getAbilityRank("DEX") : liveChar.abilities?.DEX) || 0) + (((liveChar.effectiveFeats || liveChar.feats || {})["Improved Initiative"] || 0) * 4)))
+        : (n.characterData?.derivedStats?.initiative !== undefined
+            ? n.characterData.derivedStats.initiative
+            : ((n.characterData?.abilities?.DEX || 0) + ((n.characterData?.feats?.['Improved Initiative'] || 0) * 4)));
+      const nInitRoll = liveChar
+        ? (liveChar.trackerState?.initiativeRoll ?? (n.characterData?.trackerState?.initiativeRoll ?? n.initiativeRoll ?? null))
+        : (n.characterData?.trackerState?.initiativeRoll ?? (n.initiativeRoll ?? null));
+
+      const npcOwner = resolvedGMName;
 
       roster.push({
         id: n.id,
         isLocal: false,
         isNPC: true,
         isGM: false,
+        isInEditor: isCurrentlyInEditor,
         sheetHistoryCount: 1,
-        playerName: "GM (NPC)",
+        playerName: `${npcOwner} (NPC)`,
         characterName: n.name,
         initiativeMod: nInitMod,
         initiativeRoll: nInitRoll,
-        powerLevel: n.powerLevel || 10,
-        defense: n.characterData?.combat?.DEF || 10,
-        toughness: (n.characterData?.purchasedResistances?.Toughness || 0) + (n.characterData?.abilities?.CON || 0),
-        bruises: n.currentBruises || 0,
-        injured: n.currentInjured || 0,
-        conditions: n.conditions || {},
-        heroPoints: n.heroPoints || 0,
+        powerLevel: liveChar ? (liveChar.powerLevel || n.powerLevel || 10) : (n.powerLevel || 10),
+        defense: liveChar ? (liveChar.combat?.DEF || 10) : (n.characterData?.combat?.DEF || 10),
+        toughness: liveChar
+          ? ((liveChar.derivedStats && typeof liveChar.derivedStats.toughness === 'number')
+              ? liveChar.derivedStats.toughness
+              : ((liveChar.purchasedResistances?.Toughness || 0) + (typeof liveChar.getAbilityRank === 'function' ? (liveChar.getAbilityRank("CON") || 0) : 0)))
+          : ((n.characterData?.purchasedResistances?.Toughness || 0) + (n.characterData?.abilities?.CON || 0)),
+        bruises: liveChar ? (liveChar.trackerState?.conditions?.Bruised || 0) : (n.currentBruises || 0),
+        injured: liveChar ? (liveChar.trackerState?.conditions?.Injured || 0) : (n.currentInjured || 0),
+        conditions: liveChar ? (liveChar.trackerState?.conditions || {}) : (n.conditions || {}),
+        heroPoints: liveChar
+          ? ((typeof liveChar.heroPoints === 'number' && !isNaN(liveChar.heroPoints)) ? liveChar.heroPoints : 0)
+          : ((typeof n.heroPoints === 'number') ? n.heroPoints : (typeof n.characterData?.heroPoints === 'number' ? n.characterData.heroPoints : 0)),
         isSilent: isSilenced
       });
     });
@@ -3817,52 +4812,107 @@ function setupSessionAndGMHub() {
         ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 4px; font-size: 10px; margin-top: 2px; height: 18px; line-height: 1; max-width: 48px; width: 100%;">🎲 Roll</button>`
         : '';
 
+      const canRemoveFromParty = isLocalGM || item.isLocal || (char && char.name === item.characterName);
+      const isControlled = isLocalGM || item.isLocal || (char && char.name && char.name.trim().toLowerCase() === (item.characterName || '').trim().toLowerCase());
+      const isMyCharacter = item.isLocal || (char && char.name && char.name.trim().toLowerCase() === (item.characterName || '').trim().toLowerCase());
+
+      const removeBtnHtml = canRemoveFromParty
+        ? `
+          <div class="gm-char-menu-divider"></div>
+          <button type="button" class="gm-char-menu-item" style="color: #ef4444;" onclick="window.confirmRemoveCharacterFromParty('${item.id}', '${escapeHtml(item.characterName).replace(/'/g, "\\'")}', ${item.isNPC}); window.gmCloseAllCharMenus();">
+            🚫 Remove from Party
+          </button>
+        `
+        : '';
+
+      const charNameHighlightStyle = isMyCharacter
+        ? 'background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.45); border-radius: 4px; padding: 2px 6px; box-shadow: 0 0 4px rgba(99, 102, 241, 0.2);'
+        : '';
+      const youBadge = isMyCharacter
+        ? `<span class="badge" style="background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;">YOU</span>`
+        : '';
+
+      const inEditorBadge = item.isInEditor
+        ? `<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7; border: 1px solid #0284c7; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;" title="Currently loaded in editor">IN EDITOR</span>`
+        : '';
+
+      let nameAndMenuHtml = '';
+      if (isControlled) {
+        nameAndMenuHtml = `
+          <div class="gm-char-menu-wrapper" style="position: relative; display: inline-block;">
+            <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for actions, HP options, or sheet operations" style="${charNameHighlightStyle} border: ${isMyCharacter ? '1px solid rgba(99, 102, 241, 0.45)' : 'none'}; background: ${isMyCharacter ? 'rgba(99, 102, 241, 0.12)' : 'none'}; font-weight: 700; font-size: 13px; color: var(--accent-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+              ${escapeHtml(item.characterName)} ${youBadge} ${inEditorBadge} ${muteIcon} <span style="font-size: var(--font-size-fine-print); opacity: 0.7;">▾</span>
+            </button>
+            <div id="gmCharMenu_${item.id}" class="gm-char-dropdown-menu" style="display: none;">
+              <button type="button" class="gm-char-menu-item" onclick="${item.isNPC ? `if (window.gmLoadNpcToEditor && window.activeEditorNpcId !== '${item.id}') window.gmLoadNpcToEditor('${item.id}'); ` : ''}window.openUseHeroPointModal('${item.id}'); window.gmCloseAllCharMenus();">
+                ✨ Hero Point Options...
+              </button>
+              <div class="gm-char-menu-divider"></div>
+              ${isLocalGM && !item.isLocal && !item.isNPC ? `
+                <button type="button" class="gm-char-menu-item" onclick="window.gmPullSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                  📥 Pull Sheet to GM Editor
+                </button>
+                <button type="button" class="gm-char-menu-item" onclick="window.gmPushCurrentSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                  📤 Push Editor Sheet to Player
+                </button>
+              ` : ''}
+              ${item.isNPC ? `
+                ${window.activeEditorNpcId === item.id ? `
+                  <button type="button" class="gm-char-menu-item" style="color: #0284c7; font-weight: bold;" onclick="window.gmReturnToPrimarySheet(); window.gmCloseAllCharMenus();">
+                    ↩ Return to GM Sheet
+                  </button>
+                ` : `
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}'); window.gmCloseAllCharMenus();">
+                    👁️ Load into Editor
+                  </button>
+                `}
+                ${isLocalGM ? `
+                  <button type="button" class="gm-char-menu-item" onclick="window.duplicateNPC('${item.id}'); window.gmCloseAllCharMenus();">
+                    📋 Duplicate NPC
+                  </button>
+                ` : ''}
+                <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                  💾 Export NPC (.mm2e)
+                </button>
+              ` : `
+                ${window.activeEditorNpcId && (item.isGM || item.isLocal) ? `
+                  <button type="button" class="gm-char-menu-item" style="color: #10b981; font-weight: bold;" onclick="window.gmReturnToPrimarySheet(); window.gmCloseAllCharMenus();">
+                    👤 Return to GM Sheet
+                  </button>
+                  <div class="gm-char-menu-divider"></div>
+                ` : ''}
+                <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}'); window.gmCloseAllCharMenus();">
+                  📜 Version History (${item.sheetHistoryCount || 0})
+                </button>
+                <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                  💾 Export Sheet (.mm2e)
+                </button>
+              `}
+              <div class="gm-char-menu-divider"></div>
+              <button type="button" class="gm-char-menu-item" onclick="window.gmTogglePlayerSilentBtn('${item.id}'); window.gmCloseAllCharMenus();">
+                ${item.isSilent ? '📡 Unmute Roll Output' : '🔇 Mute Roll Output'}
+              </button>
+              ${removeBtnHtml}
+              <div class="gm-char-menu-divider"></div>
+              <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
+            </div>
+          </div>
+        `;
+      } else {
+        nameAndMenuHtml = `
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px; padding: 2px 0;">
+            ${escapeHtml(item.characterName)} ${inEditorBadge} ${muteIcon}
+          </div>
+        `;
+      }
+
       return `
         <tr class="${silencedClass}" style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(2, 132, 199, 0.04)' : 'transparent'};">
           <td style="padding: 6px 10px;">
-            <div class="gm-char-menu-wrapper" style="position: relative; display: inline-block;">
-              <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for actions, spend HP, or sheet operations" style="background: none; border: none; font-weight: 700; font-size: 13px; color: var(--accent-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0;">
-                ${escapeHtml(item.characterName)} ${muteIcon} <span style="font-size: var(--font-size-fine-print); opacity: 0.7;">▾</span>
-              </button>
-              <div id="gmCharMenu_${item.id}" class="gm-char-dropdown-menu" style="display: none;">
-                <button type="button" class="gm-char-menu-item" onclick="window.sessionSpendHeroPoint('${item.id}'); window.gmCloseAllCharMenus();">
-                  ⭐ Spend Hero Point (${item.heroPoints || 0} HP)
-                </button>
-                <div class="gm-char-menu-divider"></div>
-                ${isLocalGM && !item.isLocal && !item.isNPC ? `
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmPullSheet('${item.id}'); window.gmCloseAllCharMenus();">
-                    📥 Pull Sheet to GM Editor
-                  </button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmPushCurrentSheet('${item.id}'); window.gmCloseAllCharMenus();">
-                    📤 Push Editor Sheet to Player
-                  </button>
-                ` : ''}
-                ${item.isNPC ? `
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}'); window.gmCloseAllCharMenus();">
-                    👁️ Load NPC to Editor
-                  </button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
-                    💾 Export NPC (.mm2e)
-                  </button>
-                ` : `
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}'); window.gmCloseAllCharMenus();">
-                    📜 Version History (${item.sheetHistoryCount || 0})
-                  </button>
-                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
-                    💾 Export Sheet (.mm2e)
-                  </button>
-                `}
-                <div class="gm-char-menu-divider"></div>
-                <button type="button" class="gm-char-menu-item" onclick="window.gmTogglePlayerSilentBtn('${item.id}'); window.gmCloseAllCharMenus();">
-                  ${item.isSilent ? '📡 Unmute Roll Output' : '🔇 Mute Roll Output'}
-                </button>
-                <div class="gm-char-menu-divider"></div>
-                <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
-              </div>
-            </div>
+            ${nameAndMenuHtml}
             <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 2px;">
               ${item.isNPC ? '<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: var(--font-size-fine-print);">NPC</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: var(--font-size-fine-print);">PC</span>'}
-              ${escapeHtml(item.playerName)} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: var(--font-size-fine-print);">👑 GM</span>' : ''}
+              ${escapeHtml((item.playerName || '').replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim())} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: var(--font-size-fine-print);">👑 GM</span>' : ''}
             </div>
           </td>
           <td style="width: 55px; text-align: center; vertical-align: middle; padding: 2px 4px;">
@@ -3872,8 +4922,13 @@ function setupSessionAndGMHub() {
             </div>
           </td>
           <td style="text-align: center; font-size: 13px;">
-            <strong>PL ${item.powerLevel}</strong><br>
-            <span style="color: var(--text-muted); font-size: var(--font-size-fine-print);">Def ${item.defense} / Tgh ${item.toughness}</span>
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px;">Power Level ${item.powerLevel}</div>
+            <div style="color: var(--text-muted); font-size: var(--font-size-fine-print);">Def ${item.defense} / Tgh ${item.toughness}</div>
+            <div style="margin-top: 4px;">
+              <button type="button" class="btn-hp-roster-badge" onclick="${item.isNPC ? `if (window.gmLoadNpcToEditor && window.activeEditorNpcId !== '${item.id}') window.gmLoadNpcToEditor('${item.id}'); ` : ''}window.sessionSpendHeroPoint('${item.id}', 'Hero Point spent');" title="Click to spend 1 Hero Point for ${escapeHtml(item.characterName)} (${typeof item.heroPoints === 'number' ? item.heroPoints : 0} HP remaining)" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5); color: #f59e0b; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
+                ⭐ ${typeof item.heroPoints === 'number' ? item.heroPoints : 0} HP
+              </button>
+            </div>
           </td>
           <td style="text-align: center; padding: 4px;">
             <div style="display: inline-flex; flex-direction: column; gap: 2px; align-items: center;">
@@ -3906,13 +4961,35 @@ function setupSessionAndGMHub() {
       rowsHtml = `
         <tr style="border-bottom: 1px dashed var(--border-color); height: 44px; opacity: 0.5;">
           <td colspan="5" style="text-align: center; color: var(--text-muted); font-size: var(--font-size-fine-print); padding: 12px; font-style: italic;">
-            No characters in party. Enter your user name above to log in, or load a hero into the editor.
+            ${isLocalGM
+              ? 'No player characters connected or party NPCs attached yet. Connected players will appear here automatically.'
+              : 'No characters in party. Enter your user name above to log in, or load a hero into the editor.'}
           </td>
         </tr>
       `;
     }
 
     tableRoster.innerHTML = rowsHtml;
+    try {
+      localStorage.setItem('mm2e_party_roster_html', rowsHtml);
+      localStorage.setItem('mm2e_party_roster_data', JSON.stringify(roster));
+      localStorage.setItem('mm2e_party_roster_ts', Date.now().toString());
+      if (char && char.name) {
+        localStorage.setItem('mm2e_active_editor_hero', JSON.stringify({
+          name: char.name,
+          playerName: (char.playerName && char.playerName.trim()) || localStorage.getItem("mm2e_player_name") || "",
+          powerLevel: char.powerLevel || 10,
+          combat: char.combat || {},
+          abilities: char.abilities || {},
+          derivedStats: char.derivedStats || {},
+          purchasedResistances: char.purchasedResistances || {},
+          effectiveFeats: char.effectiveFeats || char.feats || {},
+          trackerState: char.trackerState || { conditions: {} },
+          heroPoints: (typeof char.heroPoints === 'number' && !isNaN(char.heroPoints)) ? char.heroPoints : 1
+        }));
+      }
+    } catch (e) {}
+
     try {
       if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
         const activeTheme = document.documentElement.getAttribute("data-theme") || "light";
@@ -3932,9 +5009,153 @@ function setupSessionAndGMHub() {
         SessionNetwork.sendLocalBroadcast({ type: 'PARTY_ROSTER_HTML', html: rowsHtml });
       }
     } catch (e) {}
+
+    if (typeof updateSessionRowUI === 'function') {
+      updateSessionRowUI();
+    }
   }
   window.syncPartyRosterUI = syncPartyRosterUI;
   window.syncGMRosterUI = syncPartyRosterUI; // Backwards compatible alias
+
+  window.confirmRemoveCharacterFromParty = function(id, charName, isNPC) {
+    const safeName = charName || 'this character';
+    if (!confirm(`Remove "${safeName}" from the active party roster?`)) {
+      return;
+    }
+
+    if (isNPC) {
+      if (window.activeEditorNpcId === id) {
+        window.gmReturnToPrimarySheet();
+      }
+      if (typeof CampaignManager !== 'undefined') {
+        if (typeof CampaignManager.removeNPC === 'function') CampaignManager.removeNPC(id);
+        else if (typeof CampaignManager.removeNpc === 'function') CampaignManager.removeNpc(id);
+        CampaignManager.removeCharacterFromParty(id);
+        if (charName) CampaignManager.removeCharacterFromParty(charName);
+      }
+    } else {
+      if (id === 'local_hero') {
+        if (typeof CampaignManager !== 'undefined') {
+          CampaignManager.removeCharacterFromParty('local_hero');
+          CampaignManager.setGmCharIncludedInParty(false);
+          if (char && char.name) CampaignManager.removeCharacterFromParty(char.name);
+        }
+      } else {
+        if (typeof CampaignManager !== 'undefined') {
+          CampaignManager.removeCharacterFromParty(id);
+          if (charName) CampaignManager.removeCharacterFromParty(charName);
+        }
+      }
+    }
+
+    // Check if network client or host
+    const netStatus = (typeof SessionNetwork !== 'undefined') ? SessionNetwork.getStatus() : null;
+    if (netStatus && netStatus.role === 'CLIENT') {
+      SessionNetwork.broadcastPacket({
+        type: 'PLAYER_LEAVE_PARTY',
+        characterId: id,
+        characterName: charName
+      }, true);
+    } else if (netStatus && netStatus.role === 'HOST') {
+      const camp = CampaignManager.getActiveCampaign();
+      if (camp) SessionNetwork.broadcastStateSync(camp);
+    }
+
+    syncPartyRosterUI();
+    if (typeof renderGMCampaignCharacters === 'function') {
+      renderGMCampaignCharacters();
+    }
+    if (typeof showToast === 'function') {
+      showToast(`Removed "${safeName}" from the party roster.`, "info");
+    }
+  };
+
+  function updateSessionRowUI(state) {
+    const s = state || getCurrentSessionState();
+    const isNetworkClient = (typeof SessionNetwork !== 'undefined') && SessionNetwork.getStatus().role === 'CLIENT';
+    const isLocalGM = !isNetworkClient && (typeof CampaignManager !== 'undefined' ? CampaignManager.isDesignatedGM('local_player') : false);
+    const netStatus = (typeof SessionNetwork !== 'undefined') ? SessionNetwork.getStatus() : { status: 'disconnected', role: 'STANDALONE' };
+    const camp = (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null;
+
+    // 1. User Identity & Role Badge
+    const lblUser = document.getElementById("lblSessionUserRoleBadge");
+    if (lblUser) {
+      const acc = (typeof CampaignManager !== 'undefined') ? CampaignManager.getUserAccount() : null;
+      const currentUserName = acc?.userName || (char && char.playerName) || localStorage.getItem("mm2e_player_name") || "Player";
+      if (isLocalGM) {
+        const gmName = (typeof CampaignManager !== 'undefined') ? CampaignManager.getGMUserName() : "GM";
+        lblUser.innerHTML = `👑 GM: <strong>${escapeHtml(gmName)}</strong>`;
+        lblUser.style.color = "#eab308";
+        lblUser.style.borderColor = "#eab308";
+        lblUser.style.background = "rgba(234, 179, 8, 0.15)";
+        lblUser.title = "You are hosting as the Game Master";
+      } else {
+        lblUser.innerHTML = `👤 <strong>${escapeHtml(currentUserName)}</strong>`;
+        lblUser.style.color = "#10b981";
+        lblUser.style.borderColor = "#10b981";
+        lblUser.style.background = "rgba(16, 185, 129, 0.15)";
+        lblUser.title = `Your player identity: ${currentUserName}`;
+      }
+    }
+
+    // 2. Campaign Name
+    const lblCamp = document.getElementById("lblSessionCampaignName");
+    if (lblCamp) {
+      lblCamp.textContent = camp ? camp.name : (netStatus.code ? `Campaign (${netStatus.code})` : "Campaign");
+    }
+
+    // 3. Session Number
+    const lblNum = document.getElementById("lblSessionNumberBadge");
+    if (lblNum) {
+      lblNum.textContent = `Session #${s?.sessionNumber || 1}`;
+    }
+
+    // 4. Live Date/Time
+    const lblDateTime = document.getElementById("lblSessionDateTime");
+    if (lblDateTime) {
+      const now = new Date();
+      lblDateTime.textContent = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // 5. GM Commands dropdown visibility
+    const boxGMCommands = document.getElementById("boxSessionGMCommandsDropdown");
+    if (boxGMCommands) {
+      boxGMCommands.style.display = isLocalGM ? "inline-block" : "none";
+    }
+
+    // 6. Submit Sheet button visibility (only for players connected or ready)
+    const btnSubmit = document.getElementById("btnPlayerSubmitSheet");
+    if (btnSubmit) {
+      btnSubmit.style.display = (!isLocalGM && (netStatus.status === 'connected' || netStatus.role === 'CLIENT')) ? "inline-flex" : "none";
+    }
+
+    // 7. Network Status Badge
+    const lblNet = document.getElementById("lblSessionStatusBadge");
+    if (lblNet) {
+      if (netStatus.status === 'connected') {
+        lblNet.textContent = netStatus.role === 'HOST' ? '🟢 Hosting' : '🟢 Connected';
+        lblNet.style.color = '#10b981';
+        lblNet.style.borderColor = '#10b981';
+        lblNet.style.background = 'rgba(16, 185, 129, 0.15)';
+      } else if (netStatus.status === 'connecting') {
+        lblNet.textContent = '🔵 Connecting...';
+        lblNet.style.color = '#0284c7';
+        lblNet.style.borderColor = '#0284c7';
+        lblNet.style.background = 'rgba(2, 132, 199, 0.15)';
+      } else if (netStatus.status === 'waiting_approval') {
+        lblNet.textContent = '🟡 Waiting Approval';
+        lblNet.style.color = '#f59e0b';
+        lblNet.style.borderColor = '#f59e0b';
+        lblNet.style.background = 'rgba(245, 158, 11, 0.15)';
+      } else {
+        lblNet.textContent = '⚪ Standby';
+        lblNet.style.color = 'var(--text-muted)';
+        lblNet.style.borderColor = 'var(--border-color)';
+        lblNet.style.background = 'var(--bg-panel)';
+      }
+    }
+  }
+  window.updateSessionRowUI = updateSessionRowUI;
 
   function syncSessionUI() {
     if (txtPlayerName && !txtPlayerName.value) {
@@ -3942,7 +5163,7 @@ function setupSessionAndGMHub() {
     }
     if (txtCampCode && !txtCampCode.value) {
       const urlParams = new URLSearchParams(window.location.search);
-      const urlCamp = urlParams.get("campaign") || urlParams.get("room");
+      const urlCamp = urlParams.get("campaign") || urlParams.get("camp") || urlParams.get("room");
       txtCampCode.value = urlCamp || localStorage.getItem("mm2e_last_campaign_code") || "";
     }
 
@@ -3950,8 +5171,427 @@ function setupSessionAndGMHub() {
     updateSessionConnectionUI();
     syncPartyRosterUI();
     renderSessionFeed();
+    updateGameSessionUI();
+    updateSessionRowUI();
   }
   window.syncSessionUI = syncSessionUI;
+
+  // --- Game Session Management (Start, Pause, End) ---
+  function formatSessionDuration(ms) {
+    if (!ms || ms < 0) ms = 0;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  }
+
+  function formatSessionDurationReadable(ms) {
+    if (!ms || ms < 0) ms = 0;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  let localSyncedSessionState = null;
+
+  function getCurrentSessionState() {
+    if (typeof CampaignManager !== 'undefined') {
+      return CampaignManager.getSessionState();
+    }
+    return localSyncedSessionState || { status: 'ended', sessionNumber: 1, startedAt: null, pausedAt: null, totalElapsedMs: 0 };
+  }
+
+  function updateGameSessionUI(state) {
+    if (state) {
+      localSyncedSessionState = state;
+      window.__lastSyncedSessionState = state;
+    }
+    const s = state || getCurrentSessionState();
+    const isLocalGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
+
+    // Session tab controls
+    if (gmSessionActionButtons) gmSessionActionButtons.style.display = isLocalGM ? "inline-flex" : "none";
+
+    let elapsed = s.totalElapsedMs || 0;
+    if (s.status === 'active' && s.startedAt) {
+      elapsed += (Date.now() - s.startedAt);
+    }
+    const formattedDuration = formatSessionDuration(elapsed);
+
+    updateSessionRowUI(s);
+
+    if (s.status === 'active') {
+      const activeText = `🟢 Session #${s.sessionNumber || 1}: Active`;
+      if (lblGameSessionStatusBadge) {
+        lblGameSessionStatusBadge.textContent = activeText;
+        lblGameSessionStatusBadge.style.color = "#10b981";
+        lblGameSessionStatusBadge.style.borderColor = "#10b981";
+        lblGameSessionStatusBadge.style.background = "rgba(16, 185, 129, 0.15)";
+      }
+      if (lblSessionLiveClock) {
+        lblSessionLiveClock.textContent = formattedDuration;
+        lblSessionLiveClock.style.display = "inline-block";
+      }
+      if (btnGMStartSession) btnGMStartSession.style.display = "none";
+      if (btnGMPauseSession) {
+        btnGMPauseSession.style.display = "inline-block";
+        btnGMPauseSession.textContent = "⏸ Pause";
+      }
+      if (btnGMEndSession) btnGMEndSession.style.display = "inline-block";
+      if (btnGMCancelSession) btnGMCancelSession.style.display = "flex";
+
+      if (boxSessionPausedBanner) boxSessionPausedBanner.style.display = "none";
+
+      // Campaign Tab UI
+      if (lblGMCampaignSessionBadge) {
+        lblGMCampaignSessionBadge.textContent = `🟢 Session #${s.sessionNumber || 1}: Active`;
+        lblGMCampaignSessionBadge.style.color = "#10b981";
+        lblGMCampaignSessionBadge.style.borderColor = "#10b981";
+        lblGMCampaignSessionBadge.style.background = "rgba(16, 185, 129, 0.15)";
+      }
+      if (lblGMCampaignSessionClock) {
+        lblGMCampaignSessionClock.textContent = formattedDuration;
+        lblGMCampaignSessionClock.style.display = "inline-block";
+      }
+      if (btnGMCampTabStartSession) btnGMCampTabStartSession.style.display = "none";
+      if (btnGMCampTabPauseSession) {
+        btnGMCampTabPauseSession.style.display = "inline-block";
+        btnGMCampTabPauseSession.textContent = "⏸ Pause";
+      }
+      if (btnGMCampTabEndSession) btnGMCampTabEndSession.style.display = "inline-block";
+      if (btnGMCampTabCancelSession) btnGMCampTabCancelSession.style.display = "inline-block";
+
+    } else if (s.status === 'paused') {
+      const pausedText = `⏸️ Session #${s.sessionNumber || 1}: Paused`;
+      const frozenDuration = formatSessionDuration(s.totalElapsedMs || 0);
+      if (lblGameSessionStatusBadge) {
+        lblGameSessionStatusBadge.textContent = pausedText;
+        lblGameSessionStatusBadge.style.color = "#f59e0b";
+        lblGameSessionStatusBadge.style.borderColor = "#f59e0b";
+        lblGameSessionStatusBadge.style.background = "rgba(245, 158, 11, 0.15)";
+      }
+      if (lblSessionLiveClock) {
+        lblSessionLiveClock.textContent = frozenDuration;
+        lblSessionLiveClock.style.display = "inline-block";
+      }
+      if (btnGMStartSession) {
+        btnGMStartSession.style.display = "inline-block";
+        btnGMStartSession.textContent = "▶ Resume";
+      }
+      if (btnGMPauseSession) btnGMPauseSession.style.display = "none";
+      if (btnGMEndSession) btnGMEndSession.style.display = "inline-block";
+      if (btnGMCancelSession) btnGMCancelSession.style.display = "flex";
+
+      if (boxSessionPausedBanner) boxSessionPausedBanner.style.display = "flex";
+      if (lblPausedBannerClock) lblPausedBannerClock.textContent = frozenDuration;
+
+      // Campaign Tab UI
+      if (lblGMCampaignSessionBadge) {
+        lblGMCampaignSessionBadge.textContent = `⏸️ Session #${s.sessionNumber || 1}: Paused`;
+        lblGMCampaignSessionBadge.style.color = "#f59e0b";
+        lblGMCampaignSessionBadge.style.borderColor = "#f59e0b";
+        lblGMCampaignSessionBadge.style.background = "rgba(245, 158, 11, 0.15)";
+      }
+      if (lblGMCampaignSessionClock) {
+        lblGMCampaignSessionClock.textContent = frozenDuration;
+        lblGMCampaignSessionClock.style.display = "inline-block";
+      }
+      if (btnGMCampTabStartSession) {
+        btnGMCampTabStartSession.style.display = "inline-block";
+        btnGMCampTabStartSession.textContent = "▶ Resume";
+      }
+      if (btnGMCampTabPauseSession) btnGMCampTabPauseSession.style.display = "none";
+      if (btnGMCampTabEndSession) btnGMCampTabEndSession.style.display = "inline-block";
+      if (btnGMCampTabCancelSession) btnGMCampTabCancelSession.style.display = "inline-block";
+
+    } else {
+      // ended / standby
+      const standbyText = "⏹️ Session Standby";
+      if (lblGameSessionStatusBadge) {
+        lblGameSessionStatusBadge.textContent = standbyText;
+        lblGameSessionStatusBadge.style.color = "var(--text-muted)";
+        lblGameSessionStatusBadge.style.borderColor = "var(--border-color)";
+        lblGameSessionStatusBadge.style.background = "rgba(107, 114, 128, 0.15)";
+      }
+      if (lblSessionLiveClock) lblSessionLiveClock.style.display = "none";
+      if (btnGMStartSession) {
+        btnGMStartSession.style.display = "inline-block";
+        btnGMStartSession.textContent = "▶ Start Session";
+      }
+      if (btnGMPauseSession) btnGMPauseSession.style.display = "none";
+      if (btnGMEndSession) btnGMEndSession.style.display = "none";
+      if (btnGMCancelSession) btnGMCancelSession.style.display = "none";
+
+      if (boxSessionPausedBanner) boxSessionPausedBanner.style.display = "none";
+
+      // Campaign Tab UI
+      if (lblGMCampaignSessionBadge) {
+        lblGMCampaignSessionBadge.textContent = "Standby";
+        lblGMCampaignSessionBadge.style.color = "var(--text-muted)";
+        lblGMCampaignSessionBadge.style.borderColor = "var(--border-color)";
+        lblGMCampaignSessionBadge.style.background = "rgba(107, 114, 128, 0.15)";
+      }
+      if (lblGMCampaignSessionClock) lblGMCampaignSessionClock.style.display = "none";
+      if (btnGMCampTabStartSession) {
+        btnGMCampTabStartSession.style.display = "inline-block";
+        btnGMCampTabStartSession.textContent = "▶ Start";
+      }
+      if (btnGMCampTabPauseSession) btnGMCampTabPauseSession.style.display = "none";
+      if (btnGMCampTabEndSession) btnGMCampTabEndSession.style.display = "none";
+      if (btnGMCampTabCancelSession) btnGMCampTabCancelSession.style.display = "none";
+    }
+    if (typeof window.updateHeroPointsUseButtonState === 'function') {
+      window.updateHeroPointsUseButtonState();
+    }
+  }
+  window.updateGameSessionUI = updateGameSessionUI;
+
+  // Interval ticker for live clock and date/time
+  setInterval(() => {
+    const s = getCurrentSessionState();
+    if (s && s.status === 'active') {
+      let elapsed = s.totalElapsedMs || 0;
+      if (s.startedAt) elapsed += (Date.now() - s.startedAt);
+      const str = formatSessionDuration(elapsed);
+      if (lblSessionLiveClock) lblSessionLiveClock.textContent = str;
+      if (lblGMCampaignSessionClock) lblGMCampaignSessionClock.textContent = str;
+    }
+    const lblDate = document.getElementById("lblSessionDateTime");
+    if (lblDate) {
+      const now = new Date();
+      lblDate.textContent = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+  }, 1000);
+
+  window.gmStartGameSession = function() {
+    if (typeof CampaignManager === 'undefined') return;
+    const sessionState = CampaignManager.startSession();
+    if (!sessionState) return;
+
+    const isResumed = sessionState.pausedAt === null && sessionState.totalElapsedMs > 0;
+    if (!isResumed) {
+      sessionLocalLog.length = 0;
+    }
+    const announcement = isResumed
+      ? `📢 GM resumed Game Session #${sessionState.sessionNumber}.`
+      : `📢 GM started Game Session #${sessionState.sessionNumber}!`;
+
+    const sysEntry = {
+      type: 'SYSTEM',
+      id: 'sys_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: new Date().toISOString(),
+      text: announcement
+    };
+    CampaignManager.addLogEntry(sysEntry);
+    sessionLocalLog.push(sysEntry);
+    renderSessionFeed();
+
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.sendSessionStatus(sessionState);
+      SessionNetwork.sendSystemMessage(sysEntry);
+    }
+
+    updateGameSessionUI(sessionState);
+    if (typeof showToast === 'function') {
+      showToast(announcement.replace(/^📢\s*/, ''), "success");
+    }
+  };
+
+  window.gmPauseGameSession = function() {
+    if (typeof CampaignManager === 'undefined') return;
+    const sessionState = CampaignManager.pauseSession();
+    if (!sessionState) return;
+
+    const announcement = `📢 GM paused Game Session #${sessionState.sessionNumber}. Player rolls are on hold.`;
+    const sysEntry = {
+      type: 'SYSTEM',
+      id: 'sys_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: new Date().toISOString(),
+      text: announcement
+    };
+    CampaignManager.addLogEntry(sysEntry);
+    sessionLocalLog.push(sysEntry);
+    renderSessionFeed();
+
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.sendSessionStatus(sessionState);
+      SessionNetwork.sendSystemMessage(sysEntry);
+    }
+
+    updateGameSessionUI(sessionState);
+    if (typeof showToast === 'function') {
+      showToast(announcement.replace(/^📢\s*/, ''), "warning");
+    }
+  };
+
+  window.gmEndGameSession = function() {
+    if (typeof CampaignManager === 'undefined') return;
+    const currentState = CampaignManager.getSessionState();
+    const sessionNum = currentState.sessionNumber || 1;
+
+    if (!confirm(`Are you sure you want to end Game Session #${sessionNum}?\n\nThis will freeze session duration, log the session completion, and automatically create a campaign save point.`)) {
+      return;
+    }
+
+    const result = CampaignManager.endSession();
+    if (!result) return;
+
+    const durationStr = formatSessionDurationReadable(result.durationMs);
+    const announcement = `📢 GM ended Game Session #${result.sessionNum}. Duration: ${durationStr}.${result.savePointId ? ' Automatic save point created.' : ''}`;
+
+    const sysEntry = {
+      type: 'SYSTEM',
+      id: 'sys_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: new Date().toISOString(),
+      text: announcement
+    };
+    CampaignManager.addLogEntry(sysEntry);
+    sessionLocalLog.push(sysEntry);
+    renderSessionFeed();
+
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.sendSessionStatus(result.sessionState);
+      SessionNetwork.sendSystemMessage(sysEntry);
+    }
+
+    updateGameSessionUI(result.sessionState);
+    if (typeof renderGMTimeline === 'function') {
+      renderGMTimeline();
+    }
+    if (typeof showToast === 'function') {
+      showToast(`Game Session #${result.sessionNum} ended (${durationStr}).`, "info");
+    }
+  };
+
+  window.gmCancelGameSession = function() {
+    if (typeof CampaignManager === 'undefined') return;
+    const currentState = CampaignManager.getSessionState();
+    if (!currentState || currentState.status === 'ended') {
+      if (typeof showToast === 'function') showToast("No active or paused session to cancel.", "warning");
+      return;
+    }
+    const sessionNum = currentState.sessionNumber || 1;
+
+    if (!confirm(`Are you sure you want to cancel Game Session #${sessionNum}?\n\nThis will end the session without creating a save point, discard elapsed session time, and delete all chat messages and rolls posted during this session.`)) {
+      return;
+    }
+
+    const result = CampaignManager.cancelSession();
+    if (!result) return;
+
+    // Clear active session chat feed completely - cancelling is like the session never happened
+    sessionLocalLog.length = 0;
+    renderSessionFeed();
+
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.sendSessionCancel({
+        sessionState: result.sessionState,
+        sessionStartedAt: result.sessionStartedAt,
+        sessionNum: result.sessionNum
+      });
+      SessionNetwork.sendSessionStatus(result.sessionState);
+    }
+
+    updateGameSessionUI(result.sessionState);
+    updateSessionRowUI(result.sessionState);
+    if (typeof showToast === 'function') {
+      showToast(`Game Session #${result.sessionNum} was canceled. All session messages cleared.`, "info");
+    }
+  };
+
+  // Wire GM Session Buttons
+  if (btnGMStartSession) {
+    btnGMStartSession.addEventListener("click", () => {
+      if (menuSessionGMCommands) menuSessionGMCommands.style.display = "none";
+      window.gmStartGameSession();
+    });
+  }
+  if (btnGMPauseSession) {
+    btnGMPauseSession.addEventListener("click", () => {
+      if (menuSessionGMCommands) menuSessionGMCommands.style.display = "none";
+      window.gmPauseGameSession();
+    });
+  }
+  if (btnGMEndSession) {
+    btnGMEndSession.addEventListener("click", () => {
+      if (menuSessionGMCommands) menuSessionGMCommands.style.display = "none";
+      window.gmEndGameSession();
+    });
+  }
+  if (btnGMCancelSession) {
+    btnGMCancelSession.addEventListener("click", () => {
+      if (menuSessionGMCommands) menuSessionGMCommands.style.display = "none";
+      window.gmCancelGameSession();
+    });
+  }
+
+  if (btnGMCampTabStartSession) btnGMCampTabStartSession.addEventListener("click", window.gmStartGameSession);
+  if (btnGMCampTabPauseSession) btnGMCampTabPauseSession.addEventListener("click", window.gmPauseGameSession);
+  if (btnGMCampTabEndSession) btnGMCampTabEndSession.addEventListener("click", window.gmEndGameSession);
+  if (btnGMCampTabCancelSession) btnGMCampTabCancelSession.addEventListener("click", window.gmCancelGameSession);
+
+  // Wire GM Commands Dropdown in Session Row
+  if (btnSessionGMCommands && menuSessionGMCommands) {
+    btnSessionGMCommands.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = menuSessionGMCommands.style.display === "block";
+      menuSessionGMCommands.style.display = isOpen ? "none" : "block";
+    });
+    document.addEventListener("click", (e) => {
+      if (menuSessionGMCommands && menuSessionGMCommands.style.display === "block") {
+        if (!btnSessionGMCommands.contains(e.target) && !menuSessionGMCommands.contains(e.target)) {
+          menuSessionGMCommands.style.display = "none";
+        }
+      }
+    });
+  }
+
+  if (btnSessionCopyInviteLink) {
+    btnSessionCopyInviteLink.addEventListener("click", () => {
+      if (menuSessionGMCommands) menuSessionGMCommands.style.display = "none";
+      if (typeof CampaignManager === 'undefined') return;
+      const camp = CampaignManager.getActiveCampaign();
+      const campCode = camp?.code || "campaign-1";
+      const inviteUrl = `${window.location.origin}${window.location.pathname}?campaign=${encodeURIComponent(campCode)}`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(inviteUrl).then(() => {
+          if (typeof showToast === 'function') showToast(`Copied campaign link: ${inviteUrl}`, "success");
+        }).catch(() => prompt("Campaign Invite Link:", inviteUrl));
+      } else {
+        prompt("Campaign Invite Link:", inviteUrl);
+      }
+    });
+  }
+
+  if (btnSessionOpenUsersFromMenu) {
+    btnSessionOpenUsersFromMenu.addEventListener("click", () => {
+      if (menuSessionGMCommands) menuSessionGMCommands.style.display = "none";
+      openCampaignUsersModal();
+    });
+  }
+
+  if (btnPlayerSubmitSheet) {
+    btnPlayerSubmitSheet.addEventListener("click", () => {
+      if (typeof char !== 'undefined' && char && char.name) {
+        const hero = window.primaryHero || char;
+        const serialized = (typeof hero.serialize === 'function') ? hero.serialize() : hero;
+        SessionNetwork.sendCharacterSheetData(serialized);
+        if (typeof showToast === 'function') {
+          showToast(`Character sheet "${char.name}" submitted to GM!`, "success");
+        }
+      } else {
+        if (typeof showToast === 'function') {
+          showToast("No active character sheet in editor to submit.", "warning");
+        }
+      }
+    });
+  }
 
   // --- Session Event Listeners & Chat Input Handlers ---
   if (btnConnect) {
@@ -4017,6 +5657,17 @@ function setupSessionAndGMHub() {
       if (pInput && pInput.value !== val) {
         pInput.value = val;
       }
+      if (typeof CampaignManager !== 'undefined' && val.trim()) {
+        CampaignManager.setUserAccount(val.trim());
+        const isGM = CampaignManager.isDesignatedGM('local_player');
+        const currGM = CampaignManager.getGMUserName();
+        if (isGM || !currGM || currGM === 'GM') {
+          CampaignManager.setGMUserName(val.trim());
+        }
+      }
+      if (typeof syncGMRosterUI === 'function') {
+        syncGMRosterUI();
+      }
       syncPartyRosterUI();
     });
   }
@@ -4034,6 +5685,20 @@ function setupSessionAndGMHub() {
         updateSilentModeUI();
         syncPartyRosterUI();
       }
+    });
+  }
+
+  if (chkGMIncludeCharInParty) {
+    chkGMIncludeCharInParty.addEventListener("change", (e) => {
+      const val = e.target.checked;
+      if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.setGmCharIncludedInParty === 'function') {
+        CampaignManager.setGmCharIncludedInParty(val);
+      } else {
+        try {
+          localStorage.setItem("mm2e_include_gm_char_in_party", val ? "true" : "false");
+        } catch (err) {}
+      }
+      syncPartyRosterUI();
     });
   }
 
@@ -4065,6 +5730,9 @@ function setupSessionAndGMHub() {
   }
 
   function openPartyDisplayPopout() {
+    // 1. Immediately sync and persist party roster to DOM and localStorage before opening window
+    syncPartyRosterUI();
+
     const bounds = getSavedPartyDisplayBounds();
     const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
@@ -4082,11 +5750,21 @@ function setupSessionAndGMHub() {
           if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
             poppedOutPartyWindow.__applySavedThemeAndFonts();
           }
+          if (typeof poppedOutPartyWindow.syncPartyFromOpenerOrLocal === 'function') {
+            poppedOutPartyWindow.syncPartyFromOpenerOrLocal();
+          }
         }
       } catch (e) {}
       syncPartyRosterUI();
     }, 150);
     setTimeout(() => {
+      try {
+        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
+          if (typeof poppedOutPartyWindow.syncPartyFromOpenerOrLocal === 'function') {
+            poppedOutPartyWindow.syncPartyFromOpenerOrLocal();
+          }
+        }
+      } catch (e) {}
       syncPartyRosterUI();
     }, 350);
   }
@@ -4116,6 +5794,27 @@ function setupSessionAndGMHub() {
       redockPartyDisplay();
     }
   });
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'mm2e_party_docked') {
+      redockPartyDisplay();
+    } else if (e.key === 'mm2e_party_action' && e.newValue) {
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data && data.action && typeof window[data.action] === 'function') {
+          window[data.action](...(data.args || []));
+        }
+      } catch (err) {}
+    } else if (e.key === 'mm2e_include_gm_char_in_party') {
+      syncPartyRosterUI();
+    }
+  });
+
+  setInterval(() => {
+    if (poppedOutPartyWindow && poppedOutPartyWindow.closed) {
+      redockPartyDisplay();
+    }
+  }, 300);
 
   if (txtSearch) {
     txtSearch.addEventListener("input", (e) => {
@@ -4251,7 +5950,7 @@ function setupSessionAndGMHub() {
         }
       }
 
-      if (e.key === 'Enter' && !e.shiftKey && popover.style.display === 'none') {
+      if (e.key === 'Enter' && !e.shiftKey && popover.style.display !== 'flex') {
         e.preventDefault();
         handleSendChatInput();
       }
@@ -4290,33 +5989,225 @@ function setupSessionAndGMHub() {
     const raw = chatInput.value.trim();
     if (!raw) return;
 
-    // 1. /hp spend Hero Point
-    if (raw.toLowerCase() === '/hp' || raw.toLowerCase().startsWith('/hp ')) {
-      const det = raw.length > 3 ? raw.substring(4).trim() : 'Hero Point expended';
-      window.sessionSpendHeroPoint('local_hero', det);
+    // 1. Hero Point commands: /hp, /spend, /spend hp, /use hp, /reroll, /hero, etc.
+    const hpCmdMatch = raw.match(/^\/(?:hp|spend\s*hp|spend|spendhp|hero\s*points?|heropoints?|hero|use\s*hp|usehp)(?:\s+(.*))?$/i);
+    const rerollCmdMatch = raw.match(/^\/(?:reroll|re-roll)(?:\s+(.*))?$/i);
+
+    if (hpCmdMatch || rerollCmdMatch) {
+      const rawArg = rerollCmdMatch ? (rerollCmdMatch[1] || 'reroll') : (hpCmdMatch[1] || '').trim();
+      const lowerArg = rawArg.toLowerCase();
+
+      // Check current hero points
+      let currentHP = 0;
+      if (typeof char !== 'undefined' && char) {
+        if (typeof char.heroPoints === 'number' && !isNaN(char.heroPoints)) {
+          currentHP = char.heroPoints;
+        } else {
+          const hpInput = document.getElementById("heroPointsInput");
+          const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+          const rawVal = hpInput ? parseInt(hpInput.value) : NaN;
+          currentHP = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+          char.heroPoints = currentHP;
+        }
+      }
+
+      // Help command
+      if (lowerArg === 'help' || lowerArg === '?') {
+        if (typeof showToast === 'function') {
+          showToast("Hero Point Commands: /hp (spend 1 HP for +5 to next roll), /reroll or /hp reroll (reroll previous roll), /hp modal (options menu), /hp <note>", "info");
+        }
+        chatInput.value = '';
+        return;
+      }
+
+      // Explicit modal request
+      if (lowerArg === 'modal' || lowerArg === 'menu' || lowerArg === 'open' || lowerArg === 'options') {
+        window.openUseHeroPointModal('local_hero');
+        chatInput.value = '';
+        return;
+      }
+
+      if (currentHP <= 0) {
+        if (typeof showToast === 'function') showToast("No Hero Points remaining to spend!", "warning");
+        chatInput.value = '';
+        return;
+      }
+
+      // Reroll command: /reroll or /hp reroll (M&M 2E floor rule: rolls 1-10 become 11-20, take better result)
+      if (rerollCmdMatch || lowerArg.includes('reroll') || lowerArg.includes('re-roll') || lowerArg.includes('again')) {
+        const lastConfig = window.lastRollConfig;
+        const canRerollRecent = lastConfig && !lastConfig.isNat1 && !lastConfig.isNat20 && !lastConfig.isHPRerolled;
+
+        if (canRerollRecent) {
+          window.sessionSpendHeroPoint('local_hero', 'Hero Point spent');
+
+          const rawD20 = Math.floor(Math.random() * 20) + 1;
+          const wasFloored = rawD20 <= 10;
+          const flooredD20 = wasFloored ? rawD20 + 10 : rawD20;
+          const baseMod = (lastConfig.baseMod !== undefined) ? lastConfig.baseMod : (lastConfig.mod || 0);
+          const newTotal = flooredD20 + baseMod;
+          const originalTotal = lastConfig.total;
+          const finalTotal = Math.max(originalTotal, newTotal);
+          const keptOriginal = originalTotal > newTotal;
+
+          lastConfig.isHPRerolled = true;
+          lastConfig.rawD20 = rawD20;
+          lastConfig.d20 = flooredD20;
+          lastConfig.total = finalTotal;
+          lastConfig.isNat1 = false;
+          lastConfig.isNat20 = (!wasFloored && rawD20 === 20);
+
+          const rerollDesc = wasFloored 
+            ? `Rolled ${rawD20} (+10 floor = ${flooredD20})` 
+            : `Rolled ${flooredD20}`;
+          
+          const outcomeDesc = keptOriginal
+            ? `${rerollDesc} -> ${newTotal} (Original ${originalTotal} kept)`
+            : `${rerollDesc} -> ${newTotal} (Kept)`;
+
+          lastConfig.rerollInfo = outcomeDesc;
+          lastConfig.hpAnnouncement = `HP Reroll: ${outcomeDesc}`;
+
+          const cleanBaseTitle = (lastConfig.rollType || lastConfig.title || 'Check')
+            .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+            .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+            .replace(/^🎲\s*/, '')
+            .trim();
+
+          const rerollTitle = `${cleanBaseTitle} (✨ HP Reroll)`;
+          lastConfig.rollType = rerollTitle;
+          lastConfig.title = rerollTitle;
+          lastConfig.hpBonus = 0;
+
+          const rollEntry = {
+            type: 'ROLL',
+            characterName: char?.name || "Hero",
+            playerName: char?.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : "") || "Player",
+            rollType: rerollTitle,
+            total: finalTotal,
+            breakdown: `1d20 (${wasFloored ? rawD20 + '+10=' + flooredD20 : flooredD20}) ${baseMod >= 0 ? '+' + baseMod : baseMod} = ${newTotal} (Kept ${finalTotal})`,
+            isNat20: lastConfig.isNat20,
+            isNat1: false,
+            hpBonus: 0,
+            isHPRerolled: true,
+            hpAnnouncement: `HP Reroll: ${outcomeDesc}`,
+            rerollInfo: outcomeDesc
+          };
+
+          if (typeof SessionNetwork !== 'undefined') {
+            SessionNetwork.sendRoll(rollEntry);
+          } else {
+            if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+            sessionLocalLog.push(rollEntry);
+            renderSessionFeed();
+          }
+
+          // If diceRollModal is currently open, update it
+          const modal = document.getElementById("diceRollModal");
+          if (modal && modal.classList.contains("active")) {
+            if (!lastConfig.detailsHtml) lastConfig.detailsHtml = "";
+            lastConfig.detailsHtml += `
+              <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color); color: #f59e0b; font-size: var(--font-size-secondary);">
+                <strong>✨ HP Reroll:</strong> ${outcomeDesc}
+              </div>
+            `;
+            window.showDiceRollModal(lastConfig);
+          }
+
+          if (typeof showToast === 'function') {
+            showToast(`✨ HP Reroll: ${outcomeDesc} (${char.heroPoints} HP remaining)`, "info");
+          }
+        } else {
+          char._pendingHPReroll = true;
+          window.sessionSpendHeroPoint('local_hero', 'Hero Point spent');
+          if (typeof showToast === 'function') {
+            showToast(`🎲 Hero Point Reroll queued for your next roll! (Min 11–20) (${char.heroPoints} HP remaining)`, "info");
+          }
+        }
+        chatInput.value = '';
+        return;
+      }
+
+      // Default spend command: /hp, /spend, /spend hp, /use hp, /hp +5, /hp 1, etc.
+      // Immediately spends 1 HP and queues +5 Improve Roll bonus for next check
+      if (!rawArg || lowerArg === '1' || lowerArg === '1 hp' || lowerArg === 'hp' || lowerArg === 'point' || lowerArg === 'spend' || lowerArg === '+5' || lowerArg === '5' || lowerArg.includes('improve') || lowerArg.includes('bonus') || lowerArg.includes('add 5') || lowerArg.includes('+ 5')) {
+        char._pendingHPRollBonus = 5;
+        window.sessionSpendHeroPoint('local_hero', 'Hero Point spent');
+        chatInput.value = '';
+        return;
+      }
+
+      // Custom detail string (e.g. "/hp Surge", "/hp Escape", "/hp Recovery", "/hp Inspiration")
+      window.sessionSpendHeroPoint('local_hero', rawArg);
       chatInput.value = '';
       return;
     }
 
     // 2. /r or /roll dice command
     if (/^\/(r|roll)\s+/i.test(raw)) {
+      if (typeof window.isSessionRollAllowed === 'function' && !window.isSessionRollAllowed()) return;
       const expr = raw.replace(/^\/(r|roll)\s+/i, '').trim();
-      const res = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: expr };
-      const rollEntry = {
-        characterName: char?.name || "Hero",
-        playerName: char?.playerName || localStorage.getItem("mm2e_player_name") || "Player",
-        rollType: `Dice (${res.expression || expr})`,
-        total: res.total,
-        breakdown: res.breakdown || `${res.total}`,
-        isNat20: !!res.isNat20,
-        isNat1: !!res.isNat1
-      };
-      if (typeof SessionNetwork !== 'undefined') {
-        SessionNetwork.sendRoll(rollEntry);
+
+      const d20Match = expr.match(/^1?d20(?:\s*([+-]\s*\d+))?$/i);
+      if (d20Match && typeof window.performD20RollWithHP === 'function') {
+        const baseMod = d20Match[1] ? parseInt(d20Match[1].replace(/\s+/g, '')) : 0;
+        const roll = window.performD20RollWithHP(baseMod, char, 'check');
+        const hpSuffix = (roll.hpBonus > 0 ? ` (✨ +${roll.hpBonus} HP)` : '') + (roll.isHPRerolled ? ' (✨ HP Reroll)' : '');
+        const breakdownText = (roll.hpBonus > 0)
+          ? `1d20 (${roll.d20}) ${roll.baseMod >= 0 ? '+' + roll.baseMod : roll.baseMod} [Base] + ${roll.hpBonus} [✨ HP] = ${roll.total}`
+          : (roll.isHPRerolled && roll.rawD20 <= 10
+             ? `1d20 (${roll.rawD20} + 10 floor = ${roll.d20}) ${roll.mod >= 0 ? '+' + roll.mod : roll.mod} = ${roll.total}`
+             : `1d20 (${roll.d20}) ${roll.mod >= 0 ? '+' + roll.mod : roll.mod} = ${roll.total}`);
+
+        const rollEntry = {
+          type: 'ROLL',
+          characterName: char?.name || "Hero",
+          playerName: char?.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : "") || "Player",
+          rollType: `Dice (${expr})${hpSuffix}`,
+          total: roll.total,
+          breakdown: breakdownText,
+          isNat20: !!roll.isNat20,
+          isNat1: !!roll.isNat1,
+          hpBonus: roll.hpBonus,
+          isHPRerolled: roll.isHPRerolled,
+          hpAnnouncement: roll.hpAnnouncement
+        };
+
+        window.lastRollConfig = {
+          ...rollEntry,
+          d20: roll.d20,
+          rawD20: roll.rawD20,
+          mod: roll.mod,
+          baseMod: roll.baseMod,
+          title: `Dice (${expr})`
+        };
+
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendRoll(rollEntry);
+        } else {
+          if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+          sessionLocalLog.push(rollEntry);
+          renderSessionFeed();
+        }
       } else {
-        if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
-        sessionLocalLog.push(rollEntry);
-        renderSessionFeed();
+        const res = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: expr };
+        const rollEntry = {
+          type: 'ROLL',
+          characterName: char?.name || "Hero",
+          playerName: char?.playerName || localStorage.getItem("mm2e_player_name") || "Player",
+          rollType: `Dice (${res.expression || expr})`,
+          total: res.total,
+          breakdown: res.breakdown || `${res.total}`,
+          isNat20: !!res.isNat20,
+          isNat1: !!res.isNat1
+        };
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.sendRoll(rollEntry);
+        } else {
+          if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
+          sessionLocalLog.push(rollEntry);
+          renderSessionFeed();
+        }
       }
       chatInput.value = '';
       return;
@@ -4373,16 +6264,41 @@ function setupSessionAndGMHub() {
 
   if (btnDiceShortcut) {
     btnDiceShortcut.addEventListener("click", () => {
-      const res = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll("1d20") : { total: Math.floor(Math.random() * 20) + 1, breakdown: "1d20" };
+      if (typeof window.isSessionRollAllowed === 'function' && !window.isSessionRollAllowed()) return;
+      const roll = (typeof window.performD20RollWithHP === 'function')
+        ? window.performD20RollWithHP(0, char, 'check')
+        : { rawD20: Math.floor(Math.random() * 20) + 1, d20: 10, total: 10, baseMod: 0, mod: 0, hpBonus: 0, isHPRerolled: false, hpAnnouncement: '', isNat20: false, isNat1: false };
+      
+      const hpSuffix = (roll.hpBonus > 0 ? ` (✨ +${roll.hpBonus} HP)` : '') + (roll.isHPRerolled ? ' (✨ HP Reroll)' : '');
+      const breakdownText = (roll.hpBonus > 0)
+        ? `1d20 (${roll.d20}) + ${roll.hpBonus} [✨ HP] = ${roll.total}`
+        : (roll.isHPRerolled && roll.rawD20 <= 10
+           ? `1d20 (${roll.rawD20} + 10 floor = ${roll.d20}) = ${roll.total}`
+           : `1d20 (${roll.d20}) = ${roll.total}`);
+
       const rollEntry = {
+        type: 'ROLL',
         characterName: char?.name || "Hero",
-        playerName: char?.playerName || localStorage.getItem("mm2e_player_name") || "Player",
-        rollType: "Quick Check (1d20)",
-        total: res.total,
-        breakdown: res.breakdown || "1d20",
-        isNat20: res.total === 20,
-        isNat1: res.total === 1
+        playerName: char?.playerName || (typeof localStorage !== 'undefined' ? localStorage.getItem("mm2e_player_name") : "") || "Player",
+        rollType: `Quick Check (1d20)${hpSuffix}`,
+        total: roll.total,
+        breakdown: breakdownText,
+        isNat20: !!roll.isNat20,
+        isNat1: !!roll.isNat1,
+        hpBonus: roll.hpBonus,
+        isHPRerolled: roll.isHPRerolled,
+        hpAnnouncement: roll.hpAnnouncement
       };
+
+      window.lastRollConfig = {
+        ...rollEntry,
+        d20: roll.d20,
+        rawD20: roll.rawD20,
+        mod: roll.mod,
+        baseMod: roll.baseMod,
+        title: `Quick Check (1d20)`
+      };
+
       if (typeof SessionNetwork !== 'undefined') {
         SessionNetwork.sendRoll(rollEntry);
       } else {
@@ -4437,13 +6353,10 @@ function setupSessionAndGMHub() {
       btnTracker.classList.add("btn-secondary");
     }
 
-    if (btnBack) {
-      btnBack.style.display = "inline-flex";
-      const targetTab = previousActiveTab || "tab-basics";
-      const prevBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
-      const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-session" ? "Session" : (previousActiveTab === "tab-tracker" ? "Tracker" : "Previous View"));
-      btnBack.title = `Return to ${prevName}`;
-    }
+    const targetTab = previousActiveTab || "tab-basics";
+    const prevBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+    const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-session" ? "Session" : (previousActiveTab === "tab-tracker" ? "Tracker" : "Previous View"));
+    showSpecialTabBackButton(prevName);
 
     syncGMUI();
   }
@@ -4453,10 +6366,34 @@ function setupSessionAndGMHub() {
     btnOpenGM.addEventListener("click", openGMTab);
   }
 
+  if (btnOpenUsers) {
+    btnOpenUsers.addEventListener("click", () => {
+      if (modalCampaignUsers && modalCampaignUsers.classList.contains("active")) {
+        closeCampaignUsersModal();
+      } else {
+        openCampaignUsersModal();
+      }
+    });
+  }
+
+  const btnMainUsers = document.getElementById("btnMainUsers");
+  if (btnMainUsers) {
+    btnMainUsers.addEventListener("click", () => {
+      openCampaignUsersModal();
+    });
+  }
+
   if (btnGMReturn) {
     btnGMReturn.addEventListener("click", () => {
       const btnBack = document.getElementById("btnBackFromTables");
       if (btnBack) btnBack.click();
+    });
+  }
+
+  if (btnGMRefreshCharacters) {
+    btnGMRefreshCharacters.addEventListener("click", () => {
+      renderGMCampaignCharacters();
+      if (typeof showToast === 'function') showToast("Refreshed campaign characters.", "info");
     });
   }
 
@@ -4491,11 +6428,13 @@ function setupSessionAndGMHub() {
 
     renderGMJoinRequests();
     renderGMTimeline();
+    renderGMCampaignCharacters();
     renderGMPartyNpcList();
     renderGMEncounterEnemyList();
     renderCampaignUsersList();
     initUserIdentityAndAccount();
     syncPartyRosterUI();
+    updateGameSessionUI();
   }
   window.syncGMUI = syncGMUI;
 
@@ -4511,18 +6450,49 @@ function setupSessionAndGMHub() {
     }
 
     boxJoinReqs.style.display = "block";
-    listJoinReqs.innerHTML = reqs.map(r => `
-      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border-color); font-size: var(--font-size-controls, 14px);">
-        <div>
-          <strong style="font-size: var(--font-size-controls, 14px);">${escapeHtml(r.playerName)}</strong> playing <span class="badge" style="color: var(--accent-primary); font-size: var(--font-size-fine-print, 12px);">${escapeHtml(r.characterName)}</span>
+    listJoinReqs.innerHTML = reqs.map(r => {
+      const isNewDev = !!r.isNewDevice;
+      const deviceBadge = isNewDev 
+        ? `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b; font-size: 11px; margin-left: 6px;" title="Authorized user connecting from a new device key">📱 New Device (${escapeHtml((r.userToken || '').substring(0, 8))}...)</span>` 
+        : '';
+      const actionBtn = isNewDev
+        ? `<button type="button" class="btn btn-primary" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" onclick="window.gmTrustDeviceAndApprovePlayer('${r.id}')">✓ Trust Device &amp; Accept</button>`
+        : `<button type="button" class="btn btn-primary" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>`;
+
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border-color); font-size: var(--font-size-controls, 14px); gap: 8px;">
+          <div>
+            <strong style="font-size: var(--font-size-controls, 14px);">${escapeHtml(r.playerName)}</strong> playing <span class="badge" style="color: var(--accent-primary); font-size: var(--font-size-fine-print, 12px);">${escapeHtml(r.characterName)}</span>
+            ${deviceBadge}
+          </div>
+          <div style="display: flex; gap: 6px;">
+            ${actionBtn}
+            <button type="button" class="btn btn-secondary" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls, 13px);" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
+          </div>
         </div>
-        <div style="display: flex; gap: 6px;">
-          <button type="button" class="btn btn-primary" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;" onclick="window.gmApprovePlayer('${r.id}')">✓ Accept</button>
-          <button type="button" class="btn btn-secondary" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls, 13px);" onclick="window.gmRejectPlayer('${r.id}')">✕ Decline</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
+
+  window.gmTrustDeviceAndApprovePlayer = function(playerId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+    const req = (camp.pendingRequests || []).find(r => r.id === playerId);
+    if (!req) return;
+    if (req.userToken && typeof CampaignManager.trustAuthorizedUserToken === 'function') {
+      CampaignManager.trustAuthorizedUserToken(req.playerName, req.userToken);
+    }
+    CampaignManager.approvePlayer(playerId);
+    if (typeof SessionNetwork !== 'undefined') {
+      SessionNetwork.acceptJoin(playerId, camp);
+    }
+    renderGMJoinRequests();
+    renderCampaignUsersList();
+    syncPartyRosterUI();
+    syncGMRosterUI();
+    if (typeof showToast === 'function') showToast(`Trusted new device for "${req.playerName}" and accepted!`, "success");
+  };
 
   window.gmApprovePlayer = function(playerId) {
     if (typeof CampaignManager === 'undefined') return;
@@ -4532,7 +6502,9 @@ function setupSessionAndGMHub() {
       SessionNetwork.acceptJoin(playerId, camp);
     }
     renderGMJoinRequests();
+    renderCampaignUsersList();
     syncPartyRosterUI();
+    syncGMRosterUI();
     if (typeof showToast === 'function') showToast("Player accepted into campaign!", "success");
   };
 
@@ -4569,16 +6541,16 @@ function setupSessionAndGMHub() {
     container.innerHTML = timeline.map(s => {
       const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
       return `
-        <div class="gm-timeline-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;">
-            <span style="font-family: monospace; font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">[${dateStr}]</span>
-            <strong style="font-size: var(--font-size-controls, 14px); color: var(--text-main);">${escapeHtml(s.label)}</strong>
-            <span class="badge" style="font-size: var(--font-size-fine-print, 12px); background: rgba(2, 132, 199, 0.15); color: #0284c7;">${s.characterCount || 0} characters</span>
+        <div class="gm-timeline-item" style="display: flex; align-items: center; justify-content: space-between; padding: 2px 8px; min-height: 24px; line-height: 1.2; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 3px; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: wrap;">
+            <span style="font-family: monospace; font-size: 11px; color: var(--text-muted);">[${dateStr}]</span>
+            <strong style="font-size: 12px; color: var(--text-main);">${escapeHtml(s.label)}</strong>
+            <span class="badge" style="font-size: 11px; padding: 1px 6px; background: rgba(2, 132, 199, 0.15); color: #0284c7;">${s.characterCount || 0} chars</span>
           </div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <button type="button" class="btn btn-primary" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" onclick="window.gmRollbackClick('${s.id}')" title="Roll back campaign to this save point">⏪ Roll Back</button>
-            <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" onclick="window.openCharExtractionModal('${s.id}')" title="Extract individual character from this snapshot">📦 Extract</button>
-            <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" onclick="window.gmDeleteSnapshotClick('${s.id}')" title="Delete snapshot">🗑</button>
+          <div style="display: flex; gap: 4px; align-items: center;">
+            <button type="button" class="btn btn-primary" style="height: 22px; padding: 0 6px; font-size: 11px; font-weight: 600;" onclick="window.gmRollbackClick('${s.id}')" title="Roll back campaign to this save point">⏪ Roll Back</button>
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.openCharExtractionModal('${s.id}')" title="Extract individual character from this snapshot">📦 Extract</button>
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmDeleteSnapshotClick('${s.id}')" title="Delete snapshot">🗑</button>
           </div>
         </div>
       `;
@@ -4692,7 +6664,7 @@ function setupSessionAndGMHub() {
             <strong style="font-size: 14px; color: var(--accent-primary);">${escapeHtml(c.name)}</strong>
             <span class="badge" style="font-size: 11px; margin-left: 6px;">PL ${c.pl}</span>
             <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-              ${c.type} • ${escapeHtml(c.player)}
+              ${c.type} • ${escapeHtml((c.player || '').replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim())}
             </div>
           </div>
           <div style="display: flex; gap: 6px;">
@@ -4738,6 +6710,129 @@ function setupSessionAndGMHub() {
     }
   };
 
+  // --- Campaign Characters & Party Membership in GM Tab ---
+  function renderGMCampaignCharacters() {
+    const list = document.getElementById("gmCampaignCharactersList");
+    if (!list || typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    const savedChars = CampaignManager.getSavedCharacters();
+    const isLocalGmCharInParty = CampaignManager.isCharacterInParty('local_hero') || CampaignManager.isGmCharIncludedInParty();
+
+    let html = '';
+
+    // 1. GM's Active Editor Hero
+    const gmCharName = (typeof char !== 'undefined' && char && char.name) ? char.name : 'Editor Hero';
+    const gmPl = (typeof char !== 'undefined' && char) ? (char.powerLevel || 10) : 10;
+    html += `
+      <div class="campaign-character-row" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 12px; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <strong style="color: var(--accent-primary); font-size: 13px;">👑 ${escapeHtml(gmCharName)}</strong>
+          <span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: 11px;">GM Sheet</span>
+          <span style="font-size: 12px; color: var(--text-muted);">PL ${gmPl}</span>
+          ${isLocalGmCharInParty
+            ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px;">✓ In Party</span>`
+            : `<span class="badge" style="background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: 11px;">Not in Party</span>`}
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          ${isLocalGmCharInParty
+            ? `<button type="button" class="btn btn-secondary" style="height: 24px; padding: 0 8px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveCampaignCharFromParty('local_hero')">🚫 Remove from Party</button>`
+            : `<button type="button" class="btn btn-primary" style="height: 24px; padding: 0 8px; font-size: 11px;" onclick="window.gmAddCampaignCharToParty('local_hero')">+ Add to Party</button>`}
+        </div>
+      </div>
+    `;
+
+    // 2. Saved Campaign Characters
+    if (savedChars.length === 0) {
+      html += `
+        <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px; font-style: italic;">
+          No player characters submitted or saved yet. When connected players submit their sheets, they will appear here.
+        </div>
+      `;
+    } else {
+      savedChars.forEach(sc => {
+        const inParty = CampaignManager.isCharacterInParty(sc.id) || (sc.characterName && CampaignManager.isCharacterInParty(sc.characterName));
+        const safeId = sc.id.replace(/'/g, "\\'");
+        const safeName = (sc.characterName || 'Hero').replace(/'/g, "\\'");
+
+        html += `
+          <div class="campaign-character-row" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 12px; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <strong style="color: var(--text-main); font-size: 13px;">👤 ${escapeHtml(sc.characterName)}</strong>
+              <span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: 11px;">${escapeHtml(sc.playerName)}</span>
+              <span style="font-size: 12px; color: var(--text-muted);">PL ${sc.powerLevel || 10}</span>
+              ${inParty
+                ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px;">✓ In Party</span>`
+                : `<span class="badge" style="background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-size: 11px;">Not in Party</span>`}
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${inParty
+                ? `<button type="button" class="btn btn-secondary" style="height: 24px; padding: 0 8px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveCampaignCharFromParty('${safeId}')">🚫 Remove from Party</button>`
+                : `<button type="button" class="btn btn-primary" style="height: 24px; padding: 0 8px; font-size: 11px;" onclick="window.gmAddCampaignCharToParty('${safeId}')">+ Add to Party</button>`}
+              <button type="button" class="btn btn-secondary" style="height: 24px; padding: 0 8px; font-size: 11px;" title="Load into character editor" onclick="window.gmLoadSavedCharToEditor('${safeId}')">👁️ Load</button>
+              <button type="button" class="btn btn-secondary" style="height: 24px; padding: 0 8px; font-size: 11px; color: #ef4444;" title="Delete saved character" onclick="window.gmDeleteSavedCharClick('${safeId}', '${safeName}')">🗑️</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    list.innerHTML = html;
+  }
+  window.renderGMCampaignCharacters = renderGMCampaignCharacters;
+
+  window.gmAddCampaignCharToParty = function(charId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.addCharacterToParty(charId);
+    renderGMCampaignCharacters();
+    syncPartyRosterUI();
+    if (typeof SessionNetwork !== 'undefined' && SessionNetwork.getStatus().role === 'HOST') {
+      SessionNetwork.broadcastStateSync(CampaignManager.getActiveCampaign());
+    }
+    if (typeof showToast === 'function') showToast("Added character to party roster!", "success");
+  };
+
+  window.gmRemoveCampaignCharFromParty = function(charId) {
+    if (typeof CampaignManager === 'undefined') return;
+    CampaignManager.removeCharacterFromParty(charId);
+    renderGMCampaignCharacters();
+    syncPartyRosterUI();
+    if (typeof SessionNetwork !== 'undefined' && SessionNetwork.getStatus().role === 'HOST') {
+      SessionNetwork.broadcastStateSync(CampaignManager.getActiveCampaign());
+    }
+    if (typeof showToast === 'function') showToast("Removed character from party roster.", "info");
+  };
+
+  window.gmDeleteSavedCharClick = function(charId, charName) {
+    if (typeof CampaignManager === 'undefined') return;
+    if (confirm(`Delete saved character "${charName}" from this campaign?`)) {
+      CampaignManager.deleteSavedCharacter(charId);
+      renderGMCampaignCharacters();
+      syncPartyRosterUI();
+      if (typeof showToast === 'function') showToast(`Deleted "${charName}".`, "info");
+    }
+  };
+
+  window.gmLoadSavedCharToEditor = function(charId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const savedChars = CampaignManager.getSavedCharacters();
+    const found = savedChars.find(c => c.id === charId);
+    if (!found || !found.characterData) {
+      alert("Character data not found.");
+      return;
+    }
+    if (confirm(`Load "${found.characterName}" into the active editor? Any unsaved changes on current sheet will be replaced.`)) {
+      if (typeof char !== 'undefined' && typeof char.deserialize === 'function') {
+        char.deserialize(found.characterData);
+        if (typeof renderAll === 'function') renderAll();
+        if (typeof updateTitleBar === 'function') updateTitleBar();
+        if (typeof showToast === 'function') showToast(`Loaded "${found.characterName}" into editor!`, "success");
+      }
+    }
+  };
+
+  // --- Party NPCs & Encounter Adversaries in GM Tab ---
   // --- Party NPCs & Encounter Adversaries in GM Tab ---
   function renderGMPartyNpcList() {
     const list = document.getElementById("gmPartyNpcList");
@@ -4746,23 +6841,63 @@ function setupSessionAndGMHub() {
     const npcs = camp?.npcs || [];
 
     if (npcs.length === 0) {
-      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary, 14px); padding: 14px; font-style: italic;">No friendly party NPCs attached.</div>`;
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 8px; font-style: italic;">No friendly party NPCs attached.</div>`;
       return;
     }
 
-    list.innerHTML = npcs.map(n => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 12px; gap: 8px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <strong style="font-size: var(--font-size-controls, 14px); color: #0284c7;">${escapeHtml(n.name)}</strong>
-          <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">PL ${n.powerLevel || 10}</span>
+    list.innerHTML = npcs.map(n => {
+      const isCurrentlyEdited = window.activeEditorNpcId === n.id;
+      return `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: ${isCurrentlyEdited ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-card)'}; border: 1px solid ${isCurrentlyEdited ? '#0284c7' : 'var(--border-color)'}; border-radius: 3px; padding: 3px 8px; min-height: 26px; line-height: 1.2; gap: 6px;">
+        <div class="gm-char-menu-wrapper" style="position: relative; display: inline-flex; align-items: center; gap: 6px;">
+          <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, 'gm_tab_${n.id}')" title="Click for NPC actions" style="background: none; border: none; font-weight: 700; font-size: 13px; color: #0284c7; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0;">
+            ${escapeHtml(n.name)} <span style="font-size: var(--font-size-fine-print); opacity: 0.7;">▾</span>
+            ${isCurrentlyEdited ? '<span class="badge" style="background: #0284c7; color: #fff; font-size: 10px; padding: 1px 4px;">In Editor</span>' : ''}
+          </button>
+          <div id="gmCharMenu_gm_tab_${n.id}" class="gm-char-dropdown-menu" style="display: none;">
+            ${isCurrentlyEdited ? `
+              <button type="button" class="gm-char-menu-item" style="color: #0284c7; font-weight: bold;" onclick="window.gmReturnToPrimarySheet(); window.gmCloseAllCharMenus();">
+                ↩ Return to GM Sheet
+              </button>
+            ` : `
+              <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${n.id}'); window.gmCloseAllCharMenus();">
+                👁️ Load into Editor
+              </button>
+            `}
+            <button type="button" class="gm-char-menu-item" onclick="window.duplicateNPC('${n.id}'); window.gmCloseAllCharMenus();">
+              📋 Duplicate NPC
+            </button>
+            <button type="button" class="gm-char-menu-item" onclick="if (window.gmLoadNpcToEditor && window.activeEditorNpcId !== '${n.id}') window.gmLoadNpcToEditor('${n.id}'); window.sessionSpendHeroPoint('${n.id}', 'Hero Point spent'); window.gmCloseAllCharMenus();">
+              ⭐ Spend Hero Point (${typeof n.heroPoints === 'number' ? n.heroPoints : 0} HP)
+            </button>
+            <button type="button" class="gm-char-menu-item" onclick="if (window.gmLoadNpcToEditor && window.activeEditorNpcId !== '${n.id}') window.gmLoadNpcToEditor('${n.id}'); window.openUseHeroPointModal('${n.id}'); window.gmCloseAllCharMenus();">
+              ✨ Hero Point Options Menu...
+            </button>
+            <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${n.id}'); window.gmCloseAllCharMenus();">
+              💾 Export NPC (.mm2e)
+            </button>
+            <div class="gm-char-menu-divider"></div>
+            <button type="button" class="gm-char-menu-item" style="color: #ef4444;" onclick="window.gmRemoveNPC('${n.id}'); window.gmCloseAllCharMenus();">
+              🚫 Remove NPC
+            </button>
+            <div class="gm-char-menu-divider"></div>
+            <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
+          </div>
+          <span style="font-size: 11px; color: var(--text-muted);">PL ${n.powerLevel || 10}</span>
         </div>
-        <div style="display: flex; gap: 6px;">
-          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmLoadNpcToEditor('${n.id}')">👁️ Load</button>
-          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmExportCharSheet('${n.id}')">💾 .mm2e</button>
-          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" onclick="window.gmRemoveNPC('${n.id}')">✕</button>
+        <div style="display: flex; gap: 4px;">
+          ${isCurrentlyEdited ? `
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #0284c7; font-weight: bold;" onclick="window.gmReturnToPrimarySheet()" title="Stop editing and return to GM sheet">↩ Return</button>
+          ` : `
+            <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmLoadNpcToEditor('${n.id}')" title="Load into Editor">👁️ Load</button>
+          `}
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.duplicateNPC('${n.id}')" title="Duplicate NPC">📋 Clone</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmExportCharSheet('${n.id}')">💾</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveNPC('${n.id}')">✕</button>
         </div>
       </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   function renderGMEncounterEnemyList() {
@@ -4771,22 +6906,23 @@ function setupSessionAndGMHub() {
     const enemies = CampaignManager.getEncounterEnemies();
 
     if (enemies.length === 0) {
-      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: var(--font-size-secondary, 14px); padding: 14px; font-style: italic;">No encounter adversaries or enemies added.</div>`;
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 8px; font-style: italic;">No encounter adversaries or enemies added.</div>`;
       return;
     }
 
     list.innerHTML = enemies.map(e => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 12px; gap: 8px;">
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <strong style="font-size: var(--font-size-controls, 14px); color: #ef4444;">${escapeHtml(e.name)}</strong>
-          <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted);">PL ${e.powerLevel || 10}</span>
-          <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: ${e.currentBruises > 0 ? '#f59e0b' : 'var(--text-muted)'};">B: ${e.currentBruises || 0}</span>
-          <span style="font-size: var(--font-size-secondary, 13px); font-weight: 600; color: ${e.currentInjured > 0 ? '#ef4444' : 'var(--text-muted)'};">I: ${e.currentInjured || 0}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 3px; padding: 3px 8px; min-height: 26px; line-height: 1.2; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <strong style="font-size: 13px; color: #ef4444;">${escapeHtml(e.name)}</strong>
+          <span style="font-size: 11px; color: var(--text-muted);">PL ${e.powerLevel || 10}</span>
+          <span style="font-size: 11px; font-weight: 600; color: ${e.currentBruises > 0 ? '#f59e0b' : 'var(--text-muted)'};">B: ${e.currentBruises || 0}</span>
+          <span style="font-size: 11px; font-weight: 600; color: ${e.currentInjured > 0 ? '#ef4444' : 'var(--text-muted)'};">I: ${e.currentInjured || 0}</span>
         </div>
-        <div style="display: flex; gap: 6px;">
-          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmQuickRollEnemy('${e.id}')" title="Quick Roll 1d20 Attack">🎲 Roll</button>
-          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" onclick="window.gmStepEnemyBruise('${e.id}', 1)" title="+1 Bruised">+B</button>
-          <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" onclick="window.gmRemoveEnemy('${e.id}')">✕</button>
+        <div style="display: flex; gap: 4px;">
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmQuickRollEnemy('${e.id}')" title="Quick Roll 1d20 Attack">🎲 Roll</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.duplicateNPC('${e.id}')" title="Duplicate Adversary">📋 Clone</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px;" onclick="window.gmStepEnemyBruise('${e.id}', 1)" title="+1 Bruised">+B</button>
+          <button type="button" class="btn btn-secondary" style="height: 22px; padding: 0 6px; font-size: 11px; color: #ef4444;" onclick="window.gmRemoveEnemy('${e.id}')">✕</button>
         </div>
       </div>
     `).join('');
@@ -4853,47 +6989,79 @@ function setupSessionAndGMHub() {
     });
   }
 
-  if (btnGMAddEnemyFile && fileGMAddEnemy) {
-    btnGMAddEnemyFile.addEventListener("click", () => fileGMAddEnemy.click());
-    fileGMAddEnemy.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file || typeof CampaignManager === 'undefined') return;
+  async function parseCharacterFileForCampaign(file) {
+    if (!file) throw new Error("No file selected.");
+    const lower = file.name.toLowerCase();
+
+    if (lower.endsWith('.por')) {
+      if (typeof window.loadCharacterDataFromPor !== 'function') {
+        throw new Error("POR Importer library is not loaded.");
+      }
+      const res = await window.loadCharacterDataFromPor(file);
+      return {
+        character: res.character,
+        name: res.name || res.character?.name || "Imported Character",
+        powerLevel: res.powerLevel || res.character?.powerLevel || 10
+      };
+    }
+
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (evt) => {
         try {
-          const parsed = JSON.parse(evt.target.result);
+          let text = evt.target.result;
+          if (typeof text === 'string') {
+            text = text.replace(/^\uFEFF/, '').trim();
+          }
+          const parsed = JSON.parse(text);
           const cData = parsed.character || parsed;
-          CampaignManager.addEncounterEnemy(cData, cData.name, cData.powerLevel);
-          renderGMEncounterEnemyList();
-          if (typeof showToast === 'function') showToast(`Added enemy "${cData.name || 'Adversary'}" from file!`, "success");
+          const name = cData.name || (cData.identity && cData.identity.heroName) || "Imported Character";
+          const pl = typeof cData.powerLevel === 'number' ? cData.powerLevel : (cData.pl || 10);
+          resolve({ character: cData, name, powerLevel: pl });
         } catch (err) {
-          alert("Failed to parse character file: " + err.message);
+          reject(err);
         }
       };
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
       reader.readAsText(file);
+    });
+  }
+
+  if (btnGMAddEnemyFile && fileGMAddEnemy) {
+    btnGMAddEnemyFile.addEventListener("click", () => fileGMAddEnemy.click());
+    fileGMAddEnemy.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file || typeof CampaignManager === 'undefined') return;
+      try {
+        const { character: cData, name, powerLevel } = await parseCharacterFileForCampaign(file);
+        CampaignManager.addEncounterEnemy(cData, name, powerLevel);
+        renderGMEncounterEnemyList();
+        syncGMRosterUI();
+        if (typeof showToast === 'function') showToast(`Added enemy "${name}" from file!`, "success");
+      } catch (err) {
+        console.error("Failed to load enemy file:", err);
+        alert("Failed to parse character file: " + err.message);
+      }
       e.target.value = "";
     });
   }
 
   if (btnGMAttachNPCFile && fileGMAttachNPC) {
     btnGMAttachNPCFile.addEventListener("click", () => fileGMAttachNPC.click());
-    fileGMAttachNPC.addEventListener("change", (e) => {
+    fileGMAttachNPC.addEventListener("change", async (e) => {
       const file = e.target.files[0];
       if (!file || typeof CampaignManager === 'undefined') return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const parsed = JSON.parse(evt.target.result);
-          const cData = parsed.character || parsed;
-          CampaignManager.attachNPC(cData, cData.name, cData.powerLevel);
-          renderGMPartyNpcList();
-          syncPartyRosterUI();
-          if (typeof showToast === 'function') showToast(`Attached party NPC "${cData.name || 'NPC'}" from file!`, "success");
-        } catch (err) {
-          alert("Failed to parse character file: " + err.message);
-        }
-      };
-      reader.readAsText(file);
+      try {
+        const { character: cData, name, powerLevel } = await parseCharacterFileForCampaign(file);
+        CampaignManager.attachNPC(cData, name, powerLevel);
+        renderGMPartyNpcList();
+        syncPartyRosterUI();
+        syncGMRosterUI();
+        if (typeof showToast === 'function') showToast(`Attached party NPC "${name}" from file!`, "success");
+      } catch (err) {
+        console.error("Failed to load NPC file:", err);
+        alert("Failed to parse character file: " + err.message);
+      }
       e.target.value = "";
     });
   }
@@ -5111,7 +7279,12 @@ function setupSessionAndGMHub() {
 
   window.gmRemoveNPC = function(npcId) {
     if (typeof CampaignManager === 'undefined') return;
+    if (window.activeEditorNpcId === npcId) {
+      window.gmReturnToPrimarySheet();
+    }
     CampaignManager.removeNPC(npcId);
+    renderGMPartyNpcList();
+    syncPartyRosterUI();
     syncGMRosterUI();
     if (typeof showToast === 'function') showToast("Removed NPC from campaign.", "info");
   };
@@ -5119,6 +7292,8 @@ function setupSessionAndGMHub() {
   window.gmRemovePlayer = function(playerId) {
     if (typeof CampaignManager === 'undefined') return;
     CampaignManager.removePlayer(playerId);
+    renderCampaignUsersList();
+    syncPartyRosterUI();
     syncGMRosterUI();
     if (typeof showToast === 'function') showToast("Removed player from campaign.", "info");
   };
@@ -5192,6 +7367,17 @@ function setupSessionAndGMHub() {
   }
 
   // --- Campaign Authorized Users Management UI ---
+  function closeCampaignUsersModal() {
+    if (modalCampaignUsers) {
+      modalCampaignUsers.classList.remove("active");
+    }
+    if (btnOpenUsers) {
+      btnOpenUsers.classList.remove("btn-primary");
+      btnOpenUsers.classList.add("btn-secondary");
+    }
+  }
+  window.closeCampaignUsersModal = closeCampaignUsersModal;
+
   function openCampaignUsersModal() {
     if (!modalCampaignUsers || typeof CampaignManager === 'undefined') return;
     const camp = CampaignManager.getActiveCampaign();
@@ -5205,12 +7391,36 @@ function setupSessionAndGMHub() {
 
     renderCampaignUsersList();
     modalCampaignUsers.classList.add("active");
+    if (btnOpenUsers) {
+      btnOpenUsers.classList.add("btn-primary");
+      btnOpenUsers.classList.remove("btn-secondary");
+    }
     if (txtNewUserName) {
       txtNewUserName.value = "";
       txtNewUserName.focus();
     }
   }
   window.openCampaignUsersModal = openCampaignUsersModal;
+
+  if (modalCampaignUsers && btnOpenUsers) {
+    const usersObserver = new MutationObserver(() => {
+      const isActive = modalCampaignUsers.classList.contains("active");
+      if (isActive) {
+        btnOpenUsers.classList.add("btn-primary");
+        btnOpenUsers.classList.remove("btn-secondary");
+      } else {
+        btnOpenUsers.classList.remove("btn-primary");
+        btnOpenUsers.classList.add("btn-secondary");
+      }
+    });
+    usersObserver.observe(modalCampaignUsers, { attributes: true, attributeFilter: ["class"] });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modalCampaignUsers && modalCampaignUsers.classList.contains("active")) {
+      closeCampaignUsersModal();
+    }
+  });
 
   function renderCampaignUsersList() {
     const modalBody = document.getElementById("campaignUsersModalBody");
@@ -5261,10 +7471,14 @@ function setupSessionAndGMHub() {
       }
 
       // Account Token status badge
+      const tokens = Array.isArray(u.userTokens) ? u.userTokens : (u.userToken ? [u.userToken] : []);
       let tokenBadge = '';
-      if (u.userToken) {
-        const shortTok = escapeHtml(u.userToken.substring(0, 10)) + '...';
-        tokenBadge = `<span class="token-badge token-bound" style="font-size: var(--font-size-fine-print, 12px);" title="Bound P2P Account Key: ${escapeHtml(u.userToken)}">🛡️ ${shortTok}</span>`;
+      if (tokens.length > 1) {
+        const preview = tokens.map(t => escapeHtml(t.substring(0, 8))).join(', ');
+        tokenBadge = `<span class="token-badge token-bound" style="font-size: var(--font-size-fine-print, 12px);" title="Trusted Devices (${tokens.length}): ${escapeHtml(tokens.join(', '))}">🛡️ ${tokens.length} Devices Trusted (${preview})</span>`;
+      } else if (tokens.length === 1) {
+        const shortTok = escapeHtml(tokens[0].substring(0, 10)) + '...';
+        tokenBadge = `<span class="token-badge token-bound" style="font-size: var(--font-size-fine-print, 12px);" title="Bound P2P Account Key: ${escapeHtml(tokens[0])}">🛡️ 1 Device (${shortTok})</span>`;
       } else {
         tokenBadge = `<span class="token-badge token-unclaimed" style="font-size: var(--font-size-fine-print, 12px);" title="Unclaimed: Player's first login will automatically bind their unique account token">⏳ Unclaimed Key</span>`;
       }
@@ -5285,8 +7499,8 @@ function setupSessionAndGMHub() {
             </span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
-            ${u.userToken ? `
-              <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" title="Reset Account Key (allows user to re-bind from a new device)" onclick="window.gmResetUserTokenClick('${safeUserName}')">🔄 Reset Key</button>
+            ${tokens.length > 0 ? `
+              <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px);" title="Reset all trusted device keys for this user" onclick="window.gmResetUserTokenClick('${safeUserName}')">🔄 Reset Keys</button>
             ` : ''}
             <button type="button" class="btn btn-secondary" style="height: 26px; padding: 0 8px; font-size: var(--font-size-controls, 13px); color: #ef4444;" title="Remove this authorized user" onclick="window.gmRemoveAuthorizedUserClick('${safeUserName}')">✕</button>
           </div>
@@ -5301,11 +7515,11 @@ function setupSessionAndGMHub() {
 
   window.gmResetUserTokenClick = function(userName) {
     if (typeof CampaignManager === 'undefined') return;
-    if (confirm(`Reset the P2P Account Key for "${userName}"?\n\nThis will allow the player to bind their account from a new computer, browser, or device on their next login.`)) {
+    if (confirm(`Reset all trusted P2P Account Keys for "${userName}"?\n\nThis will clear all registered devices (PC, phone, etc.) and allow the player to bind a new device on their next login.`)) {
       CampaignManager.resetAuthorizedUserToken(userName);
       renderCampaignUsersList();
       syncGMUI();
-      if (typeof showToast === 'function') showToast(`Reset account key for "${userName}".`, "info");
+      if (typeof showToast === 'function') showToast(`Reset device keys for "${userName}".`, "info");
     }
   };
 
@@ -5350,10 +7564,16 @@ function setupSessionAndGMHub() {
         if (typeof char !== 'undefined' && char) {
           char.playerName = val;
         }
+        const isLocalGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
+        if (isLocalGM || (typeof CampaignManager !== 'undefined' && CampaignManager.getGMUserName() === 'GM')) {
+          CampaignManager.setGMUserName(val);
+        }
         if (txtPlayerName) txtPlayerName.value = val;
         const mainPlayerInput = document.getElementById("playerNameInput");
         if (mainPlayerInput) mainPlayerInput.value = val;
         syncPartyRosterUI();
+        updateSessionRowUI();
+        syncGMUI();
         renderCampaignUsersList();
         if (typeof showToast === 'function') showToast(`User name set to "${val}"!`, "success");
       };
@@ -5440,8 +7660,18 @@ function setupSessionAndGMHub() {
       btnSaveInlineGM.onclick = () => {
         const gmName = txtInlineGM.value.trim() || "GM";
         CampaignManager.setGMUserName(gmName);
+        CampaignManager.setUserAccount(gmName);
+        if (typeof char !== 'undefined' && char && (!char.playerName || char.playerName === 'GM')) {
+          char.playerName = gmName;
+        }
         if (typeof showToast === 'function') showToast(`GM user name set to "${gmName}".`, "success");
         syncGMUI();
+        syncPartyRosterUI();
+        updateSessionRowUI();
+        renderCampaignUsersList();
+        if (typeof SessionNetwork !== 'undefined' && SessionNetwork.isConnected()) {
+          SessionNetwork.sendLocalBroadcast({ action: 'rosterUpdate' });
+        }
       };
     }
   }
@@ -5489,9 +7719,18 @@ function setupSessionAndGMHub() {
       if (typeof CampaignManager === 'undefined') return;
       const gmName = txtGMName.value.trim() || "GM";
       CampaignManager.setGMUserName(gmName);
+      CampaignManager.setUserAccount(gmName);
+      if (typeof char !== 'undefined' && char && (!char.playerName || char.playerName === 'GM')) {
+        char.playerName = gmName;
+      }
       if (typeof showToast === 'function') showToast(`GM user name set to "${gmName}".`, "success");
       syncGMUI();
-      syncGMRosterUI();
+      syncPartyRosterUI();
+      updateSessionRowUI();
+      renderCampaignUsersList();
+      if (typeof SessionNetwork !== 'undefined' && SessionNetwork.isConnected()) {
+        SessionNetwork.sendLocalBroadcast({ action: 'rosterUpdate' });
+      }
     });
   }
 
@@ -5579,6 +7818,8 @@ function setupSessionAndGMHub() {
       }
       if (typeof CampaignManager === 'undefined') return;
       CampaignManager.attachNPC(char.serialize().character, char.name, char.powerLevel);
+      renderGMPartyNpcList();
+      syncPartyRosterUI();
       syncGMRosterUI();
       if (typeof showToast === 'function') showToast(`Attached ${char.name} as NPC to campaign!`, "success");
     });
@@ -5598,21 +7839,29 @@ function setupSessionAndGMHub() {
       const willOpen = targetMenu.style.display === "none" || !targetMenu.style.display;
       if (willOpen) {
         targetMenu.style.display = "flex";
-        // Check if menu bottom would be truncated by table container or viewport
-        const rect = targetMenu.getBoundingClientRect();
-        const container = targetMenu.closest(".gm-tracker-table-container") || targetMenu.closest("#tab-gm");
-        const containerBottom = container ? container.getBoundingClientRect().bottom : window.innerHeight;
+        const btn = (event && (event.currentTarget || (event.target && event.target.closest && event.target.closest(".gm-char-name-btn")))) || targetMenu.previousElementSibling;
+        const btnRect = btn ? btn.getBoundingClientRect() : null;
+        const menuRect = targetMenu.getBoundingClientRect();
+        const menuHeight = menuRect.height || 220;
+        const menuWidth = menuRect.width || 220;
 
-        if (rect.bottom > containerBottom || rect.bottom > (window.innerHeight - 10)) {
-          targetMenu.style.top = "auto";
-          targetMenu.style.bottom = "100%";
-          targetMenu.style.marginTop = "0";
-          targetMenu.style.marginBottom = "4px";
-        } else {
-          targetMenu.style.top = "100%";
-          targetMenu.style.bottom = "auto";
-          targetMenu.style.marginTop = "4px";
-          targetMenu.style.marginBottom = "0";
+        if (btnRect) {
+          let left = btnRect.left;
+          if (left + menuWidth > window.innerWidth - 12) {
+            left = Math.max(10, window.innerWidth - menuWidth - 12);
+          }
+          targetMenu.style.left = `${left}px`;
+
+          const spaceBelow = window.innerHeight - btnRect.bottom;
+          const openUpward = spaceBelow < (menuHeight + 16) || btnRect.bottom > (window.innerHeight - 150);
+
+          if (openUpward) {
+            targetMenu.style.top = "auto";
+            targetMenu.style.bottom = `${Math.max(10, window.innerHeight - btnRect.top + 4)}px`;
+          } else {
+            targetMenu.style.bottom = "auto";
+            targetMenu.style.top = `${btnRect.bottom + 4}px`;
+          }
         }
       } else {
         targetMenu.style.display = "none";
@@ -5620,12 +7869,15 @@ function setupSessionAndGMHub() {
     }
   };
 
-  // Close menus when clicking outside
+  // Close menus when clicking outside or scrolling
   document.addEventListener("click", (e) => {
-    if (!e.target.closest(".gm-char-menu-wrapper")) {
+    if (!e.target.closest(".gm-char-menu-wrapper") && !e.target.closest(".gm-char-dropdown-menu")) {
       document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
     }
   });
+  window.addEventListener("scroll", () => {
+    document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
+  }, true);
 
   window.gmCloseAllCharMenus = function() {
     document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
@@ -5710,15 +7962,111 @@ function setupSessionAndGMHub() {
     }
   };
 
+  window.activeEditorNpcId = null;
+  window.__gmPrimaryHeroSheet = null;
+  window.__gmPrimaryHeroName = null;
+
   window.gmLoadNpcToEditor = function(npcId) {
     if (typeof CampaignManager === 'undefined') return;
     const camp = CampaignManager.getActiveCampaign();
-    const npc = (camp?.npcs || []).find(n => n.id === npcId);
-    if (!npc || !npc.characterData) return;
+    const npc = (camp?.npcs || []).find(n => n.id === npcId) || (camp?.encounterEnemies || []).find(e => e.id === npcId);
+    if (!npc) {
+      if (typeof showToast === 'function') showToast("NPC not found in campaign.", "error");
+      return;
+    }
 
-    if (confirm(`Load NPC "${npc.name}" into your character editor? (This will replace the currently loaded sheet)`)) {
-      applyLoadedCharacter(npc.characterData);
-      if (typeof showToast === 'function') showToast(`Loaded NPC "${npc.name}" into editor!`, "success");
+    // 1. If currently editing GM primary hero (not an NPC), stash it safely
+    if (!window.activeEditorNpcId) {
+      if (typeof char !== 'undefined' && char) {
+        window.__gmPrimaryHeroSheet = char.serialize();
+        window.__gmPrimaryHeroName = char.name || 'GM Hero';
+      }
+    } else {
+      // Switching from one NPC to another NPC: auto-save current NPC edits back to campaign!
+      if (typeof char !== 'undefined' && char && typeof CampaignManager.updateNPCCharacterData === 'function') {
+        CampaignManager.updateNPCCharacterData(window.activeEditorNpcId, char.serialize().character);
+      }
+    }
+
+    // 2. Set active NPC ID
+    window.activeEditorNpcId = npcId;
+
+    // 3. Load NPC character data into editor
+    const sheetToLoad = (npc.characterData && Object.keys(npc.characterData).length > 0)
+      ? npc.characterData
+      : { name: npc.name, powerLevel: npc.powerLevel || 10 };
+
+    applyLoadedCharacter(sheetToLoad, { isNpcLoad: true, preserveTab: true });
+
+    // 4. Update UI indicators
+    if (typeof window.updateGMEditorStateUI === 'function') {
+      window.updateGMEditorStateUI();
+    }
+    if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+    if (typeof renderGMPartyNpcList === 'function') renderGMPartyNpcList();
+
+    if (typeof showToast === 'function') {
+      showToast(`Loaded NPC "${npc.name}" into editor. Use character menu or header badge to return to your GM sheet.`, "success");
+    }
+  };
+
+  window.gmReturnToPrimarySheet = function() {
+    if (!window.activeEditorNpcId && !window.__gmPrimaryHeroSheet) {
+      if (typeof showToast === 'function') showToast("Already on primary character sheet.", "info");
+      return;
+    }
+
+    // 1. Save current NPC edits back to campaign
+    if (window.activeEditorNpcId && typeof char !== 'undefined' && char && typeof CampaignManager !== 'undefined' && typeof CampaignManager.updateNPCCharacterData === 'function') {
+      CampaignManager.updateNPCCharacterData(window.activeEditorNpcId, char.serialize().character);
+    }
+
+    // 2. Restore GM primary sheet
+    if (window.__gmPrimaryHeroSheet) {
+      applyLoadedCharacter(window.__gmPrimaryHeroSheet);
+    }
+
+    const prevNpcId = window.activeEditorNpcId;
+    window.activeEditorNpcId = null;
+
+    // 3. Update UI
+    if (typeof window.updateGMEditorStateUI === 'function') {
+      window.updateGMEditorStateUI();
+    }
+    if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+    if (typeof renderGMPartyNpcList === 'function') renderGMPartyNpcList();
+
+    if (typeof showToast === 'function') {
+      showToast(`Returned to GM Character Sheet (${char.name || 'Hero'})!`, "success");
+    }
+  };
+
+  window.updateGMEditorStateUI = function() {
+    const btnReturn = document.getElementById("btnReturnToGMChar");
+    const heroNPCTag = document.getElementById("lblHeroNPCTag");
+
+    if (window.activeEditorNpcId) {
+      if (btnReturn) btnReturn.style.display = "inline-flex";
+      if (heroNPCTag) heroNPCTag.style.display = "inline-flex";
+    } else {
+      if (btnReturn) btnReturn.style.display = "none";
+      if (heroNPCTag) heroNPCTag.style.display = "none";
+    }
+
+    if (typeof updateCharacterSelectorUI === 'function') {
+      updateCharacterSelectorUI();
+    }
+  };
+
+  window.duplicateNPC = function(npcId) {
+    if (typeof CampaignManager === 'undefined') return;
+    const newNpc = CampaignManager.duplicateNPC(npcId);
+    if (newNpc) {
+      if (typeof renderGMPartyNpcList === 'function') renderGMPartyNpcList();
+      if (typeof renderGMEncounterEnemyList === 'function') renderGMEncounterEnemyList();
+      if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+      if (typeof syncGMRosterUI === 'function') syncGMRosterUI();
+      if (typeof showToast === 'function') showToast(`Duplicated NPC as "${newNpc.name}"!`, "success");
     }
   };
 
@@ -6060,30 +8408,61 @@ function setupSessionAndGMHub() {
 
   initUserIdentityAndAccount();
 
-  // Auto-connect / invite check from URL query parameter
+  // Auto-connect / invite check from URL query parameter (Automatic login without dialog)
   if (typeof window !== 'undefined' && window.location) {
     const urlParams = new URLSearchParams(window.location.search);
-    const qCamp = urlParams.get("campaign") || urlParams.get("room");
+    const qCamp = urlParams.get("campaign") || urlParams.get("camp") || urlParams.get("room");
     if (qCamp) {
-      const pName = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
+      let pName = localStorage.getItem("mm2e_player_name") || char?.playerName || "";
+      if (!pName && typeof CampaignManager !== 'undefined') {
+        const acc = CampaignManager.getUserAccount();
+        if (acc && acc.userName) pName = acc.userName;
+      }
+      if (!pName) {
+        pName = "Player-" + Math.floor(1000 + Math.random() * 9000);
+        localStorage.setItem("mm2e_player_name", pName);
+      }
       if (txtPlayerName) txtPlayerName.value = pName;
       if (txtCampCode) txtCampCode.value = qCamp;
+      if (typeof char !== 'undefined' && char && !char.playerName) char.playerName = pName;
 
-      // Switch to session tab so player sees the campaign login immediately
+      // Switch to session tab and automatically connect
       setTimeout(() => {
         const sessionTabBtn = document.querySelector('.tab-btn[data-tab="tab-session"]');
         if (sessionTabBtn && !sessionTabBtn.classList.contains("active")) {
           sessionTabBtn.click();
         }
-        if (!pName && txtPlayerName) {
-          txtPlayerName.focus();
+
+        const effFeats = char?.effectiveFeats || char?.feats || {};
+        const impInit = effFeats["Improved Initiative"] || 0;
+        const dexMod = (typeof char?.getAbilityRank === 'function')
+          ? (char.getAbilityRank("DEX") !== null ? char.getAbilityRank("DEX") : -5)
+          : (char?.abilities?.DEX || 0);
+        const totalInit = (char?.derivedStats && typeof char.derivedStats.initiative === 'number')
+          ? char.derivedStats.initiative
+          : (dexMod + (impInit * 4));
+
+        if (typeof SessionNetwork !== 'undefined') {
+          SessionNetwork.joinHost(qCamp, {
+            playerName: pName,
+            characterName: char?.name || "Hero",
+            characterSummary: {
+              powerLevel: char?.powerLevel || 10,
+              defense: char?.combat?.DEF || 0,
+              initiative: totalInit,
+              initiativeRoll: char?.trackerState?.initiativeRoll ?? null
+            }
+          });
           if (typeof showToast === 'function') {
-            showToast(`Campaign invite detected (${qCamp})! Enter your user name to log in.`, "info");
+            showToast(`Auto-connecting to campaign "${qCamp}" as "${pName}"...`, "info");
           }
         }
-      }, 350);
+      }, 400);
     }
   }
+
+  // Pre-populate party roster DOM and localStorage cache
+  syncPartyRosterUI();
 }
 window.setupSessionAndGMHub = setupSessionAndGMHub;
 
@@ -6434,7 +8813,17 @@ function buildAbilitiesUI() {
     { id: "CHA", name: "Charisma" }
   ];
 
-  container.innerHTML = list.map(abil => `
+  const headerHtml = `
+    <div class="list-row" style="font-weight: 600; font-size: var(--font-size-fine-print); color: var(--text-muted); background: var(--bg-panel); border: none; border-bottom: 1px solid var(--border-color); padding: 4px 8px; margin-bottom: 4px; border-radius: 0;">
+      <span style="width: calc(var(--font-size-controls) * 1.25); min-width: calc(var(--font-size-controls) * 1.25);"></span>
+      <span style="width: calc(140px + 36px); min-width: calc(140px + 36px); padding-left: 6px; box-sizing: border-box;">Ability</span>
+      <div style="width: calc(var(--font-size-controls) * 7.85); min-width: calc(var(--font-size-controls) * 7.85); text-align: center;">Base Score</div>
+      <div class="row-adjustments" style="padding-left: 4px;">Adjustments &amp; Enhanced</div>
+      <div class="ability-total-col" style="text-align: right;">Total (Mod)</div>
+    </div>
+  `;
+
+  container.innerHTML = headerHtml + list.map(abil => `
     <div class="list-row">
       <input type="checkbox" class="row-enable-toggle" id="enable_${abil.id}" checked title="Enable / Disable Trait">
       <button type="button" class="row-title-btn" id="btnRollAbil_${abil.id}" onclick="window.rollAbilityCheck('${abil.id}')" title="Roll ${abil.name} Check (1d20 + ${abil.id} modifier)">
@@ -6442,17 +8831,17 @@ function buildAbilitiesUI() {
         <span class="row-title">${abil.name} (${abil.id})</span>
       </button>
       
-      <div class="stepper-group">
-        <button type="button" class="stepper-btn stepper-dec" id="dec_${abil.id}" onclick="stepVal('input_${abil.id}', -1, -5, 20)">−</button>
-        <input type="number" id="input_${abil.id}" class="stepper-input" min="-5" max="20" value="0">
-        <button type="button" class="stepper-btn stepper-inc" id="inc_${abil.id}" onclick="stepVal('input_${abil.id}', 1, -5, 20)">+</button>
+      <div class="stepper-group" id="stepper_group_${abil.id}" title="Base Ability Score (10 is average human, 1 PP per point over 10)">
+        <button type="button" class="stepper-btn stepper-dec" id="dec_${abil.id}" onclick="stepVal('input_${abil.id}', -1, 0, 50)">−</button>
+        <input type="number" id="input_${abil.id}" class="stepper-input" min="0" max="50" value="10">
+        <button type="button" class="stepper-btn stepper-inc" id="inc_${abil.id}" onclick="stepVal('input_${abil.id}', 1, 0, 50)">+</button>
       </div>
 
       <div class="row-adjustments" id="adj_${abil.id}">
         <em>Base points only</em>
       </div>
 
-      <div class="ability-total-col" id="total_rank_${abil.id}">0</div>
+      <div class="ability-total-col" id="total_rank_${abil.id}" title="Total Ability Score and Modifier">10 (+0)</div>
     </div>
   `).join("");
 
@@ -6486,8 +8875,28 @@ function buildAbilitiesUI() {
 
   document.getElementById("heroNameInput").addEventListener("input", (e) => {
     char.name = e.target.value.slice(0, 45);
+    const activeHeroName = (char.name && char.name.trim()) ? char.name.trim() : "Hero";
+    const lblTrackerHero = document.getElementById("lblTrackerHeroName");
+    if (lblTrackerHero) lblTrackerHero.textContent = activeHeroName;
+    try {
+      localStorage.setItem('mm2e_active_editor_hero', JSON.stringify({ name: activeHeroName, heroPoints: char.heroPoints }));
+    } catch (err) {}
+    if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+      try {
+        if (poppedOutTrackerWindow.localTracker) {
+          poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
+        }
+        const lblPop = poppedOutTrackerWindow.document?.getElementById('lblTrackerHeroName');
+        if (lblPop) lblPop.textContent = activeHeroName;
+        if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
+          poppedOutTrackerWindow.renderAllTrackerUI();
+        }
+      } catch (err) {}
+    }
     syncActiveCompanionIfActive();
     refreshUI();
+    if (typeof syncPartyRosterUI === 'function') syncPartyRosterUI();
+    if (typeof broadcastTrackerSync === 'function') broadcastTrackerSync();
   });
   document.getElementById("playerNameInput").addEventListener("input", (e) => {
     char.playerName = e.target.value.slice(0, 45);
@@ -6496,8 +8905,19 @@ function buildAbilitiesUI() {
     if (sessionNameInput && sessionNameInput.value !== char.playerName) {
       sessionNameInput.value = char.playerName;
     }
+    if (typeof CampaignManager !== 'undefined' && char.playerName.trim()) {
+      CampaignManager.setUserAccount(char.playerName.trim());
+      const isGM = CampaignManager.isDesignatedGM('local_player');
+      const currGM = CampaignManager.getGMUserName();
+      if (isGM || !currGM || currGM === 'GM') {
+        CampaignManager.setGMUserName(char.playerName.trim());
+      }
+    }
     if (typeof syncGMRosterUI === 'function') {
       syncGMRosterUI();
+    }
+    if (typeof syncPartyRosterUI === 'function') {
+      syncPartyRosterUI();
     }
     if (!window.isCharacterLoading && typeof FileManager !== 'undefined' && FileManager.markDirty) {
       FileManager.markDirty();
@@ -6512,39 +8932,6 @@ function buildAbilitiesUI() {
     refreshUI();
   });
 
-  window.updateHeroPointsLockUI = function() {
-    const isLocked = !!char.heroPointsLocked;
-    const hpInput = document.getElementById("heroPointsInput");
-    const btnDec = document.getElementById("btnDecHeroPoints");
-    const btnInc = document.getElementById("btnIncHeroPoints");
-    const icoLock = document.getElementById("icoLockHeroPoints");
-    const btnLock = document.getElementById("btnLockHeroPoints");
-    if (hpInput) hpInput.disabled = isLocked;
-    if (btnDec) btnDec.disabled = isLocked;
-    if (btnInc) btnInc.disabled = isLocked;
-    if (icoLock) icoLock.textContent = isLocked ? "🔒" : "🔓";
-    if (btnLock) {
-      btnLock.title = isLocked ? "Unlock Hero Points Stepper" : "Lock Hero Points Stepper";
-      btnLock.style.background = isLocked ? "rgba(239, 68, 68, 0.15)" : "";
-      btnLock.style.borderColor = isLocked ? "#ef4444" : "";
-    }
-  };
-
-  const hpInput = document.getElementById("heroPointsInput");
-  if (hpInput) {
-    hpInput.addEventListener("input", (e) => {
-      char.heroPoints = Math.max(0, parseInt(e.target.value) || 0);
-      refreshUI();
-    });
-  }
-
-  const btnLockHP = document.getElementById("btnLockHeroPoints");
-  if (btnLockHP) {
-    btnLockHP.addEventListener("click", () => {
-      char.heroPointsLocked = !char.heroPointsLocked;
-      window.updateHeroPointsLockUI();
-    });
-  }
   document.getElementById("heroSizeInput").addEventListener("change", (e) => {
     char.sizeCategory = e.target.value;
     refreshUI();
@@ -6561,6 +8948,879 @@ function buildAbilitiesUI() {
     char.combat.DEF = parseInt(e.target.value) || 0;
     refreshUI();
   });
+}
+
+// --- Hero Points System ---
+window.toggleHeroPointsLock = function() {
+  if (typeof char !== 'undefined' && char) {
+    char.heroPointsLocked = !char.heroPointsLocked;
+    window.updateHeroPointsLockUI();
+  }
+};
+
+window.updateHeroPointsLockUI = function() {
+  const isLocked = typeof char !== 'undefined' && char ? !!char.heroPointsLocked : false;
+  const hpInput = document.getElementById("heroPointsInput");
+  const btnDec = document.getElementById("btnDecHeroPoints");
+  const btnInc = document.getElementById("btnIncHeroPoints");
+  const icoLock = document.getElementById("icoLockHeroPoints");
+  const btnLock = document.getElementById("btnLockHeroPoints");
+  if (hpInput) hpInput.disabled = isLocked;
+  if (btnDec) btnDec.disabled = isLocked;
+  if (btnInc) btnInc.disabled = isLocked;
+  if (icoLock) icoLock.textContent = isLocked ? "🔒" : "🔓";
+  if (btnLock) {
+    btnLock.title = isLocked ? "Unlock Hero Points Stepper" : "Lock Hero Points Stepper";
+    btnLock.style.background = isLocked ? "rgba(239, 68, 68, 0.15)" : "";
+    btnLock.style.borderColor = isLocked ? "#ef4444" : "";
+  }
+  if (typeof window.updateHeroPointsUseButtonState === 'function') {
+    window.updateHeroPointsUseButtonState();
+  }
+};
+
+const HERO_POINT_RULES = [
+  // --- Category: Rolls & Actions ---
+  {
+    id: 'improve_skill',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '🎯 Improve Skill Check (+5)',
+    rollType: 'skill',
+    tab: 'tab-skills',
+    tabLabel: 'Skills',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE making a skill check to gain an immediate +5 bonus on the roll. Must be declared before rolling. When selected, you will automatically switch to the Skills tab. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'improve_power',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '⚡ Improve Power Check / Attack (+5)',
+    rollType: 'power',
+    tab: 'tab-powers',
+    tabLabel: 'Powers',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE making a power check or power attack roll to gain an immediate +5 bonus on the roll. Must be declared before rolling. When selected, you will switch to the Powers tab. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'improve_attack',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '⚔️ Improve Attack Roll (+5)',
+    rollType: 'attack',
+    tab: 'tab-basics',
+    tabLabel: 'Main Stats',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE making a melee, ranged, or unarmed attack roll to gain an immediate +5 bonus on the attack. Must be declared before rolling. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'improve_save',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '🛡️ Improve Saving Throw (+5)',
+    rollType: 'save',
+    tab: 'tab-basics',
+    tabLabel: 'Main Stats (Defenses)',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE making a saving throw (Toughness, Fortitude, Reflex, or Will) to gain an immediate +5 bonus. Must be declared before rolling. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'improve_ability',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '🧠 Improve Ability Check (+5)',
+    rollType: 'ability',
+    tab: 'tab-basics',
+    tabLabel: 'Main Stats (Abilities)',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE making an ability check (STR, DEX, CON, INT, WIS, CHA) to gain an immediate +5 bonus. Must be declared before rolling. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'improve_initiative',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '⚡ Improve Initiative Check (+5)',
+    rollType: 'initiative',
+    tab: 'tab-basics',
+    tabLabel: 'Main Stats / Combat',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE rolling initiative to gain an immediate +5 bonus on your initiative check. Must be declared before rolling. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'improve_any',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '🎲 Improve Any Next Roll (+5)',
+    rollType: 'any',
+    tab: null,
+    tabLabel: 'Current Tab',
+    isRollBonus: true,
+    isHouseRule: true,
+    description: 'House Rule: Spend 1 Hero Point BEFORE making your next d20 roll to gain an immediate +5 bonus on whatever roll you perform next. Must be declared before rolling. (In official M&M 2E rules, check bonuses require Extra Effort, which grants +2 and causes fatigue unless negated by a Hero Point).'
+  },
+  {
+    id: 'reroll',
+    category: 'rolls_actions',
+    categoryName: '🎲 Rolls & Actions (House Rules & Reroll)',
+    name: '🔄 Reroll Most Recent Check (Official 2E: Min 11–20)',
+    tab: null,
+    tabLabel: 'Session Log',
+    isImmediate: true,
+    description: 'Official M&M 2E Rule (p. 120): Reroll any die roll you just made and take the better of the two results. If the new roll is 1–10, add 10 to it (giving 11–20). You cannot reroll a natural 1, natural 20, or a reroll. If an eligible previous roll exists, this spends 1 HP immediately and executes the reroll.'
+  },
+
+  // --- Category: Extra Effort & Powers ---
+  {
+    id: 'surge',
+    category: 'extra_effort',
+    categoryName: '⚡ Extra Effort & Powers',
+    name: '⚡ Surge (Extra Standard Action)',
+    tab: null,
+    isImmediate: true,
+    description: 'Gain an immediate extra standard action this round without suffering fatigue from Extra Effort. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'power_boost',
+    category: 'extra_effort',
+    categoryName: '⚡ Extra Effort & Powers',
+    name: '⚡ Power Boost (+2 Ranks for 1 Round)',
+    tab: 'tab-powers',
+    tabLabel: 'Powers',
+    isImmediate: true,
+    description: 'Increase the rank of one of your powers by +2 for one round without suffering fatigue. Switches to the Powers tab and spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'power_stunt',
+    category: 'extra_effort',
+    categoryName: '⚡ Extra Effort & Powers',
+    name: '⚡ Power Stunt (Alternate Power for Scene)',
+    tab: 'tab-powers',
+    tabLabel: 'Powers',
+    isImmediate: true,
+    description: 'Temporarily acquire an Alternate Power effect derived from one of your existing powers for this scene without suffering fatigue. Switches to the Powers tab and spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'extreme_effort',
+    category: 'extra_effort',
+    categoryName: '⚡ Extra Effort & Powers',
+    name: '💪 Extreme Effort (+5 Str/Con Feat)',
+    tab: null,
+    isImmediate: true,
+    description: 'Gain a +5 bonus on a Strength or Constitution check or strength feat without suffering fatigue. Spends 1 Hero Point immediately.'
+  },
+
+  // --- Category: Health & Recovery ---
+  {
+    id: 'recover_stun',
+    category: 'health_recovery',
+    categoryName: '🛡️ Health & Recovery',
+    name: '💫 Recover: Shake off Stunned / Dazed',
+    tab: null,
+    isImmediate: true,
+    description: 'Immediately recover from being stunned or dazed at the start of your turn, allowing you to act normally. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'recover_fatigue',
+    category: 'health_recovery',
+    categoryName: '🛡️ Health & Recovery',
+    name: '🏃 Recover: Remove Fatigue / Exhaustion',
+    tab: null,
+    isImmediate: true,
+    description: 'Immediately remove the fatigued condition or reduce exhausted to fatigued. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'recover_bruise',
+    category: 'health_recovery',
+    categoryName: '🛡️ Health & Recovery',
+    name: '🩹 Recover: Convert Staggered / Heal Bruise',
+    tab: null,
+    isImmediate: true,
+    description: 'Immediately convert a staggered condition to bruised, or heal a lethal injury / bruise condition. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'avoid_death',
+    category: 'health_recovery',
+    categoryName: '🛡️ Health & Recovery',
+    name: '❤️ Avoid Death: Stabilize Instantly',
+    tab: null,
+    isImmediate: true,
+    description: 'Automatically stabilize when dying, or avoid an immediately fatal attack result. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'ignore_condition',
+    category: 'health_recovery',
+    categoryName: '🛡️ Health & Recovery',
+    name: '🛡️ Overcome Condition (1 Round)',
+    tab: null,
+    isImmediate: true,
+    description: 'Ignore the negative effects of a condition (such as blinded, deafened, nauseated, or impaired) for one round. Spends 1 Hero Point immediately.'
+  },
+
+  // --- Category: Tactics & Feats ---
+  {
+    id: 'dodge_bonus',
+    category: 'tactics_feats',
+    categoryName: '⚔️ Tactics & Feats',
+    name: '🛡️ Dodge Defense (+5 Dodge for 1 Round)',
+    tab: null,
+    isImmediate: true,
+    description: 'Spend a hero point to gain a +5 dodge bonus to Defense until the start of your next turn. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'counterattack',
+    category: 'tactics_feats',
+    categoryName: '⚔️ Tactics & Feats',
+    name: '⚔️ Counterattack (Act Out of Turn)',
+    tab: null,
+    isImmediate: true,
+    description: 'When an opponent attacks you, spend a hero point to immediately make a counterattack out of normal initiative order. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'escape',
+    category: 'tactics_feats',
+    categoryName: '⚔️ Tactics & Feats',
+    name: '🔓 Escape Entanglement / Trap',
+    tab: null,
+    isImmediate: true,
+    description: 'Automatically escape from a pin, grapple, snare, or similar entanglement. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'heroic_feat',
+    category: 'tactics_feats',
+    categoryName: '⚔️ Tactics & Feats',
+    name: '⚔️ Heroic Feat (Temporary Feat for 1 Round)',
+    tab: 'tab-feats',
+    tabLabel: 'Feats',
+    isImmediate: true,
+    description: 'Temporarily gain the benefits of a Combat, General, or Skill feat you do not already possess for one round. Switches to the Feats tab and spends 1 Hero Point immediately.'
+  },
+
+  // --- Category: Narrative & Inspiration ---
+  {
+    id: 'inspiration',
+    category: 'narrative',
+    categoryName: '💡 Narrative & Edits',
+    name: '💡 Inspiration (Clue / Hint from GM)',
+    tab: null,
+    isImmediate: true,
+    description: 'The GM gives you a clue, flash of insight, or hint when you are stuck or seeking guidance. Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'dramatic_edit',
+    category: 'narrative',
+    categoryName: '💡 Narrative & Edits',
+    name: '🎬 Dramatic Edit (Minor Scene Edit)',
+    tab: null,
+    isImmediate: true,
+    description: 'Make a minor, plausible edit to your surroundings (e.g., an unlatched window, loose pipe, convenient shadow, or fire extinguisher). Spends 1 Hero Point immediately.'
+  },
+  {
+    id: 'custom',
+    category: 'narrative',
+    categoryName: '💡 Narrative & Edits',
+    name: '✨ Other / Custom Heroic Maneuver',
+    tab: null,
+    isImmediate: true,
+    description: 'Spend 1 Hero Point for a unique heroic maneuver or narrative effect negotiated with and approved by the GM. Spends 1 Hero Point immediately.'
+  }
+];
+
+window.isGameSessionActiveForHP = function() {
+  return true;
+};
+
+window.updateHeroPointsUseButtonState = function() {
+  const btnUse = document.getElementById("btnUseHeroPoint");
+  if (!btnUse) return;
+
+  btnUse.innerHTML = '✨ Use HP';
+
+  if (typeof char !== 'undefined' && char && (typeof char.heroPoints !== 'number' || isNaN(char.heroPoints))) {
+    const hpInput = document.getElementById("heroPointsInput");
+    const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+    const rawVal = hpInput ? parseInt(hpInput.value) : NaN;
+    char.heroPoints = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+  }
+
+  const hasActiveQueue = typeof char !== 'undefined' && char && (
+    (char._pendingHPRollBonus && char._pendingHPRollBonus > 0) ||
+    char._pendingHPOption ||
+    char._pendingHPReroll
+  );
+
+  if (hasActiveQueue) {
+    btnUse.innerHTML = '✨ Active (+5)';
+    btnUse.title = 'Active Hero Point: +5 bonus queued for your next roll!';
+    btnUse.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+    btnUse.style.borderColor = '#d97706';
+    btnUse.style.color = '#fff';
+    btnUse.disabled = false;
+    btnUse.style.opacity = "1";
+    btnUse.style.cursor = "pointer";
+    return;
+  } else {
+    btnUse.style.background = "";
+    btnUse.style.borderColor = "";
+    btnUse.style.color = "";
+  }
+
+  const currentHP = (typeof char !== 'undefined' && char) ? (char.heroPoints || 0) : 0;
+  const allowed = currentHP > 0;
+  btnUse.disabled = !allowed;
+
+  if (currentHP <= 0) {
+    btnUse.title = "No Hero Points remaining to spend!";
+    btnUse.style.opacity = "0.5";
+    btnUse.style.cursor = "not-allowed";
+  } else {
+    btnUse.title = `Spend 1 Hero Point (${currentHP} available)`;
+    btnUse.style.opacity = "1";
+    btnUse.style.cursor = "pointer";
+  }
+};
+
+let activeHPTargetCharId = 'local_hero';
+let selectedHPOptionId = 'improve_skill';
+window.activeHPTargetCharId = activeHPTargetCharId;
+window.selectedHPOptionId = selectedHPOptionId;
+
+window.renderHeroPointOptionsModalBody = function() {
+  const container = document.getElementById("hpOptionsListContainer");
+  if (!container) return;
+
+  const catFilter = document.getElementById("selHPCategoryFilter")?.value || 'all';
+  const searchTxt = (document.getElementById("txtHPSearch")?.value || '').trim().toLowerCase();
+
+  const filtered = HERO_POINT_RULES.filter(opt => {
+    if (catFilter !== 'all' && opt.category !== catFilter) return false;
+    if (searchTxt) {
+      const matchName = opt.name.toLowerCase().includes(searchTxt);
+      const matchDesc = opt.description.toLowerCase().includes(searchTxt);
+      const matchCat = opt.categoryName.toLowerCase().includes(searchTxt);
+      if (!matchName && !matchDesc && !matchCat) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 24px 0; font-size: 13px; font-style: italic;">No Hero Point options match "${escapeHtml(searchTxt)}".</div>`;
+    return;
+  }
+
+  if (!filtered.some(o => o.id === selectedHPOptionId)) {
+    selectedHPOptionId = filtered[0].id;
+    window.selectedHPOptionId = selectedHPOptionId;
+  }
+
+  // Group by category
+  const groups = {};
+  filtered.forEach(opt => {
+    if (!groups[opt.categoryName]) groups[opt.categoryName] = [];
+    groups[opt.categoryName].push(opt);
+  });
+
+  let html = '';
+  for (const [groupTitle, items] of Object.entries(groups)) {
+    html += `
+      <div class="hp-category-group">
+        <div class="hp-category-title">${groupTitle}</div>
+        ${items.map(opt => {
+          const isSel = opt.id === selectedHPOptionId;
+          const badgeHtml = opt.tabLabel 
+            ? `<span class="badge hp-option-badge" style="background: rgba(99, 102, 241, 0.15); color: var(--accent-primary); border: 1px solid rgba(99, 102, 241, 0.3);">➔ ${escapeHtml(opt.tabLabel)}</span>`
+            : (opt.isImmediate ? `<span class="badge hp-option-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">Instant</span>` : '');
+          const rollBadgeHtml = opt.isRollBonus
+            ? `<span class="badge hp-option-badge" style="background: rgba(180, 83, 9, 0.15); color: #b45309; border: 1px solid rgba(180, 83, 9, 0.3);">+5 Before Roll</span>`
+            : '';
+          const houseRuleBadgeHtml = opt.isHouseRule
+            ? `<span class="badge hp-option-badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">House Rule</span>`
+            : '';
+
+          return `
+            <div class="hp-option-card ${isSel ? 'selected' : ''}" onclick="window.selectHeroPointOption('${opt.id}')">
+              <div class="hp-option-header">
+                <div class="hp-option-main">
+                  <input type="radio" name="hp_option_choice" value="${opt.id}" ${isSel ? 'checked' : ''} style="margin: 0; pointer-events: none;">
+                  <span class="hp-option-title">${opt.name}</span>
+                  ${badgeHtml}
+                  ${rollBadgeHtml}
+                  ${houseRuleBadgeHtml}
+                </div>
+                <button type="button" class="hp-help-btn" onclick="window.toggleHPOptionHelp(event, '${opt.id}')" title="Click for official M&M 2E rule details">?</button>
+              </div>
+              <div id="hpHelp_${opt.id}" class="hp-help-box" style="display: none;">
+                ${escapeHtml(opt.description)}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+  window.updateSelectedOptionNotice();
+};
+window.populateHeroPointOptions = window.renderHeroPointOptionsModalBody;
+
+window.filterHeroPointOptions = function() {
+  window.renderHeroPointOptionsModalBody();
+};
+
+window.selectHeroPointOption = function(optId) {
+  selectedHPOptionId = optId;
+  window.selectedHPOptionId = selectedHPOptionId;
+  const cards = document.querySelectorAll('.hp-option-card');
+  cards.forEach(card => card.classList.remove('selected'));
+  const radios = document.querySelectorAll('input[name="hp_option_choice"]');
+  radios.forEach(r => {
+    if (r.value === optId) {
+      r.checked = true;
+      r.closest('.hp-option-card')?.classList.add('selected');
+    } else {
+      r.checked = false;
+    }
+  });
+  window.updateSelectedOptionNotice();
+};
+
+window.toggleHPOptionHelp = function(e, optId) {
+  if (e) e.stopPropagation();
+  const box = document.getElementById('hpHelp_' + optId);
+  if (!box) return;
+  const isHidden = box.style.display === 'none' || !box.style.display;
+  box.style.display = isHidden ? 'block' : 'none';
+};
+
+window.updateSelectedOptionNotice = function() {
+  const lbl = document.getElementById("lblHPSelectedDestination");
+  if (!lbl) return;
+  const opt = HERO_POINT_RULES.find(o => o.id === selectedHPOptionId);
+  if (!opt) {
+    lbl.innerHTML = `<span>Select an option above to proceed.</span>`;
+    return;
+  }
+  if (opt.isRollBonus) {
+    const tabName = opt.tabLabel || 'applicable tab';
+    lbl.innerHTML = `
+      <span style="color: var(--accent-primary); font-weight: 600;">
+        🎯 Selected: <strong>${escapeHtml(opt.name)}</strong>. Will switch to <strong>${escapeHtml(tabName)}</strong> tab.
+        <span style="color: var(--text-muted); font-weight: normal;">(Spends 1 HP &amp; scrolls to pertinent roll section with +5 bonus)</span>
+      </span>
+    `;
+  } else if (opt.id === 'reroll') {
+    lbl.innerHTML = `
+      <span style="color: #b45309; font-weight: 600;">
+        🔄 Selected: <strong>Reroll Most Recent Check</strong> (M&M 2E 11–20 Floor Rule). Spends 1 HP immediately.
+      </span>
+    `;
+  } else {
+    lbl.innerHTML = `
+      <span style="color: #10b981; font-weight: 600;">
+        ⚡ Selected: <strong>${escapeHtml(opt.name)}</strong>. Spends 1 HP immediately upon confirmation.${opt.tabLabel ? ` (Switches to ${opt.tabLabel} tab)` : ''}
+      </span>
+    `;
+  }
+};
+
+window.scrollToPertinentRollSection = function(optionId, tabId) {
+  setTimeout(() => {
+    let targetEl = null;
+
+    if (optionId === 'improve_attack') {
+      const attacksBox = document.getElementById("attacksListContainer");
+      const meleeBtn = document.getElementById("btnRollMeleeAtk");
+      targetEl = attacksBox?.closest('.collapsible-panel') || meleeBtn?.closest('.collapsible-panel') || attacksBox || meleeBtn;
+    } else if (optionId === 'improve_save' || optionId === 'dodge_bonus') {
+      const toughBtn = document.getElementById("btnRollSave_Toughness");
+      const reflexBtn = document.getElementById("btnRollSave_Reflex");
+      targetEl = toughBtn?.closest('.collapsible-panel') || reflexBtn?.closest('.collapsible-panel') || toughBtn || reflexBtn;
+    } else if (optionId === 'improve_ability') {
+      const abilBox = document.getElementById("abilitiesContainer");
+      targetEl = abilBox?.closest('.collapsible-panel') || abilBox;
+    } else if (optionId === 'improve_initiative') {
+      const initBtn = document.getElementById("btnRollInitMisc") || document.getElementById("btnRollMeleeAtk");
+      targetEl = initBtn?.closest('.collapsible-panel') || initBtn;
+    } else if (optionId === 'improve_skill') {
+      targetEl = document.getElementById("skillsContainer") || document.getElementById("txtSearchSkills");
+    } else if (optionId === 'improve_power' || optionId === 'power_boost' || optionId === 'power_stunt') {
+      targetEl = document.getElementById("powersContainer");
+    } else if (optionId === 'heroic_feat') {
+      targetEl = document.getElementById("featsContainer");
+    }
+
+    if (targetEl) {
+      // If inside a collapsed panel, ensure it is expanded!
+      const panel = targetEl.classList.contains('collapsible-panel') ? targetEl : targetEl.closest('.collapsible-panel');
+      if (panel && panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+      }
+
+      // Smooth scroll to the element
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Apply pulsing highlight animation to draw user's attention
+      targetEl.classList.remove('hp-target-highlight');
+      void targetEl.offsetWidth; // Trigger DOM reflow to restart animation
+      targetEl.classList.add('hp-target-highlight');
+      setTimeout(() => {
+        targetEl.classList.remove('hp-target-highlight');
+      }, 3600);
+    }
+  }, 120);
+};
+
+window.openUseHeroPointModal = function(charId = 'local_hero') {
+  activeHPTargetCharId = charId || 'local_hero';
+  window.activeHPTargetCharId = activeHPTargetCharId;
+
+  // If targeting an NPC from campaign, automatically load into editor
+  if (typeof CampaignManager !== 'undefined' && activeHPTargetCharId && activeHPTargetCharId !== 'local_hero' && activeHPTargetCharId !== 'local_player') {
+    const camp = CampaignManager.getActiveCampaign();
+    const npc = (camp?.npcs || []).find(n => n.id === activeHPTargetCharId || n.name === activeHPTargetCharId) ||
+                (camp?.encounterEnemies || []).find(e => e.id === activeHPTargetCharId || e.name === activeHPTargetCharId);
+    if (npc && window.activeEditorNpcId !== npc.id && typeof window.gmLoadNpcToEditor === 'function') {
+      window.gmLoadNpcToEditor(npc.id);
+    }
+  }
+
+  let targetHP = 0;
+  let targetName = 'Hero';
+  const isLocalTarget = activeHPTargetCharId === 'local_hero' || activeHPTargetCharId === 'local_player' ||
+    (typeof char !== 'undefined' && char && char.name && (
+      (typeof activeHPTargetCharId === 'string' && activeHPTargetCharId.toLowerCase() === char.name.toLowerCase()) ||
+      (char.id && activeHPTargetCharId === char.id)
+    ));
+
+  if (isLocalTarget) {
+    if (typeof char !== 'undefined' && char && (typeof char.heroPoints !== 'number' || isNaN(char.heroPoints))) {
+      const hpInput = document.getElementById("heroPointsInput");
+      const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+      const rawVal = hpInput ? parseInt(hpInput.value) : NaN;
+      char.heroPoints = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+    }
+    targetHP = (typeof char !== 'undefined' && char) ? (char.heroPoints || 0) : 0;
+    targetName = (typeof char !== 'undefined' && char && char.name) ? char.name : 'Hero';
+  } else {
+    const camp = (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null;
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === activeHPTargetCharId || p.characterName === activeHPTargetCharId);
+    const npc = (camp?.npcs || []).find(n => n.id === activeHPTargetCharId || n.name === activeHPTargetCharId);
+    const target = player || npc;
+    targetHP = target ? (target.heroPoints !== undefined ? target.heroPoints : 1) : 0;
+    targetName = target ? (target.characterName || target.name || 'Character') : 'Character';
+  }
+
+  if (targetHP <= 0) {
+    if (typeof showToast === 'function') showToast(`No Hero Points remaining for ${targetName}!`, "warning");
+    return;
+  }
+
+  const modal = document.getElementById("useHeroPointModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("useHeroPointModalTitle") || modal.querySelector("h3");
+  if (titleEl) {
+    titleEl.textContent = `✨ Hero Point Options — ${targetName}`;
+  }
+
+  const lblCurrentHP = document.getElementById("lblModalCurrentHP");
+  if (lblCurrentHP) lblCurrentHP.textContent = targetHP;
+
+  const txtDetails = document.getElementById("txtHPDetails");
+  if (txtDetails) txtDetails.value = "";
+
+  const txtSearch = document.getElementById("txtHPSearch");
+  if (txtSearch) txtSearch.value = "";
+
+  const selFilter = document.getElementById("selHPCategoryFilter");
+  if (selFilter) selFilter.value = "all";
+
+  window.renderHeroPointOptionsModalBody();
+  modal.classList.add("active");
+};
+
+window.closeUseHeroPointModal = function() {
+  const modal = document.getElementById("useHeroPointModal");
+  if (modal) modal.classList.remove("active");
+};
+
+window.confirmUseHeroPoint = function() {
+  const opt = HERO_POINT_RULES.find(o => o.id === selectedHPOptionId) || HERO_POINT_RULES[0];
+  if (!opt) return;
+
+  const targetCharId = activeHPTargetCharId || 'local_hero';
+  let targetHP = 0;
+  let targetChar = (typeof char !== 'undefined' && char) ? char : null;
+
+  const isLocalTarget = targetCharId === 'local_hero' || targetCharId === 'local_player' ||
+    (typeof char !== 'undefined' && char && char.name && (
+      (typeof targetCharId === 'string' && targetCharId.toLowerCase() === char.name.toLowerCase()) ||
+      (char.id && targetCharId === char.id)
+    ));
+
+  if (isLocalTarget) {
+    if (char && (typeof char.heroPoints !== 'number' || isNaN(char.heroPoints))) {
+      const hpInput = document.getElementById("heroPointsInput");
+      const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+      const rawVal = hpInput ? parseInt(hpInput.value) : NaN;
+      char.heroPoints = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+    }
+    targetHP = char ? (char.heroPoints || 0) : 0;
+    targetChar = char;
+  } else if (typeof CampaignManager !== 'undefined') {
+    const camp = CampaignManager.getActiveCampaign();
+    const player = (camp?.acceptedPlayers || []).find(p => p.id === targetCharId || p.characterName === targetCharId);
+    const npc = (camp?.npcs || []).find(n => n.id === targetCharId || n.name === targetCharId);
+    const target = player || npc;
+    targetHP = target ? (target.heroPoints !== undefined ? target.heroPoints : 1) : 0;
+    if (target) targetChar = target.characterSheet || target.characterData || target;
+  }
+
+  if (targetHP <= 0) {
+    if (typeof showToast === 'function') showToast("No Hero Points remaining to spend!", "warning");
+    window.closeUseHeroPointModal();
+    return;
+  }
+
+  const txtDetails = document.getElementById("txtHPDetails");
+  const extraNotes = txtDetails && txtDetails.value.trim() ? ` (${txtDetails.value.trim()})` : '';
+  const detailString = `${opt.name}${extraNotes}`;
+
+  // Case 1: Roll-influencing option (+5 bonus)
+  if (opt.isRollBonus) {
+    if (typeof window.sessionSpendHeroPoint === 'function') {
+      window.sessionSpendHeroPoint(targetCharId, detailString);
+    }
+    if (targetChar) {
+      targetChar._pendingHPRollBonus = 5;
+      targetChar._pendingHPOption = {
+        optionId: opt.id,
+        requiredType: opt.rollType, // 'skill' | 'power' | 'attack' | 'save' | 'ability' | 'initiative' | 'any'
+        bonus: 5,
+        label: opt.name.replace(/^[^\w]+/, '').trim(),
+        targetCharId: targetCharId,
+        detailString: detailString,
+        spent: true
+      };
+    }
+
+    window.closeUseHeroPointModal();
+
+    // Switch to the applicable tab and scroll to the pertinent roll section!
+    if (opt.tab) {
+      const tabBtn = document.querySelector(`.tab-btn[data-tab="${opt.tab}"]`);
+      if (tabBtn) tabBtn.click();
+      if (typeof window.scrollToPertinentRollSection === 'function') {
+        window.scrollToPertinentRollSection(opt.id, opt.tab);
+      }
+    }
+
+    if (typeof showToast === 'function') {
+      showToast(`🎯 Expended 1 Hero Point! +5 bonus applied to your next ${opt.rollType.toUpperCase()} check.`, "info");
+    }
+    if (typeof window.updateHeroPointsUseButtonState === 'function') {
+      window.updateHeroPointsUseButtonState();
+    }
+    return;
+  }
+
+  // Case 2: Reroll previous roll
+  if (opt.id === 'reroll') {
+    const lastConfig = window.lastRollConfig;
+    const canRerollRecent = isLocalTarget &&
+      lastConfig && !lastConfig.isNat1 && !lastConfig.isNat20 && !lastConfig.isHPRerolled;
+
+    if (canRerollRecent) {
+      // Spend the Hero Point immediately for Reroll
+      if (typeof window.sessionSpendHeroPoint === 'function') {
+        window.sessionSpendHeroPoint(targetCharId, 'Hero Point spent for Reroll');
+      }
+      // Execute M&M 2E floor rule (p. 120)
+      const rawD20 = Math.floor(Math.random() * 20) + 1;
+      const wasFloored = rawD20 <= 10;
+      const flooredD20 = wasFloored ? rawD20 + 10 : rawD20;
+      const baseMod = (lastConfig.baseMod !== undefined) ? lastConfig.baseMod : ((lastConfig.mod || 0) - (lastConfig.hpBonus || 0));
+      const priorHpBonus = lastConfig.hpBonus || 0;
+      const newTotal = flooredD20 + baseMod + priorHpBonus;
+      const originalTotal = lastConfig.total;
+      const finalTotal = Math.max(originalTotal, newTotal);
+      const keptOriginal = originalTotal > newTotal;
+
+      lastConfig.isHPRerolled = true;
+      lastConfig.rawD20 = rawD20;
+      lastConfig.d20 = flooredD20;
+      lastConfig.baseMod = baseMod;
+      lastConfig.mod = baseMod + priorHpBonus;
+      lastConfig.total = finalTotal;
+      lastConfig.isNat1 = false;
+      lastConfig.isNat20 = (!wasFloored && rawD20 === 20);
+
+      const rerollDesc = wasFloored 
+        ? `Rolled ${rawD20} (+10 floor = ${flooredD20})` 
+        : `Rolled ${flooredD20}`;
+      
+      const outcomeDesc = keptOriginal
+        ? `${rerollDesc} -> ${newTotal} (Original ${originalTotal} kept)`
+        : `${rerollDesc} -> ${newTotal} (Kept)`;
+
+      lastConfig.rerollInfo = outcomeDesc;
+      lastConfig.hpAnnouncement = `HP Reroll: ${outcomeDesc}`;
+
+      const cleanBaseTitle = (lastConfig.rollType || lastConfig.title || 'Check')
+        .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+        .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+        .replace(/^🎲\s*/, '')
+        .trim();
+      lastConfig.rollType = `${cleanBaseTitle} (✨ HP Reroll)`;
+      lastConfig.title = lastConfig.rollType;
+
+      if (!lastConfig.detailsHtml) lastConfig.detailsHtml = "";
+      lastConfig.detailsHtml += `
+        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color); color: #b45309; font-size: var(--font-size-secondary);">
+          <strong>✨ HP Reroll:</strong> ${outcomeDesc}
+        </div>
+      `;
+
+      window.closeUseHeroPointModal();
+      window.showDiceRollModal(lastConfig);
+      if (typeof showToast === 'function') {
+        showToast(`✨ HP Reroll applied! Kept result is ${finalTotal}`, "info");
+      }
+      return;
+    } else {
+      // Queue reroll for next roll
+      if (typeof window.sessionSpendHeroPoint === 'function') {
+        window.sessionSpendHeroPoint(targetCharId, detailString);
+      }
+      if (targetChar) {
+        targetChar._pendingHPReroll = true;
+        targetChar._pendingHPOption = {
+          optionId: 'reroll',
+          requiredType: 'any',
+          isReroll: true,
+          label: 'Reroll (Min 11–20)',
+          targetCharId: targetCharId,
+          detailString: detailString,
+          spent: true
+        };
+      }
+      window.closeUseHeroPointModal();
+      if (typeof showToast === 'function') {
+        showToast("🎲 Expended 1 Hero Point! Reroll queued for your next roll! (Min 11–20)", "info");
+      }
+      if (typeof window.updateHeroPointsUseButtonState === 'function') {
+        window.updateHeroPointsUseButtonState();
+      }
+      return;
+    }
+  }
+
+  // Case 3: Immediate effect (Surge, Recovery, Dodge Bonus, Escape, Inspiration, etc.)
+  if (typeof window.sessionSpendHeroPoint === 'function') {
+    window.sessionSpendHeroPoint(targetCharId, detailString);
+  }
+  window.closeUseHeroPointModal();
+
+  // Switch tab and scroll to pertinent section if applicable
+  if (opt.tab) {
+    const tabBtn = document.querySelector(`.tab-btn[data-tab="${opt.tab}"]`);
+    if (tabBtn) tabBtn.click();
+    if (typeof window.scrollToPertinentRollSection === 'function') {
+      window.scrollToPertinentRollSection(opt.id, opt.tab);
+    }
+  }
+
+  if (typeof window.updateHeroPointsUseButtonState === 'function') {
+    window.updateHeroPointsUseButtonState();
+  }
+};
+
+function setupHeroPointsSystem() {
+  const hpInput = document.getElementById("heroPointsInput");
+  if (hpInput) {
+    hpInput.addEventListener("input", (e) => {
+      char.heroPoints = Math.max(0, parseInt(e.target.value) || 0);
+      refreshUI();
+    });
+  }
+
+  const btnLock = document.getElementById("btnLockHeroPoints");
+  if (btnLock) {
+    btnLock.onclick = (e) => {
+      e.preventDefault();
+      window.toggleHeroPointsLock();
+    };
+  }
+
+  const btnUse = document.getElementById("btnUseHeroPoint");
+  if (btnUse) {
+    btnUse.onclick = (e) => {
+      e.preventDefault();
+      window.openUseHeroPointModal('local_hero');
+    };
+  }
+
+  const selCategory = document.getElementById("selHPCategory");
+  if (selCategory) {
+    selCategory.onchange = () => window.populateHeroPointOptions();
+  }
+
+  const selOption = document.getElementById("selHPOption");
+  if (selOption) {
+    selOption.onchange = () => window.updateHeroPointDescription();
+  }
+
+  const txtSearch = document.getElementById("txtHPSearch");
+  if (txtSearch) {
+    txtSearch.addEventListener("input", () => {
+      if (typeof window.filterHeroPointOptions === 'function') {
+        window.filterHeroPointOptions();
+      }
+    });
+  }
+
+  const selCategoryFilter = document.getElementById("selHPCategoryFilter");
+  if (selCategoryFilter) {
+    selCategoryFilter.addEventListener("change", () => {
+      if (typeof window.filterHeroPointOptions === 'function') {
+        window.filterHeroPointOptions();
+      }
+    });
+  }
+
+  const btnConfirm = document.getElementById("btnConfirmUseHP");
+  if (btnConfirm) {
+    btnConfirm.onclick = (e) => {
+      e.preventDefault();
+      window.confirmUseHeroPoint();
+    };
+  }
+
+  const btnCancel = document.getElementById("btnCancelUseHP");
+  if (btnCancel) {
+    btnCancel.onclick = (e) => {
+      e.preventDefault();
+      window.closeUseHeroPointModal();
+    };
+  }
+
+  const btnClose = document.getElementById("btnCloseUseHeroPointModal");
+  if (btnClose) {
+    btnClose.onclick = (e) => {
+      e.preventDefault();
+      window.closeUseHeroPointModal();
+    };
+  }
+
+  window.updateHeroPointsLockUI();
+  window.updateHeroPointsUseButtonState();
 }
 
 function setupDefenseSteppers() {
@@ -6651,7 +9911,7 @@ function buildSkillsUI() {
     const val = char.skills[item.name] || 0;
     const enhSkill = enhancedSkills[item.name] || 0;
     const isEnhancedOnly = val === 0 && enhSkill > 0;
-    const skillNameStyle = val > 0 ? 'color: #f59e0b;' : '';
+    const skillNameStyle = val > 0 ? 'color: #b45309;' : '';
 
     let featsArray = item.relatedFeats ? [...item.relatedFeats] : [];
     
@@ -6710,7 +9970,7 @@ function buildSkillsUI() {
           </div>
         </td>
         <td>${item.ability}</td>
-        <td>${item.untrained ? `<span style="color:#10b981; font-weight:600;">Yes</span>` : `<span style="color:#f59e0b; font-weight:600;">Trained Only</span>`}</td>
+        <td>${item.untrained ? `<span style="color:#10b981; font-weight:600;">Yes</span>` : `<span style="color:#b45309; font-weight:600;">Trained Only</span>`}</td>
         <td id="skill_base_${idSafe}">0</td>
         <td>
           <div class="stepper-group">
@@ -7643,7 +10903,7 @@ function buildAdvantagesUI() {
     const detailVal = char.featDetails ? (char.featDetails[adv.name] || "") : "";
     const baseKey = adv.baseName || (adv.name.includes(" (") ? adv.name.split(" (")[0].trim() : adv.name.trim());
 
-    const advNameStyle = effVal > 0 ? 'color: #f59e0b;' : '';
+    const advNameStyle = effVal > 0 ? 'color: #b45309;' : '';
     const enhBadge = enhFeat > 0 ? ` <span class="skill-adv-tag active-adv-tag" style="background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #10b981; font-weight: 600; font-size: var(--font-size-tags); padding: 1px 5px;" title="Enhanced Trait">[+${enhFeat} Enhanced]</span>` : '';
 
     let detailCellHTML = `<span class="secondary-text">—</span>`;
@@ -8016,9 +11276,99 @@ window.handleFeatDblClick = function(featName, event) {
   window.confirmAddFeat();
 };
 
+window.initModalSplitter = function(modalId, topPaneId, dividerId, bottomPaneId) {
+  const modal = document.getElementById(modalId);
+  const topPane = document.getElementById(topPaneId);
+  const divider = document.getElementById(dividerId);
+  const bottomPane = document.getElementById(bottomPaneId);
+  if (!modal || !topPane || !divider || !bottomPane) return;
+  if (divider._splitterInitialized) return;
+  divider._splitterInitialized = true;
+
+  let isDragging = false;
+  let startY = 0;
+  let startHeight = 0;
+  let availableHeight = 0;
+  let defaultHeight = 0;
+  let maxHeight = 0;
+  let minHeight = 80;
+
+  function onPointerDown(e) {
+    if (e.type === 'mousedown' && e.button !== 0) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const body = topPane.parentElement;
+    if (!body) return;
+
+    isDragging = true;
+    divider.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'row-resize';
+
+    startY = clientY;
+    startHeight = topPane.offsetHeight;
+
+    const bodyHeight = body.clientHeight;
+    const dividerHeight = divider.offsetHeight || 10;
+    availableHeight = Math.max(120, bodyHeight - dividerHeight - 12);
+
+    // Default height is 50% of available space
+    defaultHeight = availableHeight * 0.5;
+    // Top pane can increase by up to 50% from default: default * 1.5 = 75% of available space
+    maxHeight = Math.min(availableHeight - 60, defaultHeight * 1.5);
+    minHeight = Math.max(70, defaultHeight * 0.4);
+
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchcancel', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!isDragging) return;
+    if (e.cancelable && e.type === 'touchmove') e.preventDefault();
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaY = clientY - startY;
+    const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + deltaY));
+
+    topPane.style.flex = `0 0 ${newHeight}px`;
+    topPane.style.height = `${newHeight}px`;
+    bottomPane.style.flex = '1 1 0';
+    bottomPane.style.minHeight = '0';
+  }
+
+  function onPointerUp() {
+    if (!isDragging) return;
+    isDragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    window.removeEventListener('mousemove', onPointerMove);
+    window.removeEventListener('touchmove', onPointerMove);
+    window.removeEventListener('mouseup', onPointerUp);
+    window.removeEventListener('touchend', onPointerUp);
+    window.removeEventListener('touchcancel', onPointerUp);
+  }
+
+  function onDblClick(e) {
+    if (e) e.stopPropagation();
+    // Reset top and bottom panes to default 50/50 flex
+    topPane.style.flex = '1 1 0';
+    topPane.style.height = '';
+    bottomPane.style.flex = '1 1 0';
+    bottomPane.style.height = '';
+  }
+
+  divider.addEventListener('mousedown', onPointerDown);
+  divider.addEventListener('touchstart', onPointerDown, { passive: true });
+  divider.addEventListener('dblclick', onDblClick);
+};
+
 window.openAddFeatModal = function(defaultCategory) {
   const modal = document.getElementById("addFeatModal");
   if (!modal) return;
+  window.initModalSplitter('addFeatModal', 'boxFeatTopPane', 'divFeatModalDivider', 'boxFeatPreview');
   window.updateTraitModalPosition();
   if (window.selectedFeatCheckboxes) window.selectedFeatCheckboxes.clear();
   window.updateFeatModalAddButtonText();
@@ -9357,6 +12707,7 @@ window.handleSkillDblClick = function(skillName, event) {
 window.openAddSkillModal = function() {
   const modal = document.getElementById("addSkillModal");
   if (!modal) return;
+  window.initModalSplitter('addSkillModal', 'boxSkillTopPane', 'divSkillModalDivider', 'boxSkillPreview');
   window.updateTraitModalPosition();
   if (window.selectedSkillCheckboxes) window.selectedSkillCheckboxes.clear();
   window.updateSkillModalAddButtonText();
@@ -10249,7 +13600,22 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
   }
 
   try {
+    const idPrefix = isBlueprint ? 'bp_' : 'pow_';
     container.innerHTML = powersList.map((powerContainer, pIdx) => {
+    const isDeviceContainer = powerContainer.containerType === "device_hard" || 
+                              powerContainer.containerType === "device_easy" || 
+                              powerContainer.planType === "device" ||
+                              (Array.isArray(powerContainer.effects) && powerContainer.effects.some(e => e.effectName === "Device" || e.name === "Device" || e.isDevice));
+    let deviceBadgeHtml = "";
+    if (isDeviceContainer) {
+      let deviceLabel = "⚙️ Device";
+      if (powerContainer.containerType === "device_hard") {
+        deviceLabel = "⚙️ Device (Hard to Lose)";
+      } else if (powerContainer.containerType === "device_easy") {
+        deviceLabel = "⚙️ Device (Easy to Lose)";
+      }
+      deviceBadgeHtml = `<span class="badge badge-device" title="Device Container: Independent traits and powers granted by an item or equipment">${deviceLabel}</span>`;
+    }
     const containerCost = char.calculateTotalPowerCost(powerContainer);
     const isCollapsed = powerContainer.collapsed ? 'collapsed' : '';
     const summaryText = powerContainer.effects.map(e => {
@@ -10308,7 +13674,8 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
         else {
           shortDescText = effectData.shortDesc || "";
           if (!shortDescText && effectData.fullText) {
-            shortDescText = (effectData.fullText.length <= 300) ? effectData.fullText : (effectData.fullText.substring(0, 280) + "...");
+            const cleanText = effectData.fullText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+            shortDescText = (cleanText.length <= 280) ? cleanText : (cleanText.substring(0, 277) + "...");
           }
         }
 
@@ -10368,7 +13735,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
         ];
         const getProgMult = (r) => PROGRESSION_VALUES[Math.min(Math.max(0, r), PROGRESSION_VALUES.length - 1)] || 1;
 
-        const hasAreaMod = effect.modifiers ? effect.modifiers.some(m => m.name === "Area" || m.name.startsWith("Area (") || m.name.includes("Area")) : false;
+        const hasAreaMod = effect.modifiers ? effect.modifiers.some(m => !m.name.startsWith("Progression") && ((m.category === "extra" && m.name.includes("Area")) || m.name === "Area" || m.name.startsWith("Area (") || m.name.includes("Area (") || m.name.startsWith("Targeted Area") || m.name.startsWith("General Area"))) : false;
         const hasPortalMod = effect.modifiers ? effect.modifiers.some(m => m.name === "Portal") : false;
 
         const isDimPocket = effect.name === "Dimensional Pocket" || 
@@ -10604,17 +13971,18 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
           const distData = MEASUREMENT_TABLE[Math.min(30, Math.max(1, effDistRank)).toString()] || MEASUREMENT_TABLE["20"];
 
           if (mData && effect.effectName) {
-            const showDist = (effectiveRange === "Rank" || effectiveRange === "Extended" || hasAreaMod || hasPortalMod || (effectData && effectData.type === "Movement") || effect.effectName === "Teleport" || effect.effectName === "Elongation" || effect.name === "Elasticity");
-            const showMass = (massDisplay !== "" || ["Move Object", "Super-Strength", "Transform"].includes(effect.effectName) || isDimPocket || isAnimateObjects);
-            const showTable = showDist || showMass || ["Move Object", "Create Object", "Insubstantial"].includes(effect.effectName);
+            const showDist = Boolean(effectiveRange === "Rank" || effectiveRange === "Extended" || effect.effectName === "Elongation" || effect.name === "Elasticity");
+            const showMass = Boolean(massDisplay !== "" || ["Move Object", "Super-Strength", "Transform"].includes(effect.effectName) || isDimPocket || isAnimateObjects || progMassRanks > 0 || (effect.modifiers && effect.modifiers.some(m => m.name.startsWith("Progression (Mass)"))));
+            const showTime = Boolean(effect.effectName === "Quickness" || effect.name === "Quickness" || progDurRanks > 0 || (effect.modifiers && effect.modifiers.some(m => m.name.includes("Slow Fade") || m.name.includes("Progression (Duration)") || m.name.includes("Progression (Time)"))));
+            const showTable = Boolean((showDist || showMass || showTime) && effect.effectName !== "Enhanced Movement");
             
-            if (showTable && effect.effectName !== "Enhanced Movement") {
+            if (showTable) {
                 measurementHtml = `
                   <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); display: flex; gap: 16px; flex-wrap: wrap; font-size: calc(var(--font-size-secondary) * 0.95); font-family: monospace;">
-                    <strong style="color: var(--accent-primary);">Table Equivalents:</strong>
+                    <strong style="color: var(--accent-primary);">Table 2-1 Benchmarks:</strong>
                     ${showDist ? `<span><strong>Dist:</strong> ${distData ? distData.dist_imp : 'Special'}</span>` : ''}
                     ${showMass ? `<span><strong>Mass:</strong> ${massData && massData.mass_imp ? massData.mass_imp : (massDisplay || 'Special')}</span>` : ''}
-                    <span><strong>Time:</strong> ${mData ? mData.time : 'Special'}</span>
+                    ${showTime ? `<span><strong>Time:</strong> ${mData ? mData.time : 'Special'}</span>` : ''}
                   </div>
                 `;
             }
@@ -11082,7 +14450,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
               <input type="number" class="stepper-input" style="width: 50px !important; min-width: 50px !important; font-size: var(--font-size-minor-controls); background: transparent; border: none;" value="${sRank}" readonly title="${isSubRankLocked ? 'Rank Locked by Tier' : (isFlatAdvantage ? 'Rank 1 (Standard Feat)' : 'Rank Locked')}">
             `;
 
-            let cardStyle = "background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;";
+            let cardStyle = "background: var(--bg-card); border: 1.5px solid var(--border-power, var(--border-color)); border-radius: 4px; padding: 8px 10px;";
             if (effect.effectName === "Enhanced Trait") {
                 cardStyle += " flex: 1; min-width: calc(50% - 10px);";
             } else {
@@ -11537,13 +14905,13 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
                 <span><strong>${mod.name}</strong> (${isPositive ? '+' : '-'}${modData.cost}${rateStr})</span>
                 ${needsRanks ? `
                   <div class="modifier-stepper-group">
-                    <button type="button" class="modifier-stepper-btn" onclick="stepModifierRank(${pIdx}, ${eIdx}, ${mIdx}, -1, 1, ${maxR})">−</button>
+                    <button type="button" class="modifier-stepper-btn" onclick="stepModifierRank(${pIdx}, ${eIdx}, ${mIdx}, -1, 1, ${maxR}, ${isBlueprint})">−</button>
                     <span class="modifier-stepper-val">${currentRanks}</span>
-                    <button type="button" class="modifier-stepper-btn" onclick="stepModifierRank(${pIdx}, ${eIdx}, ${mIdx}, 1, 1, ${maxR})">+</button>
+                    <button type="button" class="modifier-stepper-btn" onclick="stepModifierRank(${pIdx}, ${eIdx}, ${mIdx}, 1, 1, ${maxR}, ${isBlueprint})">+</button>
                   </div>
                 ` : ''}
                 <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85);" onclick="showModifierInfo('${mod.name}', '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}')" title="View Modifier Rule">?</button>
-                <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 2px;" onclick="removeModifier(${pIdx}, ${eIdx}, ${mIdx})" title="Remove Modifier">✕</button>
+                <button type="button" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 2px;" onclick="removeModifier(${pIdx}, ${eIdx}, ${mIdx}, ${isBlueprint})" title="Remove Modifier">✕</button>
               </div>
             `;
           }).join(" ");
@@ -11683,7 +15051,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
 
         // Container Powers (Battle Form, Alternate Form, Container)
         let containerPowersHtml = "";
-        const isContainer = (typeof CharacterModel !== 'undefined' && CharacterModel.isContainerEffect) ? CharacterModel.isContainerEffect(effect) : (effect.effectName === "Battle Form" || effect.effectName === "Container");
+        const isContainer = (typeof CharacterModel !== 'undefined' && CharacterModel.isContainerEffect) ? CharacterModel.isContainerEffect(effect) : (effect.effectName === "Battle Form" || effect.effectName === "Container" || effect.effectName === "Device");
         if (isContainer) {
           if (!effect.containedPowers) effect.containedPowers = [];
           const pool = (typeof CharacterModel !== 'undefined' && CharacterModel.getContainerPool) ? CharacterModel.getContainerPool(effect) : (rankNum * 5);
@@ -11767,29 +15135,44 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
         // Companion In-Context Actions
         let companionButtonHtml = "";
         const isSummonEff = effect.effectName === "Summon";
-        const isDupEff = effect.effectName === "Duplication" || (effect.name && effect.name.includes("Duplication"));
+        const isDupEff = effect.effectName === "Duplication" || effect.effectName === "Duplicate" || (effect.name && /duplicat/i.test(effect.name));
         const hasMetamorphEff = effect.effectName === "Morph" && effect.modifiers && effect.modifiers.some(m => m.name && m.name.includes("Metamorph"));
 
         if (isSummonEff) {
           const budget = rankNum * 15;
+          const rootHero = window.primaryHero || char;
+          const comps = (rootHero.companions || []).filter(c => c.type === "summon" || c.type === "minion");
           companionButtonHtml = `
             <div style="margin-top: 8px; padding: 8px 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
               <span style="font-size: var(--font-size-secondary);">Summoned Creature (Rank ${rankNum}): <strong>${budget} PP Budget</strong> (Max PL ${rankNum})</span>
-              <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('summon', ${pIdx}, ${eIdx})">👥 Build / Edit Summoned Creature</button>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit companion sheet">👥 Edit "${c.name}"</button>`).join('')}
+                <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('summon', ${pIdx}, ${eIdx})">+ Build / Edit Summoned Creature</button>
+              </div>
             </div>
           `;
         } else if (isDupEff) {
+          const rootHero = window.primaryHero || char;
+          const comps = (rootHero.companions || []).filter(c => c.type === "duplicate" || c.type === "minion");
           companionButtonHtml = `
             <div style="margin-top: 8px; padding: 8px 10px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
               <span style="font-size: var(--font-size-secondary);">Duplicate Minion: <strong>Full Hero Traits</strong></span>
-              <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('duplicate', ${pIdx}, ${eIdx})">👥 Generate / Edit Duplicate Sheet</button>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit duplicate sheet">👥 Edit "${c.name}"</button>`).join('')}
+                <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('duplicate', ${pIdx}, ${eIdx})">+ Generate / Edit Duplicate Sheet</button>
+              </div>
             </div>
           `;
         } else if (hasMetamorphEff) {
+          const rootHero = window.primaryHero || char;
+          const comps = (rootHero.companions || []).filter(c => c.type === "metamorph");
           companionButtonHtml = `
             <div style="margin-top: 8px; padding: 8px 10px; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
               <span style="font-size: var(--font-size-secondary);">Alternate Form (Metamorph): <strong>${char.totalPointsAllowed} PP Budget</strong></span>
-              <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('metamorph', ${pIdx}, ${eIdx})">🔄 Build / Edit Alternate Form</button>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                ${comps.map(c => `<button type="button" class="btn btn-sm" onclick="switchToCompanion('${c.id}')" title="Edit form sheet">🔄 Edit "${c.name}"</button>`).join('')}
+                <button type="button" class="btn minor-control-btn" style="font-weight: bold;" onclick="buildOrEditCompanionForSource('metamorph', ${pIdx}, ${eIdx})">+ Build / Edit Alternate Form</button>
+              </div>
             </div>
           `;
         }
@@ -11800,7 +15183,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
         const masterBadgeHtml = isMasterEffect ? `<span class="badge badge-master-effect" title="Master Effect (Primary Array Slot)" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-size: var(--font-size-tags); font-weight: bold; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; cursor: default;">👑 Master</span>` : '';
 
         return `
-          <div class="effect-card ${isLinkedCard ? 'is-linked' : ''}" style="margin-top: 12px; padding-top: 12px; border-top: 2px dashed var(--text-muted);">
+          <div class="effect-card ${isLinkedCard ? 'is-linked' : ''}" style="margin-top: 12px; padding-top: 12px; border-top: ${eIdx > 0 ? '2.5px solid var(--accent-primary)' : '2px solid var(--border-power, #64748b)'};">
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -11836,7 +15219,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
             <!-- Row 2: Secondary Role, Profile, Link, Adjustment Tags, and Descriptors -->
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin-bottom: 8px;">
                 <select onchange="updateEffectAssociation(${pIdx}, ${eIdx}, this.value)" class="minor-control" style="width: 135px; background: var(--bg-app);" title="Slot Role in Array">
-                    <option value="" ${!effect.association || effect.association === '' ? 'selected' : ''}>- Select Array Role -</option>
+                    <option value="" ${!effect.association || effect.association === '' ? 'selected' : ''}>${isDeviceContainer ? 'Device Trait' : '- Select Array Role -'}</option>
                     <option value="primary" ${effect.association === 'primary' ? 'selected' : ''}>Primary Slot</option>
                     <option value="alternate" ${effect.association === 'alternate' ? 'selected' : ''} ${powerContainer.effects.length === 1 ? 'disabled style="color: var(--text-muted);"' : ''}>Alternate (1 PP)</option>
                     <option value="dynamic" ${effect.association === 'dynamic' ? 'selected' : ''} ${powerContainer.effects.length === 1 ? 'disabled style="color: var(--text-muted);"' : ''}>Dynamic (2 PP)</option>
@@ -11869,7 +15252,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
             ${effect.effectName !== "" ? `
             <div class="power-modifiers-row" style="margin-top: 8px;">
               <div style="display: flex; align-items: center; gap: 6px;">
-                <select id="selRootExtra_${pIdx}_${eIdx}" class="minor-control" style="max-width: 170px;">
+                <select id="selRootExtra_${idPrefix}${pIdx}_${eIdx}" class="minor-control" style="max-width: 170px;" onchange="if(this.value) addModifierToEffect(${pIdx}, ${eIdx}, this.id, ${isBlueprint});">
                   <option value="">+ Add Extra...</option>
                   ${availableSpecificExtras.length > 0 ? `<optgroup label="Effect-Specific Extras">${availableSpecificExtras.map(e => `<option value="${e.name}">${e.name} (+${e.cost || 1}${e.costType === 'flat' ? ' flat' : '/r'})${e.hasRanks && e.maxRanks && e.maxRanks < 20 ? ` (Max rank: ${e.maxRanks})` : ''}</option>`).join('')}</optgroup>` : ''}
                   <optgroup label="Universal Extras">
@@ -11879,24 +15262,24 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
                     }).join('')}
                   </optgroup>
                 </select>
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootExtra_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Extra">?</button>
-                <button type="button" class="btn minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootExtra_${pIdx}_${eIdx}')">+ Extra</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootExtra_${idPrefix}${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Extra">?</button>
+                <button type="button" class="btn minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootExtra_${idPrefix}${pIdx}_${eIdx}', ${isBlueprint})">+ Extra</button>
               </div>
 
               <div style="display: flex; align-items: center; gap: 6px;">
-                <select id="selRootFeat_${pIdx}_${eIdx}" class="minor-control" style="max-width: 170px;">
+                <select id="selRootFeat_${idPrefix}${pIdx}_${eIdx}" class="minor-control" style="max-width: 170px;" onchange="if(this.value) addModifierToEffect(${pIdx}, ${eIdx}, this.id, ${isBlueprint});">
                   <option value="">+ Add Power Feat...</option>
                   ${availableSpecificFeats.length > 0 ? `<optgroup label="Effect-Specific Feats">${availableSpecificFeats.map(f => `<option value="${f.name}">${f.name} (+${f.cost || 1}${f.costType === 'flat' ? ' flat' : '/r'})${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}</optgroup>` : ''}
                   <optgroup label="Universal Feats">
                     ${availableRootFeats.map(f => `<option value="${f.name}">${f.name} (+${f.cost} flat)${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}
                   </optgroup>
                 </select>
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFeat_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Power Feat">?</button>
-                <button type="button" class="btn minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFeat_${pIdx}_${eIdx}')">+ Feat</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFeat_${idPrefix}${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Power Feat">?</button>
+                <button type="button" class="btn minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFeat_${idPrefix}${pIdx}_${eIdx}', ${isBlueprint})">+ Feat</button>
               </div>
 
               <div style="display: flex; align-items: center; gap: 6px;">
-                <select id="selRootFlaw_${pIdx}_${eIdx}" class="minor-control" style="max-width: 170px;">
+                <select id="selRootFlaw_${idPrefix}${pIdx}_${eIdx}" class="minor-control" style="max-width: 170px;" onchange="if(this.value) addModifierToEffect(${pIdx}, ${eIdx}, this.id, ${isBlueprint});">
                   <option value="">+ Add Flaw...</option>
                   ${availableSpecificFlaws.length > 0 ? `<optgroup label="Effect-Specific Flaws">${availableSpecificFlaws.map(f => `<option value="${f.name}">${f.name} (-${Math.abs(f.cost || -1)}${f.costType === 'flat' ? ' flat' : '/r'})${f.hasRanks && f.maxRanks && f.maxRanks < 20 ? ` (Max rank: ${f.maxRanks})` : ''}</option>`).join('')}</optgroup>` : ''}
                   <optgroup label="Universal Flaws">
@@ -11906,8 +15289,8 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
                     }).join('')}
                   </optgroup>
                 </select>
-                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFlaw_${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Flaw">?</button>
-                <button type="button" class="btn btn-secondary minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFlaw_${pIdx}_${eIdx}')">+ Flaw</button>
+                <button type="button" class="btn-info-circle" style="min-width: 18px; min-height: 18px; font-size: calc(var(--font-size-minor-controls) * 0.85); margin-left: -2px; margin-right: 2px;" onclick="const val = document.getElementById('selRootFlaw_${idPrefix}${pIdx}_${eIdx}').value; if(val) showModifierInfo(val, '${(effect.effectName || effect.name || '').replace(/'/g, "\\'")}');" title="View Info for Selected Flaw">?</button>
+                <button type="button" class="btn btn-secondary minor-control-btn" onclick="addModifierToEffect(${pIdx}, ${eIdx}, 'selRootFlaw_${idPrefix}${pIdx}_${eIdx}', ${isBlueprint})">+ Flaw</button>
               </div>
 
               <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; flex-basis: 100%; margin-top: 6px;">
@@ -11943,12 +15326,14 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
     }).join("");
 
     return `
-      <div class="power-card ${isCollapsed}" id="powerCard_${pIdx}" style="border: 2px solid var(--border-color);">
+      ${pIdx > 0 ? '<div class="power-card-divider"></div>' : ''}
+      <div class="power-card ${isCollapsed} ${isDeviceContainer ? 'is-device' : ''}" id="powerCard_${pIdx}" style="border: 2px solid var(--border-power, #64748b);">
         <div class="power-card-header" onclick="togglePowerCollapse(${pIdx})">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span id="powerCollapseIcon_${pIdx}" style="font-size: var(--font-size-secondary);">${powerContainer.collapsed ? '▶' : '▼'}</span>
             <button type="button" class="btn minor-control-btn btn-power-toggle" style="font-weight: bold; min-width: 44px; background: ${isContainerActive ? '#10b981' : 'var(--bg-app)'}; color: ${isContainerActive ? '#ffffff' : 'var(--text-muted)'}; border: 1px solid ${isContainerActive ? '#10b981' : 'var(--border-color)'};" onclick="event.stopPropagation(); togglePowerContainerActive(${pIdx})" title="${isContainerActive ? 'Power Container is Active (click to turn Off)' : 'Power Container is Inactive (click to turn On)'}">${isContainerActive ? 'On' : 'Off'}</button>
             ${isBlueprint ? `<span style="font-size: var(--font-size-labels); display: inline-flex; align-items: center;" title="Plan">📐</span>` : ''}
+            ${deviceBadgeHtml}
             <input type="text" id="powerContainerName_${pIdx}" value="${powerContainer.name && powerContainer.name !== 'New Power Container' ? powerContainer.name : ''}" placeholder="${isBlueprint ? 'New Plan' : 'New Container'}" style="font-weight: bold; font-size: var(--font-size-labels); width: 200px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; color: var(--text-main);" onclick="event.stopPropagation();" oninput="updatePowerContainerName(${pIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('container_name');">
             <span class="secondary-text" style="font-weight: normal; font-size: var(--font-size-secondary);">(${summaryText})</span>
           </div>
@@ -12909,15 +16294,33 @@ window.deleteEffect = function(pIdx, eIdx) {
     }
 };
 
-window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
-  const sel = document.getElementById(selectElemId);
-  if (!sel || !sel.value) return;
+window.addModifierToEffect = function(pIdx, eIdx, selectElemId, isBlueprint) {
+  const sel = (typeof selectElemId === 'string') ? document.getElementById(selectElemId) : selectElemId;
+  if (!sel || !sel.value) {
+    if (sel) {
+      sel.focus();
+      sel.style.outline = "2px solid #ef4444";
+      setTimeout(() => { if (sel) sel.style.outline = ""; }, 1500);
+    }
+    return;
+  }
+
+  const isBp = (isBlueprint !== undefined) 
+    ? Boolean(isBlueprint) 
+    : ((typeof selectElemId === 'string' && selectElemId.includes('bp_')) || (typeof window !== 'undefined' && window.activePowerContext === 'blueprints'));
+
+  const targetList = isBp ? (char.blueprints || []) : (char.powers || []);
+  if (!targetList[pIdx] || !targetList[pIdx].effects || !targetList[pIdx].effects[eIdx]) {
+    console.error("Target effect not found:", isBp ? "blueprints" : "powers", pIdx, eIdx);
+    return;
+  }
+
   window.invalidateContainerDeclaredCost(pIdx);
   const modName = sel.value;
-  const effect = char.activePowers[pIdx].effects[eIdx];
+  const effect = targetList[pIdx].effects[eIdx];
 
   let effName = effect.effectName;
-  let effData = POWER_EFFECTS_LIST.find(e => e.name === effName);
+  let effData = (typeof POWER_EFFECTS_LIST !== 'undefined') ? POWER_EFFECTS_LIST.find(e => e.name === effName) : null;
   let modData = null;
 
   if (typeof POWER_MODIFIERS_LIST !== 'undefined') {
@@ -12929,14 +16332,15 @@ window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
       if (!modData && effData.specificFlaws) modData = effData.specificFlaws.find(m => m.name === modName);
       if (!modData && effData.specificFeats) modData = effData.specificFeats.find(m => m.name === modName);
   }
-  if (!modData) {
+  if (!modData && typeof window.generateSmartModifiers === 'function') {
       let smartMods = window.generateSmartModifiers(effect);
       modData = smartMods.extras.find(m => m.name === modName) || smartMods.flaws.find(m => m.name === modName);
   }
   if (!modData) modData = { name: modName, cost: 1, costType: "flat", category: "extra" };
 
   if (!effect.modifiers) effect.modifiers = [];
-  const chosenCategory = selectElemId.includes("Extra") ? "extra" : (selectElemId.includes("Flaw") ? "flaw" : "feat");
+  const elemIdStr = (typeof selectElemId === 'string') ? selectElemId : (sel.id || '');
+  const chosenCategory = elemIdStr.includes("Extra") ? "extra" : (elemIdStr.includes("Flaw") ? "flaw" : "feat");
   effect.modifiers.push({
     name: modName,
     ranks: 1,
@@ -12946,28 +16350,45 @@ window.addModifierToEffect = function(pIdx, eIdx, selectElemId) {
   });
   sel.value = "";
   if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("add_modifier");
+  if (typeof window !== 'undefined') {
+    window.activePowerContext = isBp ? 'blueprints' : 'powers';
+  }
   buildPowersUI();
   refreshUI();
 };
 
-window.stepModifierRank = function(pIdx, eIdx, modIdx, delta, minVal, maxVal) {
-  if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].modifiers && char.activePowers[pIdx].effects[eIdx].modifiers[modIdx]) {
+window.stepModifierRank = function(pIdx, eIdx, modIdx, delta, minVal, maxVal, isBlueprint) {
+  const isBp = (isBlueprint !== undefined) 
+    ? Boolean(isBlueprint) 
+    : (typeof window !== 'undefined' && window.activePowerContext === 'blueprints');
+  const targetList = isBp ? (char.blueprints || []) : (char.powers || []);
+  if (targetList[pIdx] && targetList[pIdx].effects && targetList[pIdx].effects[eIdx] && targetList[pIdx].effects[eIdx].modifiers && targetList[pIdx].effects[eIdx].modifiers[modIdx]) {
     window.invalidateContainerDeclaredCost(pIdx);
-    let val = (parseInt(char.activePowers[pIdx].effects[eIdx].modifiers[modIdx].ranks) || 1) + delta;
+    let val = (parseInt(targetList[pIdx].effects[eIdx].modifiers[modIdx].ranks) || 1) + delta;
     if (minVal !== undefined && val < minVal) val = minVal;
     if (maxVal !== undefined && val > maxVal) val = maxVal;
-    char.activePowers[pIdx].effects[eIdx].modifiers[modIdx].ranks = val;
+    targetList[pIdx].effects[eIdx].modifiers[modIdx].ranks = val;
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordStepperChange(`mod_rank_${pIdx}_${eIdx}_${modIdx}`);
+    if (typeof window !== 'undefined') {
+      window.activePowerContext = isBp ? 'blueprints' : 'powers';
+    }
     buildPowersUI();
     refreshUI();
   }
 };
 
-window.removeModifier = function(pIdx, eIdx, modIdx) {
-  if (char.activePowers[pIdx] && char.activePowers[pIdx].effects[eIdx] && char.activePowers[pIdx].effects[eIdx].modifiers) {
+window.removeModifier = function(pIdx, eIdx, modIdx, isBlueprint) {
+  const isBp = (isBlueprint !== undefined) 
+    ? Boolean(isBlueprint) 
+    : (typeof window !== 'undefined' && window.activePowerContext === 'blueprints');
+  const targetList = isBp ? (char.blueprints || []) : (char.powers || []);
+  if (targetList[pIdx] && targetList[pIdx].effects && targetList[pIdx].effects[eIdx] && targetList[pIdx].effects[eIdx].modifiers) {
     window.invalidateContainerDeclaredCost(pIdx);
-    char.activePowers[pIdx].effects[eIdx].modifiers.splice(modIdx, 1);
+    targetList[pIdx].effects[eIdx].modifiers.splice(modIdx, 1);
     if (window.PowerHistoryManager) window.PowerHistoryManager.recordChange("remove_modifier");
+    if (typeof window !== 'undefined') {
+      window.activePowerContext = isBp ? 'blueprints' : 'powers';
+    }
     buildPowersUI();
     refreshUI();
   }
@@ -13789,11 +17210,24 @@ function populateUIFromCharacter() {
     if (sessionNameInput && char.playerName && !sessionNameInput.value) {
       sessionNameInput.value = char.playerName;
     }
+    if (char.playerName && char.playerName.trim() && char.playerName.trim() !== 'GM') {
+      if (typeof CampaignManager !== 'undefined') {
+        CampaignManager.setUserAccount(char.playerName.trim());
+        const isGM = CampaignManager.isDesignatedGM('local_player');
+        const currGM = CampaignManager.getGMUserName();
+        if (isGM || !currGM || currGM === 'GM') {
+          CampaignManager.setGMUserName(char.playerName.trim());
+        }
+      }
+    }
   }
   if (document.getElementById("heroPLInput")) document.getElementById("heroPLInput").value = char.powerLevel || 10;
   if (document.getElementById("heroPointsInput")) {
     const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
-    document.getElementById("heroPointsInput").value = (typeof char.heroPoints === "number") ? char.heroPoints : defaultHP;
+    if (typeof char.heroPoints !== "number" || isNaN(char.heroPoints)) {
+      char.heroPoints = defaultHP;
+    }
+    document.getElementById("heroPointsInput").value = char.heroPoints;
     if (typeof window.updateHeroPointsLockUI === "function") window.updateHeroPointsLockUI();
   }
   if (document.getElementById("heroSizeInput")) document.getElementById("heroSizeInput").value = char.sizeCategory || "Medium";
@@ -13807,7 +17241,7 @@ function populateUIFromCharacter() {
   if (char.abilities) {
     for (const [k, v] of Object.entries(char.abilities)) {
       const el = document.getElementById(`input_${k}`);
-      if (el) el.value = v;
+      if (el) el.value = (typeof char.getBaseAbilityScore === "function") ? (char.getBaseAbilityScore(k) ?? v) : v;
     }
   }
   if (char.absentAbilities) {
@@ -13868,33 +17302,70 @@ function populateUIFromCharacter() {
   }
 }
 
-function applyLoadedCharacter(loaded) {
+function applyLoadedCharacter(loaded, options = {}) {
   if (!loaded) return;
   window.isCharacterLoading = true;
+
+  const isNpcLoad = !!(options && options.isNpcLoad);
+  const preserveTab = !!(options && options.preserveTab);
+
+  // Cleanly exit any companion editing mode
+  if (window.primaryHero) {
+    char = window.primaryHero;
+    window.char = char;
+    window.primaryHero = null;
+    window.activeCompanionId = null;
+  }
+  if (!isNpcLoad) {
+    window.activeEditorNpcId = null;
+    window.__gmPrimaryHeroSheet = null;
+    if (typeof window.updateGMEditorStateUI === 'function') {
+      window.updateGMEditorStateUI();
+    }
+  }
+
   char.deserialize(loaded);
   window.activePowerContext = 'powers';
 
-  // Switch to basics tab so the user begins on the loaded hero's main sheet
-  const basicsTabBtn = (typeof document !== 'undefined' && typeof document.querySelector === 'function')
-    ? document.querySelector('.tab-btn[data-tab="tab-basics"]')
-    : null;
-  if (basicsTabBtn && typeof basicsTabBtn.click === 'function') {
-    basicsTabBtn.click();
+  // Switch to basics tab so the user begins on the loaded hero's main sheet unless preserveTab is set
+  if (!preserveTab) {
+    const basicsTabBtn = (typeof document !== 'undefined' && typeof document.querySelector === 'function')
+      ? document.querySelector('.tab-btn[data-tab="tab-basics"]')
+      : null;
+    if (basicsTabBtn && typeof basicsTabBtn.click === 'function') {
+      basicsTabBtn.click();
+    }
   }
 
   populateUIFromCharacter();
   window.isCharacterLoading = false;
-  if (typeof FileManager !== 'undefined' && FileManager.clearDirty) {
-    FileManager.clearDirty();
+  if (typeof window.FileManager !== 'undefined' && window.FileManager.clearDirty) {
+    window.FileManager.clearDirty();
   }
 }
 
 function refreshUI() {
+  if (typeof char !== 'undefined' && char) {
+    if (typeof char.heroPoints !== "number" || isNaN(char.heroPoints)) {
+      const defaultHP = 1 + (char.effectiveFeats?.["Luck"] || char.feats?.["Luck"] || 0);
+      const hpInput = document.getElementById("heroPointsInput");
+      const rawVal = hpInput ? parseInt(hpInput.value) : NaN;
+      char.heroPoints = !isNaN(rawVal) ? Math.max(0, rawVal) : defaultHP;
+    }
+    const hpInput = document.getElementById("heroPointsInput");
+    if (hpInput && document.activeElement !== hpInput) {
+      hpInput.value = char.heroPoints;
+    }
+  }
+
   if (!window.isCharacterLoading && typeof FileManager !== 'undefined' && FileManager.markDirty) {
     FileManager.markDirty();
   }
 
   if (typeof updateCharacterSelectorUI === 'function') updateCharacterSelectorUI();
+  if (typeof window.updateHeroPointsLockUI === 'function') window.updateHeroPointsLockUI();
+  if (typeof window.updateHeroPointsUseButtonState === 'function') window.updateHeroPointsUseButtonState();
+  if (typeof window.updateGMEditorStateUI === 'function') window.updateGMEditorStateUI();
 
   const lblName = document.getElementById("lblHeroName");
   if (lblName) {
@@ -13902,6 +17373,29 @@ function refreshUI() {
     const comp = isComp ? (window.primaryHero.companions || []).find(c => c.id === window.activeCompanionId) : null;
     const placeholderText = comp ? getGenericCompanionName(comp, window.primaryHero) : (isComp ? "Companion" : "New Hero");
     lblName.textContent = (char.name && char.name.trim()) ? char.name : placeholderText;
+  }
+  const lblTrackerHero = document.getElementById("lblTrackerHeroName");
+  const activeHeroName = (char.name && char.name.trim()) ? char.name.trim() : "Hero";
+  if (lblTrackerHero) {
+    lblTrackerHero.textContent = activeHeroName;
+  }
+  try {
+    localStorage.setItem('mm2e_active_editor_hero', JSON.stringify({ name: activeHeroName, heroPoints: char.heroPoints }));
+  } catch (err) {}
+  if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+    try {
+      if (poppedOutTrackerWindow.localTracker) {
+        poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
+      }
+      const lblPop = poppedOutTrackerWindow.document?.getElementById('lblTrackerHeroName');
+      if (lblPop) lblPop.textContent = activeHeroName;
+      if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
+        poppedOutTrackerWindow.renderAllTrackerUI();
+      }
+    } catch (err) {}
+  }
+  if (typeof broadcastTrackerSync === 'function') {
+    broadcastTrackerSync();
   }
   const lblPL = document.getElementById("lblPL");
   if (lblPL) lblPL.textContent = char.powerLevel;
@@ -13949,7 +17443,7 @@ function refreshUI() {
 
   const abilPanelTitle = document.getElementById("lblAbilitiesPanelTitle");
   if (abilPanelTitle) {
-    abilPanelTitle.textContent = char.isMecha ? `Core Abilities (Construct Chassis - Base 0 ${unit})` : `Abilities (2 PP per Rank)`;
+    abilPanelTitle.textContent = char.isMecha ? `Core Abilities (Construct Chassis - Base 0 ${unit})` : `Abilities (1 PP per Score point over 10)`;
   }
 
   const navFeats = document.getElementById("lblNavFeats");
@@ -14355,8 +17849,8 @@ function refreshUI() {
     const elSpace = document.getElementById("resSpaceSpeed");
     if (elSpace) elSpace.textContent = "—";
     
-    const strRank = char.getAbilityRank("STR");
-    const totalLiftRank = (strRank === null ? -5 : strRank) + pMods.extraLifting;
+    const strScore = char.getAbilityScore("STR");
+    const totalLiftRank = (strScore === null ? 0 : strScore) + (pMods.extraLifting * 5);
     const liftDist = CharacterModel.getCarryingCapacity(totalLiftRank);
     const elLift = document.getElementById("resMaxLifting");
     if (elLift) elLift.textContent = `Rank ${totalLiftRank} (${liftDist})`;
@@ -14434,11 +17928,12 @@ function refreshUI() {
 
   ["STR", "CON", "DEX", "INT", "WIS", "CHA"].forEach(k => {
     const val = char.getAbilityRank(k);
+    const score = (typeof char.getAbilityScore === "function") ? char.getAbilityScore(k) : null;
     const enhVal = (char.enhancedTraits && char.enhancedTraits.abilities[k]) ? char.enhancedTraits.abilities[k] : 0;
     const totalElem = document.getElementById(`total_rank_${k}`);
     const adjElem = document.getElementById(`adj_${k}`);
 
-    if (val === null) {
+    if (val === null || score === null) {
       if (totalElem) totalElem.textContent = "—";
       if (adjElem) {
         if (char.isMecha && k === "CON") {
@@ -14450,7 +17945,22 @@ function refreshUI() {
         }
       }
     } else {
-      if (totalElem) totalElem.textContent = val;
+      const sign = val >= 0 ? `+${val}` : `${val}`;
+      const baseScore = (typeof char.getBaseAbilityScore === "function") ? char.getBaseAbilityScore(k) : (char.abilities?.[k] ?? 10);
+      if (totalElem) {
+        if (enhVal > 0) {
+          totalElem.innerHTML = `<span style="color: #059669; font-weight: 800;" title="Base Score ${baseScore} + ${enhVal} Enhanced = Total Score ${score} (Modifier ${sign})">${score} (${sign})</span>`;
+        } else {
+          totalElem.textContent = `${score} (${sign})`;
+          totalElem.title = `Total Ability Score ${score} (Modifier ${sign})`;
+        }
+      }
+      const stepperInp = document.getElementById(`input_${k}`);
+      if (stepperInp) {
+        stepperInp.title = enhVal > 0 
+          ? `Base Purchased Score: ${baseScore} (Effective total is ${score} with +${enhVal} Enhanced Trait from powers/devices)`
+          : `Base Ability Score: ${score} (1 PP per point over 10)`;
+      }
       if (adjElem) {
         let adjHTML = "";
         const effFeats = char.effectiveFeats || char.feats;
@@ -14553,6 +18063,7 @@ function showToast(message, type = "info", durationMs = 3500) {
     }, 300);
   }, durationMs);
 }
+window.showToast = showToast;
 
 /* ==========================================================================
    BACKGROUND & IDENTITY HANDLERS
@@ -14669,7 +18180,7 @@ window.openFirefoxSettings = function() {
    ========================================================================== */
 
 
-const FileManager = {
+var FileManager = {
   currentFileHandle: null,
   currentFileName: null,
   activeDirectoryHandle: null,
@@ -14684,10 +18195,8 @@ const FileManager = {
   },
 
   clearDirty: function() {
-    if (this.isDirty) {
-      this.isDirty = false;
-      this.updateFileStatusUI();
-    }
+    this.isDirty = false;
+    this.updateFileStatusUI();
   },
 
   init: async function() {
@@ -14754,12 +18263,43 @@ const FileManager = {
     }
   },
 
-  getPickerOptions: function(suggestedName = null) {
+  getPickerOptions: function(suggestedName = null, isSave = false) {
+    if (isSave) {
+      const options = {
+        types: [{
+          description: "Mutants & Masterminds 2E Character File (*.mm2e)",
+          accept: { "application/json": [".mm2e", ".json"] }
+        }]
+      };
+      if (suggestedName) options.suggestedName = suggestedName;
+      if (this.activeDirectoryHandle) options.startIn = this.activeDirectoryHandle;
+      else if (this.currentFileHandle) options.startIn = this.currentFileHandle;
+      else options.id = "mm2e_character_folder";
+      return options;
+    }
+
     const options = {
-      types: [{
-        description: "Mutants & Masterminds 2E Character File (*.mm2e)",
-        accept: { "application/json": [".mm2e", ".json", ".mm4e"] }
-      }]
+      types: [
+        {
+          description: "Mutants & Masterminds Character File (*.mm2e, *.por, *.json)",
+          accept: {
+            "application/json": [".mm2e", ".json", ".mm4e"],
+            "application/octet-stream": [".por", ".mm2e"],
+            "application/zip": [".por"]
+          }
+        },
+        {
+          description: "Hero Lab Portfolio (*.por)",
+          accept: {
+            "application/octet-stream": [".por"],
+            "application/zip": [".por"]
+          }
+        },
+        {
+          description: "All Supported Files (*.mm2e, *.por, *.json)",
+          accept: { "*/*": [] }
+        }
+      ]
     };
     if (suggestedName) {
       options.suggestedName = suggestedName;
@@ -14786,7 +18326,7 @@ const FileManager = {
 
     if (window.showSaveFilePicker) {
       try {
-        const pickerOptions = this.getPickerOptions(defaultFileName);
+        const pickerOptions = this.getPickerOptions(defaultFileName, true);
         const handle = await window.showSaveFilePicker(pickerOptions);
         const writable = await handle.createWritable();
         await writable.write(payload);
@@ -14847,28 +18387,61 @@ const FileManager = {
 
   // Load: Opens native OS open dialog starting in active/last used folder, or opens file input
   loadHero: async function() {
-    if (window.showOpenFilePicker) {
+    if (typeof window.showOpenFilePicker === 'function' && window.isSecureContext) {
       try {
         const pickerOptions = this.getPickerOptions();
         pickerOptions.multiple = false;
-        const [handle] = await window.showOpenFilePicker(pickerOptions);
+        let handle;
+        try {
+          [handle] = await window.showOpenFilePicker(pickerOptions);
+        } catch (startInErr) {
+          if (startInErr.name !== "AbortError" && (pickerOptions.startIn || pickerOptions.id)) {
+            const fallbackOptions = {
+              types: [
+                {
+                  description: "Mutants & Masterminds 2E Character File (*.mm2e, *.json)",
+                  accept: {
+                    "application/json": [".mm2e", ".json", ".mm4e"],
+                    "text/plain": [".mm2e", ".json"],
+                    "application/octet-stream": [".mm2e"]
+                  }
+                },
+                {
+                  description: "All Files (*.*)",
+                  accept: { "*/*": [] }
+                }
+              ],
+              multiple: false
+            };
+            [handle] = await window.showOpenFilePicker(fallbackOptions);
+          } else {
+            throw startInErr;
+          }
+        }
+
         const file = await handle.getFile();
+        if (file.name.toLowerCase().endsWith('.por')) {
+          if (window.handlePorImport) {
+            await window.handlePorImport(file);
+          } else {
+            showToast("POR Importer not loaded.", "error");
+          }
+          this.currentFileHandle = null;
+          this.currentFileName = file.name ? file.name.slice(0, 45) : "hero.por";
+          this.clearDirty();
+          return true;
+        }
+
         const text = await file.text();
         const parsed = JSON.parse(text);
 
-        if (window.primaryHero) {
-          char = window.primaryHero;
-          window.char = char;
-          window.primaryHero = null;
-          window.activeCompanionId = null;
-        }
-        applyLoadedCharacter(parsed);
         this.currentFileHandle = handle;
         this.currentFileName = handle.name ? handle.name.slice(0, 45) : "hero.mm2e";
-        // Last used location becomes the default starting point for further operations
         if (!this.activeDirectoryName) {
           this.activeDirectoryHandle = handle;
         }
+
+        applyLoadedCharacter(parsed);
         this.clearDirty();
         showToast(`Loaded "${handle.name}" successfully!`, "success");
         return true;
@@ -14987,6 +18560,8 @@ const FileManager = {
         window.primaryHero = null;
         window.activeCompanionId = null;
       }
+      window.activeEditorNpcId = null;
+      if (typeof window.updateGMEditorStateUI === 'function') window.updateGMEditorStateUI();
       char.reset();
       const btnAudit = document.getElementById("btnOpenImportAudit");
       if (btnAudit) btnAudit.style.display = "none";
@@ -15056,7 +18631,18 @@ function setupFileHandlers() {
   if (btnNew) btnNew.addEventListener("click", () => FileManager.newHero());
   if (btnSave) btnSave.addEventListener("click", () => FileManager.saveHero());
   if (btnSaveAs) btnSaveAs.addEventListener("click", () => FileManager.saveHeroAs());
-  if (btnLoad) btnLoad.addEventListener("click", () => FileManager.loadHero());
+  if (btnLoad) {
+    btnLoad.addEventListener("click", () => {
+      if (!window.isSecureContext || typeof window.showOpenFilePicker !== 'function') {
+        const fileInput = document.getElementById("fileLoadHero");
+        if (fileInput) {
+          fileInput.click();
+          return;
+        }
+      }
+      FileManager.loadHero();
+    });
+  }
   if (btnSetFolder) btnSetFolder.addEventListener("click", () => FileManager.setCustomFolder());
   if (btnResetFolder) btnResetFolder.addEventListener("click", () => FileManager.resetFolderToDefault());
 
@@ -15085,11 +18671,13 @@ function setupFileHandlers() {
             window.primaryHero = null;
             window.activeCompanionId = null;
           }
+          window.activeEditorNpcId = null;
+          if (typeof window.updateGMEditorStateUI === 'function') window.updateGMEditorStateUI();
+          FileManager.currentFileHandle = null;
+          FileManager.currentFileName = file.name ? file.name.slice(0, 45) : "hero.mm2e";
           applyLoadedCharacter(loadedData);
           const btnAudit = document.getElementById("btnOpenImportAudit");
           if (btnAudit) btnAudit.style.display = "none";
-          FileManager.currentFileHandle = null;
-          FileManager.currentFileName = file.name ? file.name.slice(0, 45) : "hero.mm2e";
           FileManager.clearDirty();
           showToast(`Loaded "${file.name}" successfully!`, "success");
         } catch (err) {
@@ -15126,7 +18714,9 @@ function updateCharacterSelectorUI() {
   const companions = heroRoot.companions || [];
 
   if (sel) {
-    let optionsHtml = `<option value="main">🦸 Main Hero: ${heroRoot.name || "New Hero"} (PL ${heroRoot.powerLevel})</option>`;
+    const isNPC = !!window.activeEditorNpcId;
+    const mainIcon = isNPC ? "👤 NPC: " : "🦸 Main Hero: ";
+    let optionsHtml = `<option value="main">${mainIcon}${heroRoot.name || (isNPC ? "NPC" : "New Hero")} (PL ${heroRoot.powerLevel})</option>`;
     
     if (companions.length > 0) {
       const typeLabels = {
@@ -15183,7 +18773,7 @@ function updateCharacterSelectorUI() {
 
     const lblRole = document.getElementById("lblContextRole");
     if (lblRole) {
-      lblRole.textContent = "Character Form:";
+      lblRole.textContent = "Character/Form:";
     }
   }
 
@@ -15705,7 +19295,16 @@ window.buildOrEditCompanionForSource = function(type, pIdx, eIdx) {
   syncActiveCompanionIfActive();
   const rootHero = window.primaryHero || char;
   const companions = rootHero.companions || [];
-  const matches = companions.filter(c => c.type === type);
+  let matches = companions.filter(c => c.type === type);
+
+  // Fallback matching: summon <-> minion, duplicate <-> minion
+  if (matches.length === 0) {
+    if (type === 'summon' || type === 'duplicate') {
+      matches = companions.filter(c => c.type === type || c.type === 'minion');
+    } else if (type === 'minion') {
+      matches = companions.filter(c => c.type === 'minion' || c.type === 'summon' || c.type === 'duplicate');
+    }
+  }
 
   if (matches.length === 0) {
     openCreateCompanionModal(type, { pIdx, eIdx });

@@ -15,7 +15,7 @@ function generatePrintSheet() {
     // ----------------------------------------------------
     html += `<div class="print-box">`;
     html += `<div class="print-box-title">Abilities</div>`;
-    html += `<div class="print-col-header"><span>Ability</span><span>Rank</span></div>`;
+    html += `<div class="print-col-header"><span>Ability</span><span>Score (Mod)</span></div>`;
     
     const abilities = [
         { key: 'STR', name: 'Strength' },
@@ -26,12 +26,14 @@ function generatePrintSheet() {
         { key: 'CHA', name: 'Charisma' }
     ];
     abilities.forEach(ab => {
-        let total = char.getAbilityRank ? char.getAbilityRank(ab.key) : (parseInt(char.abilities[ab.key]) || 0); 
+        let totalRank = char.getAbilityRank ? char.getAbilityRank(ab.key) : 0;
+        let totalScore = char.getAbilityScore ? char.getAbilityScore(ab.key) : (parseInt(char.abilities[ab.key]) || 10);
         let enhVal = (char.enhancedTraits && char.enhancedTraits.abilities && char.enhancedTraits.abilities[ab.key]) || 0;
         let isAbsent = char.absentAbilities && char.absentAbilities[ab.key];
-        let displayTotal = isAbsent ? "—" : total;
-        let baseVal = char.getBaseAbilityRank ? char.getBaseAbilityRank(ab.key) : (parseInt(char.abilities[ab.key]) || 0);
-        let breakdown = isAbsent ? (char.isMecha ? (ab.key === "CON" ? "Absent (Construct)" : "Absent (Mindless)") : "Absent / Disabled") : (enhVal > 0 ? `Base ${baseVal} + Enhanced ${enhVal}` : "Base points only");
+        let baseScore = char.getBaseAbilityScore ? char.getBaseAbilityScore(ab.key) : (parseInt(char.abilities[ab.key]) || 10);
+        let sign = totalRank !== null && totalRank >= 0 ? `+${totalRank}` : `${totalRank}`;
+        let displayTotal = isAbsent ? "—" : `${totalScore} (${sign})`;
+        let breakdown = isAbsent ? (char.isMecha ? (ab.key === "CON" ? "Absent (Construct)" : "Absent (Mindless)") : "Absent / Disabled") : (enhVal > 0 ? `Base ${baseScore} + Enhanced ${enhVal}` : "Base points only");
 
         html += `
             <div class="print-row" style="padding: 4px 0;">
@@ -240,8 +242,8 @@ function generatePrintSheet() {
                 let baseKey = skName.includes(" (") ? skName.split(" (")[0].trim() : skName.trim();
                 let abKey = abMap[skName] || abMap[baseKey] || 'INT';
                 let abMod = char.getAbilityRank ? (char.getAbilityRank(abKey) || 0) : (parseInt(char.abilities[abKey]) || 0);
-                let total = sR + enhSkill + abMod;
-                let displayName = skName + (char.skillDetails[skName] ? ` (${char.skillDetails[skName]})` : '');
+                let detail = char.skillDetails && char.skillDetails[skName];
+                let displayName = (detail && !skName.toLowerCase().includes(`(${detail.toLowerCase()})`)) ? `${skName} (${detail})` : skName;
                 let enhStr = enhSkill > 0 ? ` + Enh ${enhSkill}` : '';
                 let breakdown = `Base ${sR}${enhStr} + ${abKey} ${abMod}`;
 

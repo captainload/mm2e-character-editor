@@ -70,16 +70,33 @@
       if (!Array.isArray(camp.timeline)) camp.timeline = [];
       if (camp.autoBackupCharacters === undefined) camp.autoBackupCharacters = true;
       if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
+      if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+      if (!Array.isArray(camp.savedCharacters)) camp.savedCharacters = [];
+      if (!camp.sessionState) {
+        camp.sessionState = {
+          status: 'ended',
+          sessionNumber: 1,
+          startedAt: null,
+          pausedAt: null,
+          totalElapsedMs: 0,
+          sessionHistory: []
+        };
+      }
     }
     return camp;
   }
 
   function setActiveCampaign(id) {
     const data = getStorageData();
-    const exists = data.campaigns.some(c => c.id === id);
-    if (exists) {
+    const camp = data.campaigns.find(c => c.id === id);
+    if (camp) {
       data.activeCampaignId = id;
       saveStorageData(data);
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem("mm2e_include_gm_char_in_party", String(!!camp.includeGmCharInParty));
+        }
+      } catch (e) {}
       return true;
     }
     return false;
@@ -90,20 +107,53 @@
     const campName = (name && name.trim()) ? name.trim() : 'New Campaign';
     const code = customCode ? customCode.trim().toLowerCase() : generateSlug(campName);
 
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem("mm2e_include_gm_char_in_party", "false");
+      }
+    } catch (e) {}
+
+    let effectiveGMName = (gmUserName && gmUserName.trim() && gmUserName.trim() !== 'GM') ? gmUserName.trim() : null;
+    if (!effectiveGMName) {
+      try {
+        const userAcc = getUserAccount();
+        if (userAcc && userAcc.userName && userAcc.userName.trim() && userAcc.userName.trim() !== 'GM') {
+          effectiveGMName = userAcc.userName.trim();
+        } else if (typeof localStorage !== 'undefined') {
+          const localName = localStorage.getItem('mm2e_player_name');
+          if (localName && localName.trim() && localName.trim() !== 'GM') {
+            effectiveGMName = localName.trim();
+          }
+        }
+      } catch (e) {}
+    }
+    if (!effectiveGMName) effectiveGMName = 'GM';
+
     const newCamp = {
       id: 'camp_' + Math.random().toString(36).substring(2, 9),
       name: campName,
       code: code,
       createdAt: new Date().toISOString(),
       gmPlayerId: creatorPlayerId || 'local_player',
-      gmUserName: gmUserName || 'GM',
+      gmUserName: effectiveGMName,
       npcs: [],
       encounterEnemies: [],
       acceptedPlayers: [],
       authorizedUsers: [],
+      partyCharacterIds: [],
+      savedCharacters: [],
       pendingRequests: [],
       timeline: [],
       autoBackupCharacters: true,
+      includeGmCharInParty: false,
+      sessionState: {
+        status: 'ended',
+        sessionNumber: 1,
+        startedAt: null,
+        pausedAt: null,
+        totalElapsedMs: 0,
+        sessionHistory: []
+      },
       forcedModes: {
         forceSilentParty: false,
         forceSilentPlayers: {}
@@ -152,29 +202,119 @@
   }
 
   // --- NPC Management ---
+  function enumerateNPCName(incomingName, existingList) {
+    if (!incomingName) incomingName = 'NPC';
+    const cleanBase = incomingName.replace(/\s*#\d+$/, '').trim();
+    
+    // Find all items in existingList that share this base name
+    const matches = (existingList || []).filter(item => {
+      const itemName = (item.name || '').trim();
+      const itemBase = itemName.replace(/\s*#\d+$/, '').trim();
+      return itemBase.toLowerCase() === cleanBase.toLowerCase();
+    });
+
+    if (matches.length === 0) {
+      return incomingName;
+    }
+
+    // If there is exactly 1 match and it doesn't have a # suffix, rename it to #1
+    if (matches.length === 1) {
+      const single = matches[0];
+      if (!/\s*#\d+$/.test(single.name)) {
+        single.name = `${cleanBase} #1`;
+        if (single.characterData && single.characterData.name) {
+          single.characterData.name = single.name;
+        }
+      }
+    }
+
+    // Find the highest existing number
+    let maxNum = 1;
+    matches.forEach(item => {
+      const m = (item.name || '').match(/\s*#(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    });
+
+    return `${cleanBase} #${maxNum + 1}`;
+  }
+
   function attachNPC(characterData, customName = null, customPL = null) {
     const camp = getActiveCampaign();
     if (!camp) return null;
 
-    const name = customName || characterData.name || 'Unnamed NPC';
-    const pl = customPL !== null ? customPL : (characterData.powerLevel || 10);
+    if (!Array.isArray(camp.npcs)) camp.npcs = [];
+
+    const rawName = customName || characterData?.name || 'Unnamed NPC';
+    const name = enumerateNPCName(rawName, camp.npcs);
+    const pl = customPL !== null ? customPL : (characterData?.powerLevel || 10);
+
+    const cData = characterData ? JSON.parse(JSON.stringify(characterData)) : {};
+    cData.name = name;
 
     const npc = {
       id: 'npc_' + Math.random().toString(36).substring(2, 9),
       name,
       powerLevel: pl,
-      characterData: JSON.parse(JSON.stringify(characterData)),
-      currentBruises: (characterData.trackerState?.conditions?.Bruised) || (characterData.currentBruises) || 0,
-      currentInjured: (characterData.trackerState?.conditions?.Injured) || (characterData.currentInjured) || 0,
-      conditions: characterData.trackerState?.conditions ? { ...characterData.trackerState.conditions } : (characterData.conditions ? { ...characterData.conditions } : {}),
-      heroPoints: typeof characterData.heroPoints === 'number' ? characterData.heroPoints : (typeof characterData.heroPointsInput === 'number' ? characterData.heroPointsInput : 0),
+      characterData: cData,
+      currentBruises: (characterData?.trackerState?.conditions?.Bruised) || (characterData?.currentBruises) || 0,
+      currentInjured: (characterData?.trackerState?.conditions?.Injured) || (characterData?.currentInjured) || 0,
+      conditions: characterData?.trackerState?.conditions ? { ...characterData.trackerState.conditions } : (characterData?.conditions ? { ...characterData.conditions } : {}),
+      heroPoints: typeof characterData?.heroPoints === 'number' ? characterData.heroPoints : (typeof characterData?.heroPointsInput === 'number' ? characterData.heroPointsInput : 0),
       attachedAt: new Date().toISOString()
     };
 
-    if (!Array.isArray(camp.npcs)) camp.npcs = [];
     camp.npcs.push(npc);
     updateActiveCampaign({ npcs: camp.npcs });
+    addFileOperationLog(`Attached party NPC "${name}" (PL ${pl}) to campaign.`, 'npc');
     return npc;
+  }
+
+  function updateNPCCharacterData(npcId, characterData) {
+    const camp = getActiveCampaign();
+    if (!camp) return false;
+    let found = false;
+    if (Array.isArray(camp.npcs)) {
+      const npc = camp.npcs.find(n => n.id === npcId);
+      if (npc) {
+        npc.characterData = JSON.parse(JSON.stringify(characterData));
+        if (characterData.name) npc.name = characterData.name;
+        if (typeof characterData.powerLevel === 'number') npc.powerLevel = characterData.powerLevel;
+        found = true;
+      }
+    }
+    if (!found && Array.isArray(camp.encounterEnemies)) {
+      const enemy = camp.encounterEnemies.find(e => e.id === npcId);
+      if (enemy) {
+        enemy.characterData = JSON.parse(JSON.stringify(characterData));
+        if (characterData.name) enemy.name = characterData.name;
+        if (typeof characterData.powerLevel === 'number') enemy.powerLevel = characterData.powerLevel;
+        found = true;
+      }
+    }
+    if (found) {
+      updateActiveCampaign({ npcs: camp.npcs, encounterEnemies: camp.encounterEnemies });
+      return true;
+    }
+    return false;
+  }
+
+  function duplicateNPC(npcId) {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    const npc = (camp.npcs || []).find(n => n.id === npcId);
+    if (npc) {
+      const cloned = attachNPC(npc.characterData, npc.name, npc.powerLevel);
+      return cloned;
+    }
+    const enemy = (camp.encounterEnemies || []).find(e => e.id === npcId);
+    if (enemy) {
+      const cloned = addEncounterEnemy(enemy.characterData, enemy.name, enemy.powerLevel);
+      return cloned;
+    }
+    return null;
   }
 
   function removeNPC(npcId) {
@@ -184,14 +324,41 @@
     updateActiveCampaign({ npcs: filtered });
   }
 
-  function updateNPCConditions(npcId, bruises, conditions, injured) {
+  function updateNPCConditions(npcId, bruises, conditions, arg4, arg5) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.npcs)) return;
+    const npc = camp.npcs.find(n => n.id === npcId);
+    if (!npc) return;
+
+    let heroPoints = undefined;
+    let injured = undefined;
+
+    if (arg5 !== undefined) {
+      // 5 args style: (npcId, bruises, conditions, heroPoints, injured)
+      heroPoints = arg4;
+      injured = arg5;
+    } else if (arg4 !== undefined) {
+      // 4 args style: (npcId, bruises, conditions, injured)
+      injured = arg4;
+    }
+
+    if (bruises !== undefined) npc.currentBruises = Math.max(0, Number(bruises) || 0);
+    if (conditions !== undefined) npc.conditions = { ...conditions };
+    if (injured !== undefined) npc.currentInjured = Math.max(0, Number(injured) || 0);
+    if (heroPoints !== undefined) {
+      npc.heroPoints = Math.max(0, Number(heroPoints) || 0);
+      if (npc.characterData) npc.characterData.heroPoints = npc.heroPoints;
+    }
+    updateActiveCampaign({ npcs: camp.npcs });
+  }
+
+  function updateNPCHeroPoints(npcId, hp) {
     const camp = getActiveCampaign();
     if (!camp || !Array.isArray(camp.npcs)) return;
     const npc = camp.npcs.find(n => n.id === npcId);
     if (npc) {
-      if (bruises !== undefined) npc.currentBruises = Math.max(0, Number(bruises) || 0);
-      if (injured !== undefined) npc.currentInjured = Math.max(0, Number(injured) || 0);
-      if (conditions !== undefined) npc.conditions = { ...conditions };
+      npc.heroPoints = Math.max(0, Number(hp) || 0);
+      if (npc.characterData) npc.characterData.heroPoints = npc.heroPoints;
       updateActiveCampaign({ npcs: camp.npcs });
     }
   }
@@ -217,58 +384,120 @@
     if (!Array.isArray(camp.authorizedUsers)) camp.authorizedUsers = [];
     if (!Array.isArray(camp.acceptedPlayers)) camp.acceptedPlayers = [];
 
-    const pName = (playerInfo.playerName || '').trim();
+    const pName = (playerInfo.playerName || '').replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim();
     const normalizedPlayerName = pName.toLowerCase();
     const incomingToken = (playerInfo.userToken || '').trim();
 
     // 1. Check if user is pre-authorized by GM in authorizedUsers whitelist
     const authEntry = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === normalizedPlayerName);
     if (authEntry) {
-      let isTokenMismatch = false;
+      if (!Array.isArray(authEntry.userTokens)) {
+        authEntry.userTokens = (authEntry.userToken && authEntry.userToken.trim()) ? [authEntry.userToken.trim()] : [];
+      }
 
-      // Account Token binding or verification
-      if (!authEntry.userToken && incomingToken) {
-        // Initial binding
+      // Scenario A: Unclaimed / initial login
+      if (authEntry.userTokens.length === 0) {
+        if (incomingToken) {
+          authEntry.userTokens.push(incomingToken);
+          authEntry.userToken = incomingToken;
+          addFileOperationLog(`Authorized user "${pName}" bound account key (${incomingToken.substring(0, 8)}...) to campaign "${camp.name}".`, 'auth_token_bind');
+        }
+        authEntry.lastLogin = new Date().toISOString();
+        authEntry.lastCharacter = playerInfo.characterName || 'Hero';
+
+        const incomingCharName = (playerInfo.characterName || 'Hero').trim().toLowerCase();
+        let playerRecord = camp.acceptedPlayers.find(p => p.id === playerInfo.id || ((p.playerName || '').trim().toLowerCase() === normalizedPlayerName && (p.characterName || '').trim().toLowerCase() === incomingCharName));
+        if (!playerRecord) {
+          playerRecord = {
+            id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
+            playerName: pName,
+            characterName: playerInfo.characterName || 'Hero',
+            characterSummary: playerInfo.characterSummary || {},
+            userToken: incomingToken || null,
+            approvedAt: new Date().toISOString(),
+            forceSilent: false
+          };
+          camp.acceptedPlayers.push(playerRecord);
+        } else {
+          playerRecord.id = playerInfo.id || playerRecord.id;
+          playerRecord.characterName = playerInfo.characterName || playerRecord.characterName;
+          playerRecord.characterSummary = playerInfo.characterSummary || playerRecord.characterSummary;
+          if (incomingToken) playerRecord.userToken = incomingToken;
+        }
+
+        camp.pendingRequests = camp.pendingRequests.filter(r => r.id !== playerInfo.id && !((r.playerName || '').trim().toLowerCase() === normalizedPlayerName && (r.characterName || '').trim().toLowerCase() === incomingCharName));
+
+        updateActiveCampaign({
+          authorizedUsers: camp.authorizedUsers,
+          acceptedPlayers: camp.acceptedPlayers,
+          pendingRequests: camp.pendingRequests
+        });
+
+        addFileOperationLog(`Authorized user "${pName}" logged into campaign "${camp.name}" with character "${playerInfo.characterName || 'Hero'}".`, 'user_login');
+        return { status: 'already_accepted', tokenMismatch: false, authEntry };
+      }
+
+      // Scenario B: Recognized device key in userTokens
+      if (incomingToken && authEntry.userTokens.includes(incomingToken)) {
         authEntry.userToken = incomingToken;
-        addFileOperationLog(`Authorized user "${pName}" bound account key (${incomingToken.substring(0, 8)}...) to campaign "${camp.name}".`, 'auth_token_bind');
-      } else if (authEntry.userToken && incomingToken && authEntry.userToken !== incomingToken) {
-        // Token mismatch!
-        isTokenMismatch = true;
-        addFileOperationLog(`AUTHENTICATION ALERT: User "${pName}" attempted login with an unrecognized account key (${incomingToken.substring(0, 8)}...). Expected key (${authEntry.userToken.substring(0, 8)}...).`, 'auth_mismatch');
+        authEntry.lastLogin = new Date().toISOString();
+        authEntry.lastCharacter = playerInfo.characterName || 'Hero';
+
+        const incomingCharName = (playerInfo.characterName || 'Hero').trim().toLowerCase();
+        let playerRecord = camp.acceptedPlayers.find(p => p.id === playerInfo.id || ((p.playerName || '').trim().toLowerCase() === normalizedPlayerName && (p.characterName || '').trim().toLowerCase() === incomingCharName));
+        if (!playerRecord) {
+          playerRecord = {
+            id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
+            playerName: pName,
+            characterName: playerInfo.characterName || 'Hero',
+            characterSummary: playerInfo.characterSummary || {},
+            userToken: incomingToken,
+            approvedAt: new Date().toISOString(),
+            forceSilent: false
+          };
+          camp.acceptedPlayers.push(playerRecord);
+        } else {
+          playerRecord.id = playerInfo.id || playerRecord.id;
+          playerRecord.characterName = playerInfo.characterName || playerRecord.characterName;
+          playerRecord.characterSummary = playerInfo.characterSummary || playerRecord.characterSummary;
+          playerRecord.userToken = incomingToken;
+        }
+
+        camp.pendingRequests = camp.pendingRequests.filter(r => r.id !== playerInfo.id && !((r.playerName || '').trim().toLowerCase() === normalizedPlayerName && (r.characterName || '').trim().toLowerCase() === incomingCharName));
+
+        updateActiveCampaign({
+          authorizedUsers: camp.authorizedUsers,
+          acceptedPlayers: camp.acceptedPlayers,
+          pendingRequests: camp.pendingRequests
+        });
+
+        addFileOperationLog(`Authorized user "${pName}" recognized from trusted device (${incomingToken.substring(0, 8)}...) logged into "${camp.name}".`, 'user_login');
+        return { status: 'already_accepted', tokenMismatch: false, authEntry };
       }
 
-      authEntry.lastLogin = new Date().toISOString();
-      authEntry.lastCharacter = playerInfo.characterName || 'Hero';
+      // Scenario C: Unrecognized device key for authorized user
+      addFileOperationLog(`AUTHENTICATION NOTICE: Authorized user "${pName}" requested connection from an unrecognized device key (${incomingToken ? incomingToken.substring(0, 8) + '...' : 'none'}). Awaiting GM device trust approval.`, 'auth_mismatch');
 
-      let playerRecord = camp.acceptedPlayers.find(p => (p.playerName || '').trim().toLowerCase() === normalizedPlayerName);
-      if (!playerRecord) {
-        playerRecord = {
-          id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
-          playerName: pName,
-          characterName: playerInfo.characterName || 'Hero',
-          characterSummary: playerInfo.characterSummary || {},
-          userToken: incomingToken || authEntry.userToken || null,
-          approvedAt: new Date().toISOString(),
-          forceSilent: false
-        };
-        camp.acceptedPlayers.push(playerRecord);
+      const existingIdx = camp.pendingRequests.findIndex(r => r.id === playerInfo.id);
+      const requestItem = {
+        id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
+        playerName: pName,
+        characterName: playerInfo.characterName || 'Hero',
+        characterSummary: playerInfo.characterSummary || {},
+        userToken: incomingToken || null,
+        isNewDevice: true,
+        existingKeyCount: authEntry.userTokens.length,
+        requestedAt: new Date().toISOString()
+      };
+
+      if (existingIdx >= 0) {
+        camp.pendingRequests[existingIdx] = requestItem;
       } else {
-        playerRecord.id = playerInfo.id || playerRecord.id;
-        playerRecord.characterName = playerInfo.characterName || playerRecord.characterName;
-        playerRecord.characterSummary = playerInfo.characterSummary || playerRecord.characterSummary;
-        if (incomingToken) playerRecord.userToken = incomingToken;
+        camp.pendingRequests.push(requestItem);
       }
 
-      camp.pendingRequests = camp.pendingRequests.filter(r => r.id !== playerInfo.id && (r.playerName || '').trim().toLowerCase() !== normalizedPlayerName);
-
-      updateActiveCampaign({
-        authorizedUsers: camp.authorizedUsers,
-        acceptedPlayers: camp.acceptedPlayers,
-        pendingRequests: camp.pendingRequests
-      });
-
-      addFileOperationLog(`Authorized user "${pName}" logged into campaign "${camp.name}" with character "${playerInfo.characterName || 'Hero'}".`, 'user_login');
-      return { status: 'already_accepted', tokenMismatch: isTokenMismatch, authEntry };
+      updateActiveCampaign({ pendingRequests: camp.pendingRequests });
+      return { status: 'pending_device_approval', tokenMismatch: true, isNewDevice: true, authEntry, request: requestItem };
     }
 
     // 2. Check if already accepted previously
@@ -279,7 +508,7 @@
     const existingIdx = camp.pendingRequests.findIndex(r => r.id === playerInfo.id);
     const requestItem = {
       id: playerInfo.id || 'peer_' + Math.random().toString(36).substring(2, 7),
-      playerName: playerInfo.playerName || 'Anonymous Player',
+      playerName: pName || 'Anonymous Player',
       characterName: playerInfo.characterName || 'Hero',
       characterSummary: playerInfo.characterSummary || {},
       userToken: incomingToken || null,
@@ -306,7 +535,7 @@
     if (!Array.isArray(camp.acceptedPlayers)) camp.acceptedPlayers = [];
     camp.acceptedPlayers.push({
       id: req.id,
-      playerName: req.playerName,
+      playerName: (req.playerName || '').replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim(),
       characterName: req.characterName,
       characterSummary: req.characterSummary,
       approvedAt: new Date().toISOString(),
@@ -416,10 +645,12 @@
     const exists = camp.authorizedUsers.some(u => (u.userName || '').trim().toLowerCase() === trimmed.toLowerCase());
     if (exists) return { success: false, error: `User "${trimmed}" is already authorized for this campaign.` };
 
+    const cleanCustom = (customToken && customToken.trim()) ? customToken.trim() : null;
     const newUser = {
       id: 'usr_' + Math.random().toString(36).substring(2, 8),
       userName: trimmed,
-      userToken: customToken ? customToken.trim() : null,
+      userToken: cleanCustom,
+      userTokens: cleanCustom ? [cleanCustom] : [],
       addedAt: new Date().toISOString(),
       notes: notes || '',
       lastLogin: null,
@@ -432,6 +663,27 @@
     return { success: true, user: newUser };
   }
 
+  function trustAuthorizedUserToken(userName, token) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.authorizedUsers)) return false;
+    const trimmed = (userName || '').trim().toLowerCase();
+    const user = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === trimmed || u.id === userName);
+    if (user) {
+      if (!Array.isArray(user.userTokens)) {
+        user.userTokens = (user.userToken && user.userToken.trim()) ? [user.userToken.trim()] : [];
+      }
+      const cleanTok = (token || '').trim();
+      if (cleanTok && !user.userTokens.includes(cleanTok)) {
+        user.userTokens.push(cleanTok);
+      }
+      user.userToken = cleanTok || user.userToken;
+      updateActiveCampaign({ authorizedUsers: camp.authorizedUsers });
+      addFileOperationLog(`Added trusted device key (${(cleanTok || '').substring(0, 8)}...) for authorized user "${user.userName}". Total trusted devices: ${user.userTokens.length}.`, 'auth_token_trust');
+      return true;
+    }
+    return false;
+  }
+
   function resetAuthorizedUserToken(userName) {
     const camp = getActiveCampaign();
     if (!camp || !Array.isArray(camp.authorizedUsers)) return false;
@@ -439,8 +691,9 @@
     const user = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === trimmed || u.id === userName);
     if (user) {
       user.userToken = null;
+      user.userTokens = [];
       updateActiveCampaign({ authorizedUsers: camp.authorizedUsers });
-      addFileOperationLog(`Reset Account Token for authorized user "${user.userName}". Player may now bind a new device/browser.`, 'auth_token_reset');
+      addFileOperationLog(`Reset all device keys for authorized user "${user.userName}". Player may now bind a new device/browser.`, 'auth_token_reset');
       return true;
     }
     return false;
@@ -481,6 +734,21 @@
 
   function getGMUserName() {
     const camp = getActiveCampaign();
+    if (camp && camp.gmUserName && camp.gmUserName.trim() && camp.gmUserName.trim() !== 'GM') {
+      return camp.gmUserName.trim();
+    }
+    try {
+      const userAcc = getUserAccount();
+      if (userAcc && userAcc.userName && userAcc.userName.trim() && userAcc.userName.trim() !== 'GM') {
+        return userAcc.userName.trim();
+      }
+      if (typeof localStorage !== 'undefined') {
+        const localName = localStorage.getItem('mm2e_player_name');
+        if (localName && localName.trim() && localName.trim() !== 'GM') {
+          return localName.trim();
+        }
+      }
+    } catch (e) {}
     return camp?.gmUserName || 'GM';
   }
 
@@ -600,6 +868,133 @@
     return true;
   }
 
+  // --- GM Sheet Inclusion in Party Display ---
+  function isGmCharIncludedInParty() {
+    const camp = getActiveCampaign();
+    const lsVal = (typeof localStorage !== 'undefined') && localStorage.getItem("mm2e_include_gm_char_in_party") === "true";
+    if (!camp) {
+      return lsVal;
+    }
+    return !!camp.includeGmCharInParty || lsVal;
+  }
+
+  function setGmCharIncludedInParty(included) {
+    const val = !!included;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem("mm2e_include_gm_char_in_party", val ? "true" : "false");
+      }
+    } catch (e) {}
+    const camp = getActiveCampaign();
+    if (!camp) return;
+    camp.includeGmCharInParty = val;
+    updateActiveCampaign({ includeGmCharInParty: val });
+    addFileOperationLog(`GM active editor sheet ${val ? 'included in' : 'excluded from'} party roster.`, 'config');
+  }
+
+  // --- Saved Campaign Characters & Party Membership Management ---
+  function saveCampaignCharacter(sheetData, playerName = null, ownerPlayerId = null) {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    if (!Array.isArray(camp.savedCharacters)) camp.savedCharacters = [];
+    if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+
+    const heroName = sheetData?.character?.name || sheetData?.name || sheetData?.heroName || 'Hero';
+    const pName = (playerName || sheetData?.character?.playerName || sheetData?.playerName || 'Player').replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim();
+    const pl = sheetData?.character?.powerLevel || sheetData?.powerLevel || 10;
+    const ownerId = ownerPlayerId || sheetData?.ownerId || 'local_player';
+
+    let existing = camp.savedCharacters.find(c => (ownerId !== 'local_player' && c.ownerPlayerId === ownerId) || (c.characterName === heroName && c.playerName === pName));
+
+    let charId;
+    if (existing) {
+      charId = existing.id;
+      existing.characterName = heroName;
+      existing.playerName = pName;
+      existing.powerLevel = pl;
+      existing.characterData = JSON.parse(JSON.stringify(sheetData));
+      existing.updatedAt = new Date().toISOString();
+    } else {
+      charId = 'sc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      camp.savedCharacters.push({
+        id: charId,
+        characterName: heroName,
+        playerName: pName,
+        ownerPlayerId: ownerId,
+        powerLevel: pl,
+        characterData: JSON.parse(JSON.stringify(sheetData)),
+        savedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    if (ownerId && ownerId !== 'local_player') {
+      ingestCharacterSheet(ownerId, sheetData, pName, heroName);
+    }
+
+    updateActiveCampaign({ savedCharacters: camp.savedCharacters });
+    addFileOperationLog(`Saved character "${heroName}" for ${pName} in campaign characters.`, 'sheet_receive');
+    return charId;
+  }
+
+  function getSavedCharacters() {
+    const camp = getActiveCampaign();
+    return (camp && Array.isArray(camp.savedCharacters)) ? [...camp.savedCharacters] : [];
+  }
+
+  function deleteSavedCharacter(charId) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.savedCharacters)) return false;
+    const charObj = camp.savedCharacters.find(c => c.id === charId);
+    camp.savedCharacters = camp.savedCharacters.filter(c => c.id !== charId);
+    if (Array.isArray(camp.partyCharacterIds)) {
+      camp.partyCharacterIds = camp.partyCharacterIds.filter(id => id !== charId && (charObj ? id !== charObj.characterName : true));
+    }
+    updateActiveCampaign({ savedCharacters: camp.savedCharacters, partyCharacterIds: camp.partyCharacterIds });
+    addFileOperationLog(`Deleted saved character ${charObj ? `"${charObj.characterName}"` : charId} from campaign.`, 'sheet_delete');
+    return true;
+  }
+
+  function getPartyCharacterIds() {
+    const camp = getActiveCampaign();
+    return (camp && Array.isArray(camp.partyCharacterIds)) ? [...camp.partyCharacterIds] : [];
+  }
+
+  function isCharacterInParty(charId) {
+    const camp = getActiveCampaign();
+    if (!camp || !Array.isArray(camp.partyCharacterIds)) return false;
+    return camp.partyCharacterIds.includes(charId);
+  }
+
+  function addCharacterToParty(charId) {
+    const camp = getActiveCampaign();
+    if (!camp) return false;
+    if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+    if (!camp.partyCharacterIds.includes(charId)) {
+      camp.partyCharacterIds.push(charId);
+      if (charId === 'local_hero') {
+        setGmCharIncludedInParty(true);
+      }
+      updateActiveCampaign({ partyCharacterIds: camp.partyCharacterIds });
+      addFileOperationLog(`Character "${charId}" added to active party roster.`, 'party_add');
+      return true;
+    }
+    return false;
+  }
+
+  function removeCharacterFromParty(charId) {
+    const camp = getActiveCampaign();
+    if (!camp) return false;
+    if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+    camp.partyCharacterIds = camp.partyCharacterIds.filter(id => id !== charId);
+    if (charId === 'local_hero') {
+      setGmCharIncludedInParty(false);
+    }
+    updateActiveCampaign({ partyCharacterIds: camp.partyCharacterIds });
+    addFileOperationLog(`Character "${charId}" removed from active party roster.`, 'party_remove');
+    return true;
+  }
+
   // --- Remote Character Sheet Ingestion & Revision History ---
   function ingestCharacterSheet(playerId, sheetData, playerName = null, characterName = null) {
     const camp = getActiveCampaign();
@@ -632,7 +1027,7 @@
       player.sheetHistory = player.sheetHistory.slice(-20);
     }
 
-    if (playerName) player.playerName = playerName;
+    if (playerName) player.playerName = playerName.replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim();
     if (characterName) player.characterName = characterName;
 
     updateActiveCampaign({ acceptedPlayers: camp.acceptedPlayers });
@@ -935,14 +1330,20 @@
     const camp = getActiveCampaign();
     if (!camp) return null;
 
-    const name = customName || characterData?.name || 'Encounter Adversary';
+    if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
+
+    const rawName = customName || characterData?.name || 'Encounter Adversary';
+    const name = enumerateNPCName(rawName, camp.encounterEnemies);
     const pl = customPL !== null ? customPL : (characterData?.powerLevel || 10);
+
+    const cData = characterData ? JSON.parse(JSON.stringify(characterData)) : {};
+    if (cData.name) cData.name = name;
 
     const enemy = {
       id: 'enemy_' + Math.random().toString(36).substring(2, 9),
       name,
       powerLevel: pl,
-      characterData: characterData ? JSON.parse(JSON.stringify(characterData)) : {},
+      characterData: cData,
       currentBruises: (characterData?.trackerState?.conditions?.Bruised) || (characterData?.currentBruises) || 0,
       currentInjured: (characterData?.trackerState?.conditions?.Injured) || (characterData?.currentInjured) || 0,
       conditions: characterData?.trackerState?.conditions ? { ...characterData.trackerState.conditions } : (characterData?.conditions ? { ...characterData.conditions } : {}),
@@ -950,7 +1351,6 @@
       attachedAt: new Date().toISOString()
     };
 
-    if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
     camp.encounterEnemies.push(enemy);
     updateActiveCampaign({ encounterEnemies: camp.encounterEnemies });
     addFileOperationLog(`Added encounter adversary "${name}" (PL ${pl}) to campaign.`, 'encounter');
@@ -1018,7 +1418,20 @@
       if (!Array.isArray(campData.fileOperationsLog)) campData.fileOperationsLog = [];
       if (!Array.isArray(campData.timeline)) campData.timeline = [];
       if (campData.autoBackupCharacters === undefined) campData.autoBackupCharacters = true;
+      if (campData.includeGmCharInParty === undefined) campData.includeGmCharInParty = false;
       if (!Array.isArray(campData.encounterEnemies)) campData.encounterEnemies = [];
+      if (!Array.isArray(campData.partyCharacterIds)) campData.partyCharacterIds = [];
+      if (!Array.isArray(campData.savedCharacters)) campData.savedCharacters = [];
+      if (!campData.sessionState) {
+        campData.sessionState = {
+          status: 'ended',
+          sessionNumber: 1,
+          startedAt: null,
+          pausedAt: null,
+          totalElapsedMs: 0,
+          sessionHistory: []
+        };
+      }
 
       campData.fileOperationsLog.push({
         id: 'flog_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -1037,6 +1450,177 @@
     }
   }
 
+  // --- Game Session Management (Start, Pause, End) ---
+  function getSessionState() {
+    const camp = getActiveCampaign();
+    if (!camp) {
+      return {
+        status: 'ended',
+        sessionNumber: 1,
+        startedAt: null,
+        pausedAt: null,
+        totalElapsedMs: 0,
+        sessionHistory: []
+      };
+    }
+    if (!camp.sessionState) {
+      camp.sessionState = {
+        status: 'ended',
+        sessionNumber: 1,
+        startedAt: null,
+        pausedAt: null,
+        totalElapsedMs: 0,
+        sessionHistory: []
+      };
+    }
+    return camp.sessionState;
+  }
+
+  function startSession() {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    if (!camp.sessionState) {
+      camp.sessionState = {
+        status: 'ended',
+        sessionNumber: 1,
+        startedAt: null,
+        pausedAt: null,
+        totalElapsedMs: 0,
+        sessionHistory: []
+      };
+    }
+
+    const prevStatus = camp.sessionState.status;
+    const now = Date.now();
+    if (prevStatus === 'paused') {
+      // Resuming from pause
+      camp.sessionState.status = 'active';
+      camp.sessionState.startedAt = now;
+      camp.sessionState.pausedAt = null;
+    } else {
+      // Starting new session
+      camp.sessionState.status = 'active';
+      camp.sessionState.startedAt = now;
+      camp.sessionState.sessionStartedAt = now;
+      camp.sessionState.pausedAt = null;
+      camp.sessionState.totalElapsedMs = 0;
+    }
+
+    updateActiveCampaign({ sessionState: camp.sessionState });
+    return camp.sessionState;
+  }
+
+  function pauseSession() {
+    const camp = getActiveCampaign();
+    if (!camp || !camp.sessionState) return null;
+    if (camp.sessionState.status !== 'active') return camp.sessionState;
+
+    const now = Date.now();
+    const activeChunk = camp.sessionState.startedAt ? (now - camp.sessionState.startedAt) : 0;
+    camp.sessionState.totalElapsedMs = (camp.sessionState.totalElapsedMs || 0) + activeChunk;
+    camp.sessionState.status = 'paused';
+    camp.sessionState.pausedAt = now;
+    camp.sessionState.startedAt = null;
+
+    updateActiveCampaign({ sessionState: camp.sessionState });
+    return camp.sessionState;
+  }
+
+  function endSession() {
+    const camp = getActiveCampaign();
+    if (!camp) return null;
+    if (!camp.sessionState) {
+      camp.sessionState = {
+        status: 'ended',
+        sessionNumber: 1,
+        startedAt: null,
+        pausedAt: null,
+        totalElapsedMs: 0,
+        sessionHistory: []
+      };
+    }
+
+    if (camp.sessionState.status === 'active' && camp.sessionState.startedAt) {
+      const now = Date.now();
+      const activeChunk = now - camp.sessionState.startedAt;
+      camp.sessionState.totalElapsedMs = (camp.sessionState.totalElapsedMs || 0) + activeChunk;
+    }
+
+    const durationMs = camp.sessionState.totalElapsedMs || 0;
+    const sessionNum = camp.sessionState.sessionNumber || 1;
+
+    camp.sessionState.status = 'ended';
+    camp.sessionState.startedAt = null;
+    camp.sessionState.pausedAt = null;
+    camp.sessionState.sessionStartedAt = null;
+
+    if (!Array.isArray(camp.sessionState.sessionHistory)) {
+      camp.sessionState.sessionHistory = [];
+    }
+
+    let savePointId = null;
+    if (camp.autoBackupCharacters) {
+      const sp = createSnapshot(`End of Session #${sessionNum}`);
+      if (sp) savePointId = sp.id;
+    }
+
+    camp.sessionState.sessionHistory.push({
+      sessionNumber: sessionNum,
+      durationMs: durationMs,
+      endedAt: new Date().toISOString(),
+      savePointId: savePointId
+    });
+
+    camp.sessionState.sessionNumber = sessionNum + 1;
+    camp.sessionState.totalElapsedMs = 0;
+
+    updateActiveCampaign({ sessionState: camp.sessionState });
+    return { sessionState: camp.sessionState, durationMs, sessionNum, savePointId };
+  }
+
+  function cancelSession() {
+    const camp = getActiveCampaign();
+    if (!camp || !camp.sessionState) return null;
+    if (camp.sessionState.status === 'ended') return null;
+
+    const sessionNum = camp.sessionState.sessionNumber || 1;
+    let sessionStartedAt = camp.sessionState.sessionStartedAt;
+    if (!sessionStartedAt) {
+      if (camp.sessionState.startedAt) {
+        sessionStartedAt = camp.sessionState.startedAt - (camp.sessionState.totalElapsedMs || 0);
+      } else {
+        sessionStartedAt = Date.now() - (camp.sessionState.totalElapsedMs || 0);
+      }
+    }
+
+    camp.sessionState.status = 'ended';
+    camp.sessionState.startedAt = null;
+    camp.sessionState.pausedAt = null;
+    camp.sessionState.sessionStartedAt = null;
+    camp.sessionState.totalElapsedMs = 0;
+
+    // Delete messages and rolls posted during this session from camp.sessionLog (and camp.log if present)
+    const cutoff = sessionStartedAt ? (sessionStartedAt - 50) : Date.now();
+    if (Array.isArray(camp.sessionLog)) {
+      camp.sessionLog = camp.sessionLog.filter(entry => {
+        if (!entry.timestamp) return false;
+        const entryTime = new Date(entry.timestamp).getTime();
+        return !isNaN(entryTime) && entryTime < cutoff;
+      });
+    }
+    if (Array.isArray(camp.log)) {
+      camp.log = camp.log.filter(entry => {
+        if (!entry.timestamp) return false;
+        const entryTime = new Date(entry.timestamp).getTime();
+        return !isNaN(entryTime) && entryTime < cutoff;
+      });
+    }
+
+    updateActiveCampaign({ sessionState: camp.sessionState, sessionLog: camp.sessionLog, log: camp.log });
+    addFileOperationLog(`Game Session #${sessionNum} was canceled without saving. Session entries discarded.`, 'session_cancel');
+    return { sessionState: camp.sessionState, sessionNum, sessionStartedAt: cutoff };
+  }
+
   return {
     generateSlug,
     getCampaigns,
@@ -1048,6 +1632,10 @@
     attachNPC,
     removeNPC,
     updateNPCConditions,
+    updateNPCHeroPoints,
+    updateNPCCharacterData,
+    duplicateNPC,
+    enumerateNPCName,
     updatePlayerConditions,
     addPlayerRequest,
     approvePlayer,
@@ -1079,6 +1667,7 @@
     addAuthorizedUser,
     removeAuthorizedUser,
     resetAuthorizedUserToken,
+    trustAuthorizedUserToken,
     isUserAuthorized,
     setGMUserName,
     getGMUserName,
@@ -1089,9 +1678,23 @@
     extractCharacterFromSnapshot,
     setAutoBackupCharacters,
     isAutoBackupCharactersEnabled,
+    isGmCharIncludedInParty,
+    setGmCharIncludedInParty,
+    saveCampaignCharacter,
+    getSavedCharacters,
+    deleteSavedCharacter,
+    getPartyCharacterIds,
+    isCharacterInParty,
+    addCharacterToParty,
+    removeCharacterFromParty,
     addEncounterEnemy,
     removeEncounterEnemy,
     updateEncounterEnemyConditions,
-    getEncounterEnemies
+    getEncounterEnemies,
+    getSessionState,
+    startSession,
+    pauseSession,
+    endSession,
+    cancelSession
   };
 }));

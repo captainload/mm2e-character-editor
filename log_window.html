@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Session Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=41">
+  <link rel="stylesheet" href="styles.css?v=51">
   <script>
     (function() {
       function applySavedThemeAndFonts() {
@@ -135,6 +135,11 @@
       border-style: dashed;
       background: rgba(39, 39, 42, 0.6);
     }
+    .roll-card.hp-enhanced {
+      border-color: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+      background: linear-gradient(to right, rgba(245, 158, 11, 0.08), var(--bg-panel, #27272a));
+    }
     .roll-header {
       display: flex;
       justify-content: space-between;
@@ -142,10 +147,29 @@
       font-size: var(--font-size-secondary, 13px);
     }
     .roll-math {
-      font-family: monospace;
-      font-size: 14px;
-      font-weight: bold;
-      color: var(--accent-primary, #dc2626);
+      font-family: inherit;
+      font-size: var(--font-size-controls, 13px);
+      color: var(--text-main);
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .log-roll-formula {
+      font-family: inherit;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .log-total-result {
+      font-family: inherit;
+      font-size: 1.15em;
+      font-weight: 800;
+      color: var(--accent-primary, #1d4ed8);
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 4px;
+      padding: 1px 6px;
+      display: inline-block;
+      letter-spacing: 0.3px;
     }
     .roll-result {
       font-size: var(--font-size-secondary, 13px);
@@ -181,6 +205,7 @@
     <button type="button" class="filter-chip" data-filter="attack">Attacks</button>
     <button type="button" class="filter-chip" data-filter="save">Saves</button>
     <button type="button" class="filter-chip" data-filter="check">Checks</button>
+    <button type="button" class="filter-chip" data-filter="hp" title="Show only rolls that used Hero Points">HP</button>
     <button type="button" class="filter-chip" data-filter="nat20">Nat 20</button>
     <button type="button" class="filter-chip" data-filter="failed">Failed</button>
     <button type="button" class="filter-chip" data-filter="silent">Silent</button>
@@ -205,8 +230,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="dice_notation.js"></script>
-  <script src="session_network.js"></script>
+  <script src="dice_notation.js?v=3"></script>
+  <script src="session_network.js?v=19"></script>
   <script>
     const allRollCards = [];
     let currentFilter = 'all';
@@ -234,6 +259,13 @@
         if (currentFilter === 'attack' && !item.rollType?.toLowerCase().includes('attack')) return false;
         if (currentFilter === 'save' && !item.rollType?.toLowerCase().includes('save') && !item.rollType?.toLowerCase().includes('toughness')) return false;
         if (currentFilter === 'check' && !item.rollType?.toLowerCase().includes('check')) return false;
+        if (currentFilter === 'hp') {
+          const hasHp = (typeof item.hpBonus === 'number' && item.hpBonus > 0) ||
+                        !!item.isHPRerolled ||
+                        !!(item.hpAnnouncement && item.hpAnnouncement.trim()) ||
+                        !!(item.rollType && (item.rollType.includes('+5 HP') || item.rollType.includes('HP Reroll') || item.rollType.includes('✨ HP')));
+          if (!hasHp) return false;
+        }
         if (currentFilter === 'nat20' && !item.isNat20) return false;
         if (currentFilter === 'failed' && !item.result?.toLowerCase().includes('fail')) return false;
         if (currentFilter === 'silent' && !item.isSilent) return false;
@@ -249,6 +281,10 @@
         return;
       }
 
+      function escapeHtml(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
       feed.innerHTML = filtered.map(item => {
         const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
         const natClass = item.isNat20 ? 'nat20' : (item.isNat1 ? 'nat1' : '');
@@ -256,24 +292,67 @@
         const silentBadge = item.isSilent ? `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px;">🔇 Silent</span>` : '';
         const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 10px;">★ Natural 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; font-size: 10px;">⚠ Natural 1</span>` : '');
 
+        const hasHpBonus = typeof item.hpBonus === 'number' && item.hpBonus > 0;
+        const isHpReroll = !!item.isHPRerolled;
+        const hpClass = (hasHpBonus || isHpReroll) ? 'hp-enhanced' : '';
+        let hpBadge = '';
+        if (isHpReroll || (item.rollType && item.rollType.includes('HP Reroll'))) {
+          hpBadge = `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px; font-weight: bold;">✨ HP Reroll</span>`;
+        }
+
+        let hpAnnouncementText = '';
+        if (item.hpAnnouncement) {
+          hpAnnouncementText = item.hpAnnouncement.replace(/\bHero Point\b/g, 'HP').replace(/^HP:\s*\+/i, '+').replace(/^HP\s*\+/i, '+');
+        } else if (hasHpBonus) {
+          hpAnnouncementText = `+${item.hpBonus} (Improve Roll)`;
+        } else if (isHpReroll) {
+          hpAnnouncementText = item.rerollInfo ? `HP Reroll: ${item.rerollInfo.replace(/\bHero Point\b/g, 'HP')}` : `HP Reroll (min 11–20 floor)`;
+        } else if (item.rollType && item.rollType.includes('+5 HP')) {
+          hpAnnouncementText = `+5 (Improve Roll)`;
+        } else if (item.rollType && item.rollType.includes('HP Reroll')) {
+          hpAnnouncementText = `HP Reroll (min 11–20 floor)`;
+        }
+        const hpAnnouncementHtml = hpAnnouncementText ? ` <span style="color: #f59e0b; font-size: 11px; font-weight: 600; margin-left: 4px;">[✨ ${escapeHtml(hpAnnouncementText)}]</span>` : '';
+
+        const cleanRollType = (item.rollType || 'Roll')
+          .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+          .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+          .trim();
+
+        let mathSnippet = '';
+        if (item.breakdown) {
+          const rawBreakdown = String(item.breakdown);
+          const eqIdx = rawBreakdown.lastIndexOf('=');
+          if (eqIdx !== -1) {
+            const formulaPart = rawBreakdown.substring(0, eqIdx).trim();
+            const totalPart = rawBreakdown.substring(eqIdx + 1).trim();
+            mathSnippet = `<span class="log-roll-formula">${escapeHtml(formulaPart)}</span> <span style="font-weight: 600; color: var(--text-muted);">=</span> <strong class="log-total-result">${escapeHtml(totalPart)}</strong>`;
+          } else {
+            mathSnippet = `<span class="log-roll-formula">${escapeHtml(rawBreakdown)}</span>`;
+          }
+        } else {
+          mathSnippet = `<strong class="log-total-result">${item.total !== undefined ? item.total : ''}</strong>`;
+        }
+
         return `
-          <div class="roll-card ${natClass} ${silentClass}">
+          <div class="roll-card ${natClass} ${silentClass} ${hpClass}">
             <div class="roll-header">
               <div>
-                <strong>${item.characterName || 'Hero'}</strong>
-                <span style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">(${item.playerName || 'Player'})</span>
+                <strong>${escapeHtml(item.characterName || 'Hero')}</strong>
+                <span style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">(${escapeHtml(item.playerName || 'Player')})</span>
               </div>
               <div style="display: flex; align-items: center; gap: 4px;">
                 ${silentBadge}
                 ${natBadge}
+                ${hpBadge}
                 <span style="color: var(--text-muted); font-size: 11px;">${time}</span>
               </div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px;">
-              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">${item.rollType || 'Roll'}</span>
-              <span class="roll-math">${item.breakdown || item.total}</span>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px; flex-wrap: wrap; gap: 4px;">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">${escapeHtml(cleanRollType)}</span>
+              <span class="roll-math">${mathSnippet}${hpAnnouncementHtml}</span>
             </div>
-            ${item.result ? `<div class="roll-result" style="color: ${item.result.toLowerCase().includes('fail') ? '#ef4444' : '#10b981'};">${item.result}</div>` : ''}
+            ${item.result ? `<div class="roll-result" style="color: ${item.result.toLowerCase().includes('fail') ? '#ef4444' : '#10b981'};">${escapeHtml(item.result)}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -316,15 +395,45 @@
     // Quick Dice Roll
     btnRoll.addEventListener('click', () => {
       const expr = txtDice.value.trim() || '1d20';
-      const rolled = DiceNotation.roll(expr);
+      const d20Match = expr.match(/^1?d20(?:\s*([+-]\s*\d+))?$/i);
+      let rolled = null;
+      let hpBonus = 0;
+      let isHPRerolled = false;
+      let hpAnnouncement = '';
+
+      if (d20Match && window.opener && typeof window.opener.performD20RollWithHP === 'function') {
+        const baseMod = d20Match[1] ? parseInt(d20Match[1].replace(/\s+/g, '')) : 0;
+        const r = window.opener.performD20RollWithHP(baseMod);
+        rolled = {
+          total: r.total,
+          breakdown: r.hpBonus > 0
+            ? `1d20 (${r.d20}) ${r.baseMod >= 0 ? '+' + r.baseMod : r.baseMod} [Base] + ${r.hpBonus} [✨ HP] = ${r.total}`
+            : (r.isHPRerolled && r.rawD20 <= 10
+               ? `1d20 (${r.rawD20} + 10 floor = ${r.d20}) ${r.mod >= 0 ? '+' + r.mod : r.mod} = ${r.total}`
+               : `1d20 (${r.d20}) ${r.mod >= 0 ? '+' + r.mod : r.mod} = ${r.total}`),
+          isNat20: r.isNat20,
+          isNat1: r.isNat1
+        };
+        hpBonus = r.hpBonus;
+        isHPRerolled = r.isHPRerolled;
+        hpAnnouncement = r.hpAnnouncement;
+      } else {
+        rolled = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: expr, isNat20: false, isNat1: false };
+      }
+
+      const charName = (window.opener && window.opener.char && window.opener.char.name) ? window.opener.char.name : 'Popout User';
+      const hpSuffix = (hpBonus > 0 ? ` (✨ +${hpBonus} HP)` : '') + (isHPRerolled ? ' (✨ HP Reroll)' : '');
       SessionNetwork.sendRoll({
-        characterName: 'Popout User',
-        rollType: 'Dice Roll',
+        characterName: charName,
+        rollType: `Dice (${expr})${hpSuffix}`,
         expression: expr,
         total: rolled.total,
-        breakdown: rolled.breakdown,
-        isNat20: rolled.isNat20,
-        isNat1: rolled.isNat1
+        breakdown: rolled.breakdown || `${rolled.total}`,
+        isNat20: !!rolled.isNat20,
+        isNat1: !!rolled.isNat1,
+        hpBonus,
+        isHPRerolled,
+        hpAnnouncement
       });
     });
 

@@ -49,7 +49,9 @@
     onPartyRosterHtml: [],
     onPartyReqRoster: [],
     onTrackerAction: [],
-    onThemeChange: []
+    onThemeChange: [],
+    onSessionStatus: [],
+    onSessionCancel: []
   };
 
   function initBroadcastChannel() {
@@ -104,8 +106,10 @@
             c._userToken = packet.userToken;
           }
 
-          // Duplicate login check: check if an existing open connection already has this player's name
+          // Duplicate login check: check if an existing open connection already has this player's name AND character name.
+          // Note: Players can run multiple instances/tabs to play multiple distinct characters!
           const incomingPlayerName = (packet.playerName || '').trim().toLowerCase();
+          const incomingCharName = (packet.characterName || '').trim().toLowerCase();
           let duplicateConn = null;
           let duplicatePeerId = null;
 
@@ -113,7 +117,9 @@
             for (const [peerId, conn] of clientConns.entries()) {
               if (peerId !== packet.id && conn && conn.open) {
                 const existingName = (conn._playerName || '').trim().toLowerCase();
-                if (existingName === incomingPlayerName) {
+                const existingChar = (conn._characterName || '').trim().toLowerCase();
+                // Only treat as duplicate if both player name and character name collide (or identical client peer)
+                if (existingName === incomingPlayerName && (!incomingCharName || !existingChar || existingChar === incomingCharName)) {
                   duplicateConn = conn;
                   duplicatePeerId = peerId;
                   break;
@@ -123,16 +129,33 @@
           }
 
           if (duplicateConn) {
-            const isSameToken = Boolean(
+            let isSameOrTrustedToken = Boolean(
               packet.userToken &&
               duplicateConn._userToken &&
               packet.userToken === duplicateConn._userToken
             );
+
+            // Also check if token belongs to the authorized user's trusted device keys
+            if (!isSameOrTrustedToken && packet.userToken && typeof CampaignManager !== 'undefined') {
+              try {
+                const camp = CampaignManager.getActiveCampaign();
+                if (camp && Array.isArray(camp.authorizedUsers)) {
+                  const authU = camp.authorizedUsers.find(u => (u.userName || '').trim().toLowerCase() === incomingPlayerName);
+                  if (authU) {
+                    const tokens = Array.isArray(authU.userTokens) ? authU.userTokens : (authU.userToken ? [authU.userToken] : []);
+                    if (tokens.includes(packet.userToken)) {
+                      isSameOrTrustedToken = true;
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
+
             emit('onDuplicateLoginAttempt', {
               incomingPacket: packet,
               existingPeerId: duplicatePeerId,
               existingConn: duplicateConn,
-              isSameToken: isSameToken,
+              isSameToken: isSameOrTrustedToken,
               playerName: packet.playerName
             });
           }
@@ -243,6 +266,13 @@
         emit('onGMTransfer', packet);
         break;
 
+      case 'PLAYER_LEAVE_PARTY':
+        emit('onPlayerLeaveParty', packet);
+        if (role === 'HOST') {
+          broadcastPacket(packet, false);
+        }
+        break;
+
       case 'POPOUT_DOCKED':
         emit('onPopoutDocked');
         break;
@@ -316,6 +346,39 @@
 
       case 'THEME_CHANGE':
         emit('onThemeChange', packet);
+        break;
+
+      case 'SESSION_STATUS':
+        if (role === 'HOST') {
+          clientConns.forEach((conn, pid) => {
+            if (conn && conn.open && pid !== packet.senderPlayerId) {
+              try { conn.send(packet); } catch (e) {}
+            }
+          });
+        }
+        emit('onSessionStatus', packet.sessionState);
+        break;
+
+      case 'SYSTEM':
+        if (role === 'HOST') {
+          clientConns.forEach((conn, pid) => {
+            if (conn && conn.open && pid !== packet.senderPlayerId) {
+              try { conn.send(packet); } catch (e) {}
+            }
+          });
+        }
+        emit('onChat', packet);
+        break;
+
+      case 'SESSION_CANCEL':
+        if (role === 'HOST') {
+          clientConns.forEach((conn, pid) => {
+            if (conn && conn.open && pid !== packet.senderPlayerId) {
+              try { conn.send(packet); } catch (e) {}
+            }
+          });
+        }
+        emit('onSessionCancel', packet);
         break;
 
       default:
@@ -550,9 +613,10 @@
     const packet = {
       type: 'ROLL',
       roll: {
+        type: 'ROLL',
         id: 'r_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         timestamp: new Date().toISOString(),
-        playerName: localPlayerInfo.playerName,
+        playerName: rollData.playerName || localPlayerInfo.playerName,
         characterName: rollData.characterName || localPlayerInfo.characterName,
         isNPC: !!rollData.isNPC,
         rollType: rollData.rollType || 'Check',
@@ -565,6 +629,10 @@
         result: rollData.result || '',
         isNat20: !!rollData.isNat20,
         isNat1: !!rollData.isNat1,
+        hpBonus: rollData.hpBonus || 0,
+        isHPRerolled: !!rollData.isHPRerolled,
+        hpAnnouncement: rollData.hpAnnouncement || '',
+        rerollInfo: rollData.rerollInfo || '',
         isSilent: isSilent
       }
     };
@@ -654,12 +722,12 @@
     return packet;
   }
 
-  function sendHeroPointSpent(characterName, remainingHP = 0, details = '') {
+  function sendHeroPointSpent(characterName, remainingHP = 0, details = '', customId = null, senderPlayerName = null) {
     const packet = {
       type: 'HERO_POINT_SPENT',
-      id: 'hp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: customId || ('hp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
       characterName: characterName || localPlayerInfo.characterName || 'Hero',
-      playerName: localPlayerInfo.playerName || 'Player',
+      playerName: senderPlayerName || localPlayerInfo.playerName || 'Player',
       senderPlayerId: peerInstance?.id || 'local_player',
       remainingHP: Math.max(0, Number(remainingHP) || 0),
       details: details || '',
@@ -805,6 +873,45 @@
     return false;
   }
 
+  function sendSessionStatus(sessionState) {
+    const packet = {
+      type: 'SESSION_STATUS',
+      sessionState,
+      senderPlayerId: peerInstance?.id || 'local_player',
+      timestamp: Date.now()
+    };
+    broadcastPacket(packet, true);
+    emit('onSessionStatus', sessionState);
+    return packet;
+  }
+
+  function sendSystemMessage(text, existingId = null) {
+    const packet = {
+      type: 'SYSTEM',
+      id: existingId || ('sys_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+      text: (typeof text === 'string') ? text.trim() : (text?.text || ''),
+      senderPlayerId: peerInstance?.id || 'local_player',
+      timestamp: (typeof text === 'object' && text?.timestamp) ? text.timestamp : new Date().toISOString()
+    };
+    broadcastPacket(packet, true);
+    return packet;
+  }
+
+  function sendSessionCancel(data) {
+    const packet = {
+      type: 'SESSION_CANCEL',
+      id: 'scancel_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      sessionState: data?.sessionState || null,
+      sessionStartedAt: data?.sessionStartedAt || null,
+      sessionNum: data?.sessionNum || 1,
+      senderPlayerId: peerInstance?.id || 'local_player',
+      timestamp: Date.now()
+    };
+    broadcastPacket(packet, true);
+    emit('onSessionCancel', packet);
+    return packet;
+  }
+
   return {
     initBroadcastChannel,
     startHost,
@@ -819,8 +926,11 @@
     sendGMStatusOverride,
     sendLocalBroadcast,
     sendChat,
+    sendSystemMessage,
     sendHeroPointSpent,
     sendStateSync,
+    sendSessionStatus,
+    sendSessionCancel,
     requestCharacterSheets,
     sendCharacterSheetData,
     sendPushCharacter,

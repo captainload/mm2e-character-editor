@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=42">
+  <link rel="stylesheet" href="styles.css?v=62">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -57,13 +57,13 @@
     /* Active (Ranked) Feat Tag Styling */
     .skill-adv-tag.active-adv-tag,
     .skill-feat-tag.active-feat-tag {
-      color: #f59e0b;
-      border-color: #f59e0b;
-      background: rgba(245, 158, 11, 0.1);
+      color: #b45309;
+      border-color: #b45309;
+      background: rgba(180, 83, 9, 0.1);
     }
     .skill-adv-tag.active-adv-tag:hover,
     .skill-feat-tag.active-feat-tag:hover {
-      background: #f59e0b;
+      background: #b45309;
       color: #ffffff;
     }
   </style>
@@ -74,12 +74,18 @@
   <div id="persistentHeader" class="persistent-header">
     <!-- Top App Header -->
     <header class="top-header">
-      <h1>Mutants & Masterminds 2nd Edition Hero Builder</h1>
+      <h1 class="app-main-title">
+        <span class="title-primary">Mutants &amp; Masterminds</span>
+        <span class="title-secondary">2nd Ed. Hero Builder</span>
+      </h1>
       
       <div class="header-actions">
         <span class="file-status-badge" id="lblCurrentFile" title="Current Character File">
           <span id="lblUnsavedIndicator" class="unsaved-indicator" style="display: none;">●</span><span id="lblCurrentFileNameText">[Unsaved Character]</span>
         </span>
+        <button type="button" class="btn btn-secondary" id="btnReturnToGMChar" style="display: none; align-items: center; gap: 4px; border-color: #0284c7; color: #0284c7; font-weight: 600; padding: 4px 10px;" onclick="window.gmReturnToPrimarySheet()" title="Click to save NPC changes and return to your GM character sheet">
+          ↩ Return to GM character
+        </button>
         <button class="btn btn-secondary" id="btnOpenImportAudit" style="display: none; align-items: center; gap: 4px;" title="View Hero Lab Import Audit Report">📋 Audit</button>
         <input type="file" id="fileLoadHero" accept=".mm2e,.json,.por" style="display: none;">
         
@@ -88,10 +94,10 @@
           ⚙ Options
         </button>
 
-        <!-- File Menu Dropdown at far right -->
+        <!-- Main Menu Dropdown at far right -->
         <div style="position: relative; display: inline-block;">
-          <button class="btn btn-secondary" id="btnFileMenu" style="display: flex; align-items: center; gap: 6px;" title="File Operations">
-            📁 File ▾
+          <button class="btn btn-secondary" id="btnFileMenu" style="display: flex; align-items: center; gap: 6px;" title="Main Operations">
+            📁 Main ▾
           </button>
           <div class="file-dropdown-menu" id="fileDropdownMenu" style="display: none;">
             <button type="button" class="file-menu-item" id="btnNewHero">
@@ -110,6 +116,10 @@
             <div class="file-menu-divider"></div>
             <button type="button" class="file-menu-item" id="btnPrintHero" onclick="window.print()">
               <span class="file-menu-icon">🖨️</span><span class="file-menu-label">Print Sheet</span>
+            </button>
+            <div class="file-menu-divider"></div>
+            <button type="button" class="file-menu-item" id="btnMainUsers" onclick="window.openUsersModal ? window.openUsersModal() : (document.getElementById('userManagementModal') &amp;&amp; document.getElementById('userManagementModal').classList.add('active')); document.getElementById('fileDropdownMenu').style.display='none';">
+              <span class="file-menu-icon">👤</span><span class="file-menu-label">Users &amp; Whitelist...</span>
             </button>
           </div>
         </div>
@@ -309,9 +319,9 @@
 
     <!-- Power Point Totals Header -->
     <div class="summary-bar">
-      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-        <span style="font-weight: 600;" id="lblContextRole">Character Form:</span>
-        <select id="selActiveCharacterContext" class="fit-content" style="height: 28px; font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; cursor: pointer; box-sizing: border-box; min-width: 260px; max-width: 440px;" title="Switch Active Character / Form">
+      <div style="display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap;">
+        <span style="font-weight: 600; white-space: nowrap;" id="lblContextRole">Character/Form:</span>
+        <select id="selActiveCharacterContext" style="height: 28px; font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; cursor: pointer; box-sizing: border-box; flex: 1; min-width: 220px;" title="Switch Active Character / Form">
           <option value="main">🦸 Main Hero: New Hero (PL 10)</option>
           <optgroup label="➕ Add Character / Form">
             <option value="__new_hero__">✨ + New Hero (Fresh Sheet)...</option>
@@ -325,14 +335,16 @@
           </optgroup>
         </select>
         <span id="lblHeroName" style="display: none;">New Hero</span>
-        | PL: <span class="badge" id="lblPL">10</span>
-        <button type="button" class="btn btn-secondary" id="btnTogglePPBreakdown" style="height: 28px; padding: 0 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Power Points Breakdown">
-          <span id="lblPointTypePrefix">⚡ PP:</span> <span class="badge" id="lblTotalPP">0 / 150 PP</span>
-        </button>
-        <button type="button" class="btn btn-secondary" id="btnOpenTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; box-sizing: border-box;" title="View Reference Tables">📊 Tables</button>
-        <button type="button" class="btn btn-secondary" id="btnOpenTracker" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Status &amp; Combat Tracker">⏱ Tracker</button>
-        <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Campaigns Hub &amp; Master Tracker">🏰 Campaigns</button>
-        <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="display: none; height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; align-items: center; gap: 4px; box-sizing: border-box;" title="Return to previous view">⬅ Back</button>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
+          <span>| PL: <span class="badge" id="lblPL">10</span></span>
+          <button type="button" class="btn btn-secondary" id="btnTogglePPBreakdown" style="height: 28px; padding: 0 8px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Power Points Breakdown">
+            <span id="lblPointTypePrefix">⚡ PP:</span> <span class="badge" id="lblTotalPP">0 / 150 PP</span>
+          </button>
+          <button type="button" class="btn btn-secondary" id="btnOpenTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; box-sizing: border-box;" title="View Reference Tables">📊 Tables</button>
+          <button type="button" class="btn btn-secondary" id="btnOpenTracker" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="Status &amp; Combat Tracker">⏱ Tracker</button>
+          <button type="button" class="btn btn-secondary" id="btnOpenGM" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;" title="GM Campaign Hub, Characters &amp; Encounters">👑 GM</button>
+          <button type="button" class="btn btn-secondary" id="btnBackFromTables" style="visibility: hidden; pointer-events: none; min-width: 72px; height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; color: #2563eb;" title="Return to previous view">⬅ Back</button>
+        </div>
       </div>
     </div>
 
@@ -372,6 +384,7 @@
           <div class="hero-detail-item">
             <label>Name:</label>
             <input type="text" id="heroNameInput" value="" placeholder="New Hero" maxlength="45" style="width: 200px;">
+            <span id="lblHeroNPCTag" class="badge" style="display: none; background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid rgba(2, 132, 199, 0.4); font-size: 11px; font-weight: bold; padding: 2px 8px; margin-left: 2px; align-items: center;">NPC</span>
           </div>
           <div class="hero-detail-item">
             <label>Player:</label>
@@ -386,14 +399,17 @@
             </div>
           </div>
           <div class="hero-detail-item" style="display: flex; align-items: center; gap: 6px;">
-            <label>Hero Points:</label>
+            <label>HP:</label>
             <div class="stepper-group" id="stepperHeroPoints">
               <button type="button" class="stepper-btn stepper-dec" id="btnDecHeroPoints" onclick="stepVal('heroPointsInput', -1, 0, 99)">−</button>
               <input type="number" id="heroPointsInput" class="stepper-input" min="0" max="99" value="1">
               <button type="button" class="stepper-btn stepper-inc" id="btnIncHeroPoints" onclick="stepVal('heroPointsInput', 1, 0, 99)">+</button>
             </div>
-            <button type="button" id="btnLockHeroPoints" class="btn btn-secondary" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); height: calc(var(--font-size-controls) * 2.14); min-height: 26px; display: inline-flex; align-items: center; justify-content: center; width: 28px;" title="Lock/Unlock Hero Points Stepper">
+            <button type="button" id="btnLockHeroPoints" class="btn btn-secondary" onclick="window.toggleHeroPointsLock && window.toggleHeroPointsLock()" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); height: calc(var(--font-size-controls) * 2.14); min-height: 26px; display: inline-flex; align-items: center; justify-content: center; width: 28px;" title="Lock/Unlock Hero Points Stepper">
               <span id="icoLockHeroPoints">🔓</span>
+            </button>
+            <button type="button" id="btnUseHeroPoint" class="btn btn-primary" onclick="window.openUseHeroPointModal('local_hero')" style="padding: 2px 10px; font-size: var(--font-size-controls, 13px); height: calc(var(--font-size-controls) * 2.14); min-height: 26px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;" title="Spend 1 Hero Point">
+              ✨ Use HP
             </button>
           </div>
         </div>
@@ -403,7 +419,7 @@
     <!-- Core Abilities Panel -->
     <div class="collapsible-panel">
       <div class="panel-header">
-        <span id="lblAbilitiesPanelTitle">Abilities (2 PP per Rank)</span>
+        <span id="lblAbilitiesPanelTitle">Abilities (1 PP per Score point over 10)</span>
         <span>▼</span>
       </div>
       <div class="panel-body">
@@ -869,30 +885,83 @@
       
       <!-- TOP SECTION: PARTY & USER TRACKER (Visible to all by default, lengthens dynamically) -->
       <div id="sessionPartyTrackerCard" class="tracker-card session-party-tracker" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; flex-shrink: 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; gap: 8px; width: 100%; box-sizing: border-box;">
-          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-            <strong style="font-size: var(--font-size-labels); display: flex; align-items: center; gap: 6px; color: var(--accent-primary); white-space: nowrap;">
-              🛡️ Party Display
-            </strong>
-            <span class="secondary-text" style="font-size: var(--font-size-fine-print); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">(Damage tracks &amp; conditions visible to all • Click character name for actions)</span>
+        <!-- TOP SESSION ROW (Replaces Party Display Header & Login Bar) -->
+        <div id="sessionTopControlRow" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 12px; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+          <!-- Left: User Identity, Campaign Name, Session Number, Live Date/Time -->
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;">
+            <span class="badge" id="lblSessionUserRoleBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 700; font-size: 12px; padding: 2px 8px;" title="Your User Identity and Role">
+              👤 Loading...
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; color: var(--accent-primary);" id="lblSessionCampaignNameTitle">
+              🏰 <span id="lblSessionCampaignName">Campaign</span>
+            </span>
+            <span class="badge" id="lblSessionNumberBadge" style="background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 600; font-size: 11px;">
+              Session #1
+            </span>
+            <span id="lblSessionDateTime" style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">
+              —
+            </span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
-            <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: var(--font-size-fine-print);">Offline</span>
-            <button type="button" class="btn btn-secondary" id="btnToggleLoginBar" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="User name and campaign login">👤 Login / Room ▾</button>
-            <button type="button" class="btn btn-secondary" id="btnToggleSilentMode" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="Mute/unmute local roll output to others">📡 Broadcast: ON</button>
-            <button type="button" class="btn btn-secondary" id="btnPopoutPartyDisplay" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print); display: inline-flex; align-items: center; gap: 4px; margin-left: 6px;" title="Pop out Party Display in separate window">↗ Pop Out</button>
-          </div>
-        </div>
 
-        <!-- User Login Mini-Bar (Collapsible) -->
-        <div id="sessionLoginBar" style="display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 4px; padding: 4px 8px; margin-bottom: 6px; flex-wrap: wrap;">
-          <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtSessionPlayerName">👤 User Name:</label>
-          <input type="text" id="txtSessionPlayerName" placeholder="Enter your user name" maxlength="45" style="width: 140px; height: 24px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
-          <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtSessionCampaignCode">Room / Code:</label>
-          <input type="text" id="txtSessionCampaignCode" placeholder="campaign-1" maxlength="45" style="width: 130px; height: 24px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
-          <button type="button" class="btn btn-primary" id="btnSessionConnect" style="height: 24px; padding: 0 10px; font-size: var(--font-size-fine-print); font-weight: 600;">🔑 Log In</button>
-          <button type="button" class="btn btn-secondary" id="btnSessionOpenProfile" style="height: 24px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="View your User Identity &amp; Account Key in Campaigns">👤 Profile</button>
-          <span id="lblSessionConnectMsg" style="font-size: var(--font-size-fine-print); color: var(--text-muted);"></span>
+          <!-- Right: Clock, GM Commands Dropdown, Submit Sheet, Popout -->
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto;">
+            <!-- Game Session Status Badge & Clock -->
+            <span class="badge" id="lblGameSessionStatusBadge" style="background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-weight: 600; font-size: 11px;">⏹️ Standby</span>
+            <span id="lblSessionLiveClock" style="font-family: monospace; font-size: 12px; font-weight: 700; color: var(--accent-primary); display: none;">00:00:00</span>
+
+            <!-- GM Commands Dropdown (Session controls, Broadcast, etc.) -->
+            <div class="gm-cmd-dropdown-container" id="boxSessionGMCommandsDropdown" style="position: relative; display: inline-block;">
+              <button type="button" class="btn btn-secondary" id="btnSessionGMCommands" style="height: 24px; padding: 0 8px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="GM Session &amp; Roll Broadcast Commands">
+                👑 GM Commands ▾
+              </button>
+              <div id="menuSessionGMCommands" style="display: none; position: absolute; right: 0; top: 100%; z-index: 1000; min-width: 210px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); padding: 4px 0; margin-top: 4px;">
+                <div style="padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Game Session</div>
+                <button type="button" class="file-menu-item" id="btnGMStartSession" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: #10b981; display: flex; align-items: center; gap: 6px;">
+                  <span>▶</span> <span>Start / Resume Session</span>
+                </button>
+                <button type="button" class="file-menu-item" id="btnGMPauseSession" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+                  <span>⏸</span> <span>Pause Session</span>
+                </button>
+                <button type="button" class="file-menu-item" id="btnGMEndSession" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: #ef4444; display: flex; align-items: center; gap: 6px;">
+                  <span>⏹</span> <span>End Session (Save Point)</span>
+                </button>
+                <button type="button" class="file-menu-item" id="btnGMCancelSession" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: #f87171; display: none; align-items: center; gap: 6px;">
+                  <span>❌</span> <span>Cancel Session (No Save)</span>
+                </button>
+                <div style="height: 1px; background: var(--border-color); margin: 4px 0;"></div>
+                <div style="padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Broadcasting</div>
+                <button type="button" class="file-menu-item" id="btnToggleSilentMode" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                  <span>📡</span> <span>Broadcast Output: ON</span>
+                </button>
+                <div style="height: 1px; background: var(--border-color); margin: 4px 0;"></div>
+                <button type="button" class="file-menu-item" id="btnSessionCopyInviteLink" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                  <span>📋</span> <span>Copy Campaign Link</span>
+                </button>
+                <button type="button" class="file-menu-item" id="btnSessionOpenUsersFromMenu" style="width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; border: none; background: none; cursor: pointer; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                  <span>👥</span> <span>Manage Users &amp; Whitelist</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Player Submit Sheet to GM Button -->
+            <button type="button" class="btn btn-secondary" id="btnPlayerSubmitSheet" style="height: 24px; padding: 0 8px; font-size: 11px; display: none; align-items: center; gap: 4px;" title="Send your active hero sheet to the GM">
+              📤 Submit Sheet to GM
+            </button>
+
+            <!-- Network Status Badge -->
+            <span class="badge" id="lblSessionStatusBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Offline</span>
+
+            <!-- GM Include Sheet Checkbox -->
+            <label id="lblToggleGMIncludeChar" style="display: none; align-items: center; gap: 5px; font-size: var(--font-size-fine-print, 12px); color: var(--text-muted); cursor: pointer; user-select: none;" title="Include your active editor sheet in the party roster">
+              <input type="checkbox" id="chkGMIncludeCharInParty" style="cursor: pointer;">
+              Include Editor Sheet
+            </label>
+
+            <!-- Pop Out Party Display Button -->
+            <button type="button" class="btn btn-secondary" id="btnPopoutPartyDisplay" style="height: 24px; padding: 0 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Pop out Party Display in separate window">
+              ↗ Pop Out
+            </button>
+          </div>
         </div>
 
         <!-- Party Display Popped-Out Notice -->
@@ -901,14 +970,14 @@
           <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplay" style="height: 22px; padding: 0 8px; font-size: var(--font-size-fine-print);">⬅ Re-dock</button>
         </div>
 
-        <!-- Party Tracker Table (NO Hero Points column, NO Modes column, includes Initiative) -->
-        <div class="gm-tracker-table-container" id="sessionPartyTableContainer" style="overflow-x: auto; overflow-y: auto; max-height: 240px; transition: max-height 0.2s;">
+        <!-- Party Tracker Table (With Initiative, Def/Tough, and Hero Points) -->
+        <div class="gm-tracker-table-container" id="sessionPartyTableContainer" style="overflow-x: auto; overflow-y: auto; max-height: 480px; min-height: auto;">
           <table class="data-table" id="tableSessionPartyRoster" style="width: 100%; border-collapse: collapse; min-width: 680px;">
             <thead>
               <tr>
                 <th style="width: 220px; text-align: left;">Character</th>
                 <th style="width: 55px; text-align: center;">Init</th>
-                <th style="width: 125px; text-align: center;">PL / Def / Tough</th>
+                <th style="width: 135px; text-align: center;">Combat &amp; Hero Points</th>
                 <th style="width: 170px; text-align: center;">Damage (Bruised / Injured)</th>
                 <th style="text-align: left;">Active Conditions</th>
               </tr>
@@ -920,26 +989,36 @@
         </div>
       </div>
 
+      <!-- Paused Session Banner -->
+      <div id="boxSessionPausedBanner" style="display: none; background: rgba(180, 83, 9, 0.15); border: 1px solid #b45309; color: #b45309; border-radius: 4px; padding: 6px 12px; margin-bottom: 6px; font-size: 12px; font-weight: 600; justify-content: space-between; align-items: center;">
+        <span>⏸️ Game session is currently paused by the GM. Player rolls are temporarily on hold.</span>
+        <span id="lblPausedBannerClock" style="font-family: monospace; font-size: 13px; font-weight: 700;">00:00:00</span>
+      </div>
+
       <!-- BOTTOM SECTION: DISCORD / ROLL20-STYLE TABLETOP CHAT & LOG -->
       <div id="sessionChatSection" class="session-chat-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
         
         <!-- Chat & Log Top Header Bar -->
-        <div class="session-chat-header" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 6px 12px; flex-wrap: wrap; gap: 8px;">
-          <!-- Left: Search Box -->
-          <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 260px;">
-            <input type="text" id="txtSessionSearch" placeholder='Search log... ("exact phrase", -exclude, from:Hero, type:attack)' style="flex: 1; height: 26px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+        <div class="session-chat-header" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 6px 12px; gap: 12px; flex-wrap: wrap;">
+          <!-- Left: Widened Search Box -->
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 220px;">
+            <input type="text" id="txtSessionSearch" placeholder='Search log... ("phrase", -term, type:check)' style="flex: 1; min-width: 150px; height: 26px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px; box-sizing: border-box;">
             <button type="button" class="btn btn-secondary" id="btnSessionClearSearch" style="height: 26px; padding: 0 8px; font-size: var(--font-size-fine-print);" title="Clear search">Clear</button>
-            <div style="display: flex; gap: 3px;" id="sessionFilterChips">
-              <button type="button" class="filter-chip active" data-filter="all" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">All</button>
-              <button type="button" class="filter-chip" data-filter="attack" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Atk</button>
-              <button type="button" class="filter-chip" data-filter="save" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Save</button>
-              <button type="button" class="filter-chip" data-filter="chat" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Chat</button>
-              <button type="button" class="filter-chip" data-filter="whisper" style="padding: 1px 6px; font-size: var(--font-size-fine-print);">Whisper</button>
-            </div>
+          </div>
+
+          <!-- Center: Filter Options -->
+          <div style="display: flex; gap: 4px; justify-content: center; align-items: center; flex-shrink: 0;" id="sessionFilterChips">
+            <button type="button" class="filter-chip active" data-filter="all" style="padding: 1px 7px; font-size: var(--font-size-fine-print);">All</button>
+            <button type="button" class="filter-chip" data-filter="attack" style="padding: 1px 7px; font-size: var(--font-size-fine-print);">Atk</button>
+            <button type="button" class="filter-chip" data-filter="save" style="padding: 1px 7px; font-size: var(--font-size-fine-print);">Save</button>
+            <button type="button" class="filter-chip" data-filter="check" style="padding: 1px 7px; font-size: var(--font-size-fine-print);">Check</button>
+            <button type="button" class="filter-chip" data-filter="hp" style="padding: 1px 7px; font-size: var(--font-size-fine-print);" title="Show only rolls that used Hero Points">HP</button>
+            <button type="button" class="filter-chip" data-filter="chat" style="padding: 1px 7px; font-size: var(--font-size-fine-print);">Chat</button>
+            <button type="button" class="filter-chip" data-filter="whisper" style="padding: 1px 7px; font-size: var(--font-size-fine-print);">Whisper</button>
           </div>
 
           <!-- Right: GM Name -->
-          <div style="display: flex; align-items: center; gap: 10px; font-size: var(--font-size-controls);">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: var(--font-size-controls); flex-shrink: 0;">
             <span id="lblSessionGMInfo" style="color: var(--accent-primary); font-size: var(--font-size-secondary);" title="Campaign GM Host">👑 GM: <strong>GM</strong></span>
           </div>
         </div>
@@ -1224,8 +1303,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button type="button" class="btn btn-secondary" id="btnPopoutTracker" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Pop out Status & Combat Tracker into standalone window">🪟 Pop Out</button>
-          <button type="button" class="btn btn-secondary" id="btnTrackerReturnToSheet" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Return to previous sheet view">⬅ Return to Sheet</button>
-          <button type="button" class="btn btn-secondary" id="btnResetTrackerSize" style="display: none;" title="Reset Tracker Size">↺ Reset Size</button>
+                    <button type="button" class="btn btn-secondary" id="btnResetTrackerSize" style="display: none;" title="Reset Tracker Size">↺ Reset Size</button>
           <button class="info-popup-close" id="modalStatusTrackerClose" style="display: none;" title="Close Tracker">✕</button>
         </div>
       </div>
@@ -1424,7 +1502,7 @@
 
   <!-- TAB: GM (Standalone Management & Campaign Control Center) -->
   <section id="tab-gm" class="tab-content" style="max-width: 1360px;">
-    <div style="display: flex; flex-direction: column; gap: 10px; max-width: 1360px; margin: 0 auto;">
+    <div style="display: flex; flex-direction: column; gap: 8px; max-width: 1360px; margin: 0 auto; width: 100%; flex: 1; min-height: 0;">
       
       <!-- GM / Campaigns Header Bar -->
       <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 14px; flex-wrap: wrap; gap: 8px;">
@@ -1435,80 +1513,26 @@
           <span class="badge" id="lblGMHostStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 12px; padding: 2px 8px;">Campaigns Active</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <button type="button" class="btn btn-secondary" id="btnGMReturnToSheet" style="height: 26px; padding: 0 10px; font-size: var(--font-size-minor-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Return to previous sheet view">⬅ Back</button>
-        </div>
+                  </div>
       </div>
 
-      <!-- SECTION 1: USER IDENTITY & CAMPAIGN ACCESS MANAGEMENT CARD (First section users notice) -->
-      <div class="tracker-card" id="campaignUserManagementCard" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+      <!-- SECTION 1: CAMPAIGN CHARACTERS & PARTY ROSTER -->
+      <div class="tracker-card" id="gmCampaignCharactersCard" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <strong style="font-size: var(--font-size-labels); color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
-              👤 User Identity &amp; Campaign Access Management
+            <strong style="font-size: var(--font-size-labels, 15px); font-weight: 700; color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+              👥 Campaign Characters &amp; Party Roster
             </strong>
-            <span class="secondary-text" style="font-size: var(--font-size-fine-print, 13px);">(Your user name &amp; P2P account token • Authorized player whitelist)</span>
+            <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted);">(Characters added to party auto-join the session when connected)</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span id="lblLocalAccountStatusBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; font-size: var(--font-size-fine-print, 12px); padding: 2px 8px;">🛡️ P2P Authenticated</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="btn btn-secondary" id="btnGMRefreshCharacters" style="height: 26px; padding: 0 10px; font-size: 12px;" title="Refresh characters list">🔄 Refresh</button>
           </div>
         </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; align-items: start;">
-          
-          <!-- Left Side: Your Local User Profile & P2P Token (For All Users: GMs & Players) -->
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
-            <div style="font-weight: 700; font-size: var(--font-size-labels, 15px); color: var(--text-main); display: flex; align-items: center; gap: 6px;">
-              <span>🔑 Your User Identity &amp; Account Key</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: var(--font-size-controls, 14px); font-weight: 600; color: var(--text-muted);" for="txtLocalAccountUserName">Your User Name:</label>
-              <div style="display: flex; gap: 6px;">
-                <input type="text" id="txtLocalAccountUserName" placeholder="Enter your user name" maxlength="45" style="flex: 1; height: 30px; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
-                <button type="button" class="btn btn-secondary" id="btnSaveLocalAccountUserName" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">Save</button>
-              </div>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: var(--font-size-controls, 14px); font-weight: 600; color: var(--text-muted);">Unique P2P Account Key:</label>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <code id="lblLocalAccountToken" style="flex: 1; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px 8px; font-size: 13px; color: var(--accent-primary); word-break: break-all; user-select: all;">usr_...</code>
-                <button type="button" class="btn btn-secondary" id="btnCopyLocalAccountToken" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" title="Copy account key to clipboard">📋 Copy</button>
-                <button type="button" class="btn btn-secondary" id="btnImportLocalAccountToken" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;" title="Import or set your account key for another device">🔑 Import</button>
-              </div>
-              <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted); line-height: 1.4;">
-                This cryptographic token authenticates your user identity across peer-to-peer campaigns without central servers.
-              </span>
-            </div>
-          </div>
-
-          <!-- Right Side: Campaign Authorized Users Whitelist (GM Controls) -->
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-              <div style="font-weight: 700; font-size: var(--font-size-labels, 15px); color: var(--text-main); display: flex; align-items: center; gap: 6px;">
-                <span>👥 Campaign Player Whitelist</span>
-                <span id="lblGMInlineUserCount" class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: var(--font-size-fine-print, 12px);">0 users</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <label style="font-size: var(--font-size-controls, 14px); color: var(--text-muted);">GM Name:</label>
-                <input type="text" id="txtInlineGMName" placeholder="GM Name" style="width: 120px; height: 30px; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
-                <button type="button" class="btn btn-secondary" id="btnSaveInlineGMName" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;">Save</button>
-              </div>
-            </div>
-
-            <!-- Add User input row -->
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <input type="text" id="txtInlineNewUserName" placeholder="Enter player user name (e.g. Alice, Bob)..." style="flex: 1; height: 30px; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
-              <button type="button" class="btn btn-primary" id="btnInlineAddNewUser" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ Authorize User</button>
-            </div>
-
-            <!-- Authorized Users Table Container -->
-            <div id="campaignInlineUsersTableContainer" style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel);">
-              <!-- Dynamically rendered -->
-            </div>
-          </div>
-
+        <div id="gmCampaignCharactersList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; padding: 2px;">
+          <!-- Dynamically populated campaign characters -->
         </div>
       </div>
-
 
       <!-- Active Campaign & Backup Controls Bar -->
       <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
@@ -1524,6 +1548,15 @@
           </div>
           <button type="button" class="btn btn-secondary" id="btnGMCopyPlayerLink" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Copy campaign invite link or code for players">📋 Copy Link</button>
           <button type="button" class="btn btn-secondary" id="btnGMManageUsers" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Manage Authorized Users / Players for this Campaign">👥 Users (<span id="lblGMUserCount">0</span>)</button>
+          <div id="gmCampTabSessionControls" style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 8px; height: 30px; box-sizing: border-box;">
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Session:</span>
+            <span class="badge" id="lblGMCampaignSessionBadge" style="background: rgba(107, 114, 128, 0.15); color: var(--text-muted); font-size: 12px;">Standby</span>
+            <span id="lblGMCampaignSessionClock" style="font-family: monospace; font-size: 12px; font-weight: 700; color: var(--accent-primary); display: none;">00:00:00</span>
+            <button type="button" class="btn btn-primary" id="btnGMCampTabStartSession" style="height: 24px; padding: 0 8px; font-size: 12px; font-weight: 600;" title="Start or resume the game session">▶ Start</button>
+            <button type="button" class="btn btn-secondary" id="btnGMCampTabPauseSession" style="height: 24px; padding: 0 8px; font-size: 12px; display: none;" title="Pause the game session">⏸ Pause</button>
+            <button type="button" class="btn btn-secondary" id="btnGMCampTabEndSession" style="height: 24px; padding: 0 8px; font-size: 12px; color: #ef4444; display: none;" title="End game session and create save point">⏹ End</button>
+            <button type="button" class="btn btn-secondary" id="btnGMCampTabCancelSession" style="height: 24px; padding: 0 8px; font-size: 12px; color: #f87171; display: none;" title="Cancel game session without saving and delete session messages">❌ Cancel</button>
+          </div>
         </div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           <button type="button" class="btn btn-secondary" id="btnGMExportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Export campaign as JSON backup">📥 Backup JSON</button>
@@ -1564,44 +1597,44 @@
         </div>
 
         <!-- Timeline List Container -->
-        <div id="gmTimelineContainer" style="display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding: 2px;">
+        <div id="gmTimelineContainer" style="display: flex; flex-direction: column; gap: 2px; max-height: 105px; overflow-y: auto; padding: 1px 2px;">
           <!-- Dynamically populated save points -->
         </div>
       </div>
 
-      <!-- PARTY NPCS & ENCOUNTER ADVERSARIES SECTION -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <!-- PARTY NPCS & ENCOUNTER ADVERSARIES SECTION (Expanded to reach tab bottom) -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; min-height: 0; overflow-x: hidden;">
         
         <!-- Friendly Party NPCs -->
-        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; flex: 1; min-height: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; flex-wrap: wrap; gap: 6px;">
             <strong style="font-size: var(--font-size-labels, 15px); font-weight: 700; color: #0284c7; display: flex; align-items: center; gap: 6px;">
               🛡️ Friendly Party NPCs
             </strong>
             <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn btn-primary" id="btnGMAttachNPC" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ Attach From Editor</button>
-              <button type="button" class="btn btn-secondary" id="btnGMAttachNPCFile" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px);">📂 From File</button>
+              <button type="button" class="btn btn-primary" id="btnGMAttachNPC" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ Attach From Editor</button>
+              <button type="button" class="btn btn-secondary" id="btnGMAttachNPCFile" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px);">📂 From File</button>
               <input type="file" id="fileGMAttachNPC" accept=".mm2e,.por,.json" style="display: none;">
             </div>
           </div>
-          <div id="gmPartyNpcList" style="display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto;">
+          <div id="gmPartyNpcList" style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 2px;">
             <!-- Dynamically populated -->
           </div>
         </div>
 
         <!-- Encounter Enemies & Adversaries -->
-        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+        <div class="tracker-card" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; flex: 1; min-height: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; flex-wrap: wrap; gap: 6px;">
             <strong style="font-size: var(--font-size-labels, 15px); font-weight: 700; color: #ef4444; display: flex; align-items: center; gap: 6px;">
               ⚔️ Encounter Adversaries &amp; Enemies
             </strong>
             <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn btn-primary" id="btnGMAddEnemy" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600; background: #dc2626; border-color: #dc2626;">+ Add Adversary</button>
-              <button type="button" class="btn btn-secondary" id="btnGMAddEnemyFile" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls, 13px);">📂 From File</button>
+              <button type="button" class="btn btn-primary" id="btnGMAddEnemy" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px); font-weight: 600; background: #dc2626; border-color: #dc2626;">+ Add Adversary</button>
+              <button type="button" class="btn btn-secondary" id="btnGMAddEnemyFile" style="height: 26px; padding: 0 10px; font-size: var(--font-size-controls, 13px);">📂 From File</button>
               <input type="file" id="fileGMAddEnemy" accept=".mm2e,.por,.json" style="display: none;">
             </div>
           </div>
-          <div id="gmEncounterEnemyList" style="display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto;">
+          <div id="gmEncounterEnemyList" style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 2px;">
             <!-- Dynamically populated -->
           </div>
         </div>
@@ -1619,6 +1652,56 @@
         <button class="info-popup-close" onclick="document.getElementById('diceRollModal').classList.remove('active')">✕</button>
       </div>
       <div class="info-popup-body" id="diceRollModalBody" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; white-space: normal;"></div>
+    </div>
+  </div>
+
+  <!-- Use Hero Point Dialog Modal Overlay -->
+  <div class="modal-overlay" id="useHeroPointModal" onclick="if(event.target===this)(window.closeUseHeroPointModal ? window.closeUseHeroPointModal() : this.classList.remove('active'))">
+    <div class="info-popup-box" style="width: 95%; max-width: 700px; max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3 id="useHeroPointModalTitle" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+          ✨ Hero Point Options
+        </h3>
+        <button class="info-popup-close" id="btnCloseUseHeroPointModal" onclick="window.closeUseHeroPointModal ? window.closeUseHeroPointModal() : document.getElementById('useHeroPointModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: var(--font-size-controls, 14px); flex: 1; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 6px 12px;">
+          <div style="font-size: 12px; color: var(--text-main);">
+            <strong>Hero Points Available:</strong> <span class="badge" id="lblModalCurrentHP" style="font-size: 13px; font-weight: 700; background: #f59e0b; color: #000; padding: 1px 8px; border-radius: 10px; margin-left: 4px;">1</span>
+          </div>
+          <div style="font-size: var(--font-size-fine-print, 11px); color: var(--text-muted);">
+            Select an official M&amp;M 2E Hero Point use or House Rule option (declared before rolling)
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="txtHPSearch" placeholder="🔍 Search options (e.g. skill, attack, power, recover, surge)..." oninput="window.filterHeroPointOptions && window.filterHeroPointOptions()" style="flex: 1; height: 30px; font-size: 13px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; box-sizing: border-box;">
+          <select id="selHPCategoryFilter" onchange="window.filterHeroPointOptions && window.filterHeroPointOptions()" style="height: 30px; font-size: 12px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 6px;">
+            <option value="all">All Categories</option>
+            <option value="rolls_actions">🎲 Rolls &amp; Actions (House Rules &amp; Reroll)</option>
+            <option value="extra_effort">⚡ Extra Effort &amp; Powers</option>
+            <option value="health_recovery">🛡️ Health &amp; Recovery</option>
+            <option value="tactics_feats">⚔️ Tactics &amp; Feats</option>
+            <option value="narrative">💡 Narrative &amp; Edits</option>
+          </select>
+        </div>
+
+        <div id="hpOptionsListContainer" class="hp-options-container">
+          <!-- Dynamically populated list of all official options with ? info buttons -->
+        </div>
+
+        <div id="hpSelectionNotice" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; font-size: 12px; line-height: 1.4; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+          <span id="lblHPSelectedDestination">Select an option above to proceed.</span>
+        </div>
+
+        <div>
+          <input type="text" id="txtHPDetails" placeholder="Optional notes / target (e.g. Acrobatics to balance, Toughness save vs fire)" style="width: 100%; height: 28px; font-size: 12px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; box-sizing: border-box;">
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" id="btnCancelUseHP" onclick="window.closeUseHeroPointModal ? window.closeUseHeroPointModal() : document.getElementById('useHeroPointModal').classList.remove('active')">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmUseHP" onclick="window.confirmUseHeroPoint && window.confirmUseHeroPoint()" style="font-weight: 600; display: flex; align-items: center; gap: 4px;">✓ Confirm Option</button>
+      </div>
     </div>
   </div>
 
@@ -1762,7 +1845,7 @@
       <div class="info-popup-body" style="display: flex; flex-direction: column; gap: 6px; overflow: hidden; padding: 8px 12px 6px 12px; white-space: normal; flex: 1; min-height: 0; box-sizing: border-box;">
         
         <!-- Top Half: Pick List & Initial Ranks Row (50% of pop-up length) -->
-        <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
+        <div id="boxFeatTopPane" style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
           <!-- Category Filter & Search -->
           <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
             <input type="text" id="txtFeatSearch" placeholder="Search feats by name or keyword..." style="flex: 1; min-width: 180px; font-size: var(--font-size-controls); padding: 4px 8px; box-sizing: border-box;" oninput="window.filterFeatModalOptions()">
@@ -1808,8 +1891,8 @@
           </div>
         </div>
 
-        <!-- 50% Divider -->
-        <div style="border-top: 1px dashed var(--border-color); margin: 2px 0;"></div>
+        <!-- Movable Divider -->
+        <div id="divFeatModalDivider" class="split-pane-divider-h" title="Drag to resize pane height. Double-click to reset."></div>
 
         <!-- Bottom Half: Trait Description Pane (extending to almost touch the bottom of the popup) -->
         <div id="boxFeatPreview" style="flex: 1; min-height: 0; padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--font-size-secondary); overflow-y: auto; line-height: 1.35; box-sizing: border-box; margin-bottom: 2px;">
@@ -1828,48 +1911,51 @@
       </div>
       <div class="info-popup-body" style="display: flex; flex-direction: column; gap: 6px; overflow: hidden; padding: 8px 12px 6px 12px; white-space: normal; flex: 1; min-height: 0; box-sizing: border-box;">
         
-        <!-- Skill Choice Section (consumes 50% by default, or clamp(160px, 30vh, 230px) when specialization is active) -->
-        <div id="boxSkillChoiceContainer" style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 140px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-            <label style="font-weight: 600; font-size: var(--font-size-labels); margin: 0;">Choose Skill:</label>
-            <span id="lblSkillCheckedCount" style="font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 600;"></span>
-          </div>
-          <input type="hidden" id="selSkillChoice" value="">
-
-          <div id="listSkillChoice" class="touch-trait-list" style="flex: 1; min-height: 120px; overflow-y: auto;" role="listbox" aria-label="Choose Skill">
-            <!-- Populated dynamically with touch-friendly rows and checkboxes -->
-          </div>
-        </div>
-
-        <!-- Dynamic Specialization Container (shown for Craft, Knowledge, Perform, Drive, Pilot, Profession, Language) -->
-        <div id="boxSkillSpecContainer" style="display: none; padding: 6px 8px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 4px; flex-shrink: 0; box-sizing: border-box;">
-          <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 2px;" id="lblSkillSpecTitle">Specialization (Treated as a Separate Skill):</label>
-          <input type="hidden" id="selSkillSpecialization" value="">
-          <div id="listSkillSpecialization" class="touch-trait-list" style="height: 185px; max-height: 185px; overflow-y: auto; margin-bottom: 4px;" role="listbox" aria-label="Choose Specialization">
-            <!-- Populated with canonical specializations -->
-          </div>
-          <input type="text" id="txtSkillCustomSpec" placeholder="Or enter custom specialization..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 6px; box-sizing: border-box; display: none;">
-        </div>
-
-        <!-- Unified Initial Bought Ranks & Action Buttons Row -->
-        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); gap: 8px; flex-wrap: wrap; flex-shrink: 0;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span style="font-weight: 600; font-size: var(--font-size-labels);">Initial Bought Ranks:</span>
-            <div class="stepper-group">
-              <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('numSkillInitialRank', -1, 1, 20)">−</button>
-              <input type="number" id="numSkillInitialRank" class="stepper-input" min="1" max="20" value="4">
-              <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('numSkillInitialRank', 1, 1, 20)">+</button>
+        <!-- Top Half: Skill Choice Section, Spec & Initial Ranks -->
+        <div id="boxSkillTopPane" style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
+          <!-- Skill Choice Section -->
+          <div id="boxSkillChoiceContainer" style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 140px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <label style="font-weight: 600; font-size: var(--font-size-labels); margin: 0;">Choose Skill:</label>
+              <span id="lblSkillCheckedCount" style="font-size: var(--font-size-secondary); color: var(--accent-primary); font-weight: 600;"></span>
             </div>
-            <span class="secondary-text" style="font-size: var(--font-size-secondary);">(4 ranks = 1 PP)</span>
+            <input type="hidden" id="selSkillChoice" value="">
+
+            <div id="listSkillChoice" class="touch-trait-list" style="flex: 1; min-height: 120px; overflow-y: auto;" role="listbox" aria-label="Choose Skill">
+              <!-- Populated dynamically with touch-friendly rows and checkboxes -->
+            </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-            <button type="button" class="btn btn-secondary" onclick="window.closeAddSkillModal()">Cancel</button>
-            <button type="button" class="btn" id="btnAddSkillConfirm" onclick="window.confirmAddSkill()">+ Add to Sheet</button>
+
+          <!-- Dynamic Specialization Container (shown for Craft, Knowledge, Perform, Drive, Pilot, Profession, Language) -->
+          <div id="boxSkillSpecContainer" style="display: none; padding: 6px 8px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 4px; flex-shrink: 0; box-sizing: border-box;">
+            <label style="font-weight: 600; font-size: var(--font-size-labels); display: block; margin-bottom: 2px;" id="lblSkillSpecTitle">Specialization (Treated as a Separate Skill):</label>
+            <input type="hidden" id="selSkillSpecialization" value="">
+            <div id="listSkillSpecialization" class="touch-trait-list" style="height: 185px; max-height: 185px; overflow-y: auto; margin-bottom: 4px;" role="listbox" aria-label="Choose Specialization">
+              <!-- Populated with canonical specializations -->
+            </div>
+            <input type="text" id="txtSkillCustomSpec" placeholder="Or enter custom specialization..." style="width: 100%; font-size: var(--font-size-controls); padding: 4px 6px; box-sizing: border-box; display: none;">
+          </div>
+
+          <!-- Unified Initial Bought Ranks & Action Buttons Row -->
+          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); gap: 8px; flex-wrap: wrap; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span style="font-weight: 600; font-size: var(--font-size-labels);">Initial Bought Ranks:</span>
+              <div class="stepper-group">
+                <button type="button" class="stepper-btn stepper-dec" onclick="stepVal('numSkillInitialRank', -1, 1, 20)">−</button>
+                <input type="number" id="numSkillInitialRank" class="stepper-input" min="1" max="20" value="4">
+                <button type="button" class="stepper-btn stepper-inc" onclick="stepVal('numSkillInitialRank', 1, 1, 20)">+</button>
+              </div>
+              <span class="secondary-text" style="font-size: var(--font-size-secondary);">(4 ranks = 1 PP)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+              <button type="button" class="btn btn-secondary" onclick="window.closeAddSkillModal()">Cancel</button>
+              <button type="button" class="btn" id="btnAddSkillConfirm" onclick="window.confirmAddSkill()">+ Add to Sheet</button>
+            </div>
           </div>
         </div>
 
-        <!-- Divider -->
-        <div id="divSkillModalDivider" style="border-top: 1px dashed var(--border-color); margin: 2px 0; flex-shrink: 0;"></div>
+        <!-- Movable Divider -->
+        <div id="divSkillModalDivider" class="split-pane-divider-h" title="Drag to resize pane height. Double-click to reset."></div>
 
         <!-- Bottom Half: Skill Description Pane (extending to almost touch the bottom of the popup) -->
         <div id="boxSkillPreview" style="flex: 1; min-height: 70px; padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--font-size-secondary); overflow-y: auto; line-height: 1.35; box-sizing: border-box; margin-bottom: 2px;">
@@ -1932,17 +2018,44 @@
   </div>
 
   <!-- Campaign Authorized Users & Whitelist Modal Overlay -->
-  <div class="modal-overlay" id="campaignUsersModal" onclick="if(event.target===this)this.classList.remove('active')">
-    <div class="info-popup-box" style="width: 92%; max-width: 780px; max-height: 85vh; display: flex; flex-direction: column;">
+  <div class="modal-overlay" id="campaignUsersModal" onclick="if(event.target===this)(window.closeCampaignUsersModal ? window.closeCampaignUsersModal() : this.classList.remove('active'))">
+    <div class="info-popup-box" style="width: 92%; max-width: 820px; max-height: 88vh; display: flex; flex-direction: column;">
       <div class="info-popup-header" style="padding: 10px 16px;">
         <h3 id="campaignUsersModalTitle" style="margin: 0; display: flex; align-items: center; gap: 8px;">
-          👥 Campaign Users &amp; Player Whitelist
+          👥 User Identity &amp; Campaign Player Whitelist
         </h3>
-        <button class="info-popup-close" onclick="document.getElementById('campaignUsersModal').classList.remove('active')">✕</button>
+        <button class="info-popup-close" id="btnCloseCampaignUsersModal" onclick="window.closeCampaignUsersModal ? window.closeCampaignUsersModal() : document.getElementById('campaignUsersModal').classList.remove('active')">✕</button>
+      </div>
+
+      <!-- SECTION: YOUR USER IDENTITY & ACCOUNT KEY -->
+      <div style="padding: 12px 16px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <strong style="font-size: var(--font-size-labels, 14px); color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+            🔑 Your User Identity &amp; Account Key
+          </strong>
+          <span id="lblLocalAccountStatusBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; font-size: 11px; padding: 2px 8px;">🛡️ P2P Authenticated</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);" for="txtLocalAccountUserName">Your User Name:</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="txtLocalAccountUserName" placeholder="Enter your user name" maxlength="45" style="flex: 1; height: 28px; font-size: 13px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px;">
+              <button type="button" class="btn btn-secondary" id="btnSaveLocalAccountUserName" style="height: 28px; padding: 0 10px; font-size: 12px; font-weight: 600;">Save</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Unique P2P Account Key:</label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <code id="lblLocalAccountToken" style="flex: 1; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--accent-primary); word-break: break-all; user-select: all;">usr_...</code>
+              <button type="button" class="btn btn-secondary" id="btnCopyLocalAccountToken" style="height: 28px; padding: 0 8px; font-size: 12px; font-weight: 600;" title="Copy account key to clipboard">📋 Copy</button>
+              <button type="button" class="btn btn-secondary" id="btnImportLocalAccountToken" style="height: 28px; padding: 0 8px; font-size: 12px; font-weight: 600;" title="Import account key from another device">🔑 Import</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Subtitle & GM Identity Bar -->
-      <div style="padding: 8px 16px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <div style="padding: 8px 16px; background: var(--bg-panel); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div style="display: flex; align-items: center; gap: 6px; font-size: var(--font-size-secondary);">
           <span>Campaign:</span>
           <strong id="lblUsersModalCampName" style="color: var(--accent-primary);">Campaign</strong>
@@ -1950,7 +2063,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 6px;">
           <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">👑 GM Name:</label>
-          <input type="text" id="txtUsersModalGMName" placeholder="GM Name" style="width: 120px; height: 24px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
+          <input type="text" id="txtUsersModalGMName" placeholder="GM Name" style="width: 120px; height: 24px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 6px;">
           <button type="button" class="btn btn-secondary" id="btnSaveUsersModalGMName" style="height: 24px; padding: 0 8px; font-size: 11px;">Save</button>
         </div>
       </div>
@@ -1974,7 +2087,7 @@
 
       <div class="modal-footer" style="padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); background: var(--bg-card);">
         <span id="lblCampaignUsersSummary" style="font-size: 12px; color: var(--text-muted);">0 authorized users</span>
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('campaignUsersModal').classList.remove('active')">Close</button>
+        <button type="button" class="btn btn-secondary" onclick="window.closeCampaignUsersModal ? window.closeCampaignUsersModal() : document.getElementById('campaignUsersModal').classList.remove('active')">Close</button>
       </div>
     </div>
   </div>
@@ -2028,7 +2141,7 @@
   <div class="modal-overlay" id="unsavedSessionRestoreModal">
     <div class="info-popup-box" style="width: 90%; max-width: 520px; display: flex; flex-direction: column;">
       <div class="info-popup-header" style="padding: 10px 16px;">
-        <h3 style="color: #f59e0b; display: flex; align-items: center; gap: 8px;">⚠️ Restore Unsaved Campaign?</h3>
+        <h3 style="color: #b45309; display: flex; align-items: center; gap: 8px;">⚠️ Restore Unsaved Campaign?</h3>
         <button class="info-popup-close" id="btnCloseUnsavedRestoreModal">✕</button>
       </div>
       <div class="info-popup-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: var(--font-size-secondary); line-height: 1.5;">
@@ -2091,28 +2204,30 @@
   <!-- Data and Model Files -->
   <script src="data_feats.js?v=11"></script>
   <script src="data_skills.js?v=10"></script>
-  <script src="data_powers_effects.js?v=24"></script>
-  <script src="data_powers_profiles.js?v=8"></script>
+  <script src="data_powers_effects.js?v=25"></script>
+  <script src="data_powers_profiles.js?v=9"></script>
   <script src="data_powers_modifiers.js?v=13"></script>
   <script src="data_measurements.js?v=8"></script>
   <script src="data_equipment.js?v=6"></script>
-  <script src="character_model.js?v=23"></script>
-  <script src="por_importer.js?v=19"></script>
-  <script src="print.js?v=10"></script>
+  <script src="character_model.js?v=30"></script>
+  <script src="por_importer.js?v=33"></script>
+  <script src="print.js?v=15"></script>
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
-  <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=9"></script>
-  <script src="session_tracker.js?v=1"></script>
+  <script src="campaign_manager.js?v=18"></script>
+  <script src="session_network.js?v=19"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=104"></script>
+  <script src="app.js?v=147"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
     // Service Worker Registration for Offline PWA Capabilities
     if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=50').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=96').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

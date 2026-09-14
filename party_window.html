@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Party Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=42">
+  <link rel="stylesheet" href="styles.css?v=62">
   <script>
     (function() {
       function getActiveTheme() {
@@ -118,18 +118,34 @@
 </head>
 <body>
   <!-- Top Header Bar -->
-  <div class="party-win-header">
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <strong style="font-size: var(--font-size-labels, 15px); display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
+  <!-- Top Session Header Bar -->
+  <div class="party-win-header" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 12px; margin-bottom: 4px;">
+    <!-- Left: Identity, Campaign Name, Session Number, Live Date/Time -->
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;">
+      <span class="badge" id="lblPartyWinUserRoleBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 700; font-size: 11px; padding: 2px 8px;">
         🛡️ Party Display
-      </strong>
-      <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted);">
-        (Damage tracks &amp; conditions synchronized)
       </span>
-      <span class="badge" id="lblPartyWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
+      <span style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 12px; color: var(--accent-primary);" id="lblPartyWinCampaignTitle">
+        🏰 <span id="lblPartyWinCampaignName">Campaign</span>
+      </span>
+      <span class="badge" id="lblPartyWinSessionNumber" style="background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 600; font-size: 11px;">
+        Session #1
+      </span>
+      <span id="lblPartyWinDateTime" style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">
+        —
+      </span>
     </div>
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplayWindow" onclick="window.redockPartyDisplayWindow()" style="height: 26px; padding: 0 10px; font-size: var(--font-size-fine-print, 12px); font-weight: 600; cursor: pointer;">
+
+    <!-- Right: Status Badge, Live Clock, Re-dock -->
+    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto;">
+      <span class="badge" id="lblPartyWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
+      <span class="badge" id="lblPartyWinSessionBadge" style="background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-weight: 600; font-size: 11px;">Standby</span>
+      <span id="lblPartyWinSessionClock" style="font-family: monospace; font-size: 12px; font-weight: 700; color: var(--accent-primary); display: none;">00:00:00</span>
+      <label id="lblWinToggleGMIncludeChar" style="display: none; align-items: center; gap: 5px; font-size: var(--font-size-fine-print, 12px); color: var(--text-muted); cursor: pointer; user-select: none;" title="Include your active editor sheet in the party roster">
+        <input type="checkbox" id="chkWinGMIncludeCharInParty" style="cursor: pointer;">
+        Include Editor Sheet
+      </label>
+      <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplayWindow" onclick="window.redockPartyDisplayWindow()" style="height: 24px; padding: 0 10px; font-size: 11px; font-weight: 600; cursor: pointer;">
         ⬅ Re-dock
       </button>
     </div>
@@ -142,7 +158,7 @@
         <tr>
           <th style="width: 220px; text-align: left;">Character</th>
           <th style="width: 55px; text-align: center;">Init</th>
-          <th style="width: 125px; text-align: center;">PL / Def / Tough</th>
+          <th style="width: 135px; text-align: center;">Combat &amp; Hero Points</th>
           <th style="width: 170px; text-align: center;">Damage (Bruised / Injured)</th>
           <th style="text-align: left;">Active Conditions</th>
         </tr>
@@ -155,8 +171,8 @@
 
   <!-- Scripts -->
   <script src="dice_notation.js?v=3"></script>
-  <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=9"></script>
+  <script src="campaign_manager.js?v=18"></script>
+  <script src="session_network.js?v=19"></script>
   <script>
     const STORAGE_KEY_BOUNDS = 'mm2e_party_display_bounds';
 
@@ -165,6 +181,10 @@
     // ==========================================
     function redockPartyDisplayWindow() {
       saveWindowBounds();
+
+      try {
+        localStorage.setItem('mm2e_party_docked', Date.now().toString());
+      } catch (e) {}
 
       // 1. Broadcast docking notification over mm2e_session_channel
       try {
@@ -184,8 +204,13 @@
 
       // 2. Safe call to opener if permitted
       try {
-        if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
-          window.opener.redockPartyDisplay();
+        if (window.opener && !window.opener.closed) {
+          if (typeof window.opener.redockPartyDisplay === 'function') {
+            window.opener.redockPartyDisplay();
+          } else if (typeof window.opener.updatePartyDisplayDockMode === 'function') {
+            window.opener.updatePartyDisplayDockMode(false);
+          }
+          try { window.opener.focus(); } catch (e) {}
         }
       } catch (e) {}
 
@@ -275,14 +300,22 @@
     window.addEventListener('beforeunload', () => {
       saveWindowBounds();
       try {
+        localStorage.setItem('mm2e_party_docked', Date.now().toString());
+      } catch (e) {}
+      try {
         if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
           SessionNetwork.sendLocalBroadcast({ type: 'PARTY_DISPLAY_DOCKED' });
           SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
         }
       } catch (e) {}
       try {
-        if (window.opener && !window.opener.closed && typeof window.opener.redockPartyDisplay === 'function') {
-          window.opener.redockPartyDisplay();
+        if (window.opener && !window.opener.closed) {
+          if (typeof window.opener.redockPartyDisplay === 'function') {
+            window.opener.redockPartyDisplay();
+          } else if (typeof window.opener.updatePartyDisplayDockMode === 'function') {
+            window.opener.updatePartyDisplayDockMode(false);
+          }
+          try { window.opener.focus(); } catch (e) {}
         }
       } catch (e) {}
     });
@@ -293,6 +326,16 @@
     // ==========================================
     // 3. TWO-WAY ACTION FORWARDING & LIVE SYNC
     // ==========================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     function callOpenerOrBroadcast(fnName, ...args) {
       // 1. Try opener directly if accessible
       try {
@@ -303,12 +346,18 @@
         }
       } catch (e) {}
 
-      // 2. Broadcast action to main window
+      // 2. Broadcast action to main window over SessionNetwork
       try {
         if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
           SessionNetwork.sendLocalBroadcast({ type: 'PARTY_ACTION', action: fnName, args: args });
         }
       } catch (e) {}
+
+      // 3. Fallback IPC over localStorage storage event
+      try {
+        localStorage.setItem('mm2e_party_action', JSON.stringify({ action: fnName, args: args, ts: Date.now() }));
+      } catch (e) {}
+
       syncPartyFromOpenerOrLocal();
     }
 
@@ -322,50 +371,643 @@
     };
     window.gmClearAllConditions = (id, isNpc) => callOpenerOrBroadcast('gmClearAllConditions', id, isNpc);
     window.gmStepDamage = (id, type, delta, isNpc) => callOpenerOrBroadcast('gmStepDamage', id, type, delta, isNpc);
-    window.gmStepBruises = (id, isNpc, condName, delta) => callOpenerOrBroadcast('gmStepBruises', id, isNpc, condName, delta);
-    window.sessionSpendHeroPoint = (id) => callOpenerOrBroadcast('sessionSpendHeroPoint', id);
-    window.rollInitiativeCheck = () => callOpenerOrBroadcast('rollInitiativeCheck');
+    window.sessionSpendHeroPoint = (id, details = 'Hero Point spent') => {
+      callOpenerOrBroadcast('sessionSpendHeroPoint', id, details);
+      try { if (window.opener && !window.opener.closed) window.opener.focus(); } catch (e) {}
+    };
+    window.openUseHeroPointModal = (id) => {
+      callOpenerOrBroadcast('openUseHeroPointModal', id);
+      try { if (window.opener && !window.opener.closed) window.opener.focus(); } catch (e) {}
+    };
     window.gmTogglePlayerSilentBtn = (id) => callOpenerOrBroadcast('gmTogglePlayerSilentBtn', id);
     window.gmPullSheet = (id) => callOpenerOrBroadcast('gmPullSheet', id);
     window.gmPushCurrentSheet = (id) => callOpenerOrBroadcast('gmPushCurrentSheet', id);
     window.gmLoadNpcToEditor = (id) => callOpenerOrBroadcast('gmLoadNpcToEditor', id);
+    window.duplicateNPC = (id) => callOpenerOrBroadcast('duplicateNPC', id);
+    window.gmReturnToPrimarySheet = () => callOpenerOrBroadcast('gmReturnToPrimarySheet');
     window.gmExportCharSheet = (id) => callOpenerOrBroadcast('gmExportCharSheet', id);
     window.gmOpenCharHistory = (id) => callOpenerOrBroadcast('gmOpenCharHistory', id);
+    window.confirmRemoveCharacterFromParty = (id, charName, isNPC) => callOpenerOrBroadcast('confirmRemoveCharacterFromParty', id, charName, isNPC);
 
     // Dropdown menu handling
     window.gmToggleCharMenu = function(e, id) {
-      e.stopPropagation();
+      if (e) e.stopPropagation();
       const menu = document.getElementById('gmCharMenu_' + id);
-      const isOpen = menu && menu.style.display === 'block';
+      const isOpen = menu && menu.style.display === 'flex';
       window.gmCloseAllCharMenus();
-      if (menu && !isOpen) menu.style.display = 'block';
+      if (menu && !isOpen) {
+        menu.style.display = 'flex';
+        const btn = (e && (e.currentTarget || (e.target && e.target.closest && e.target.closest('.gm-char-name-btn')))) || menu.previousElementSibling;
+        const btnRect = btn ? btn.getBoundingClientRect() : null;
+        const menuRect = menu.getBoundingClientRect();
+        const menuHeight = menuRect.height || 220;
+        const menuWidth = menuRect.width || 220;
+        if (btnRect) {
+          let left = btnRect.left;
+          if (left + menuWidth > window.innerWidth - 12) {
+            left = Math.max(10, window.innerWidth - menuWidth - 12);
+          }
+          menu.style.left = `${left}px`;
+          const spaceBelow = window.innerHeight - btnRect.bottom;
+          const openUpward = spaceBelow < (menuHeight + 16) || btnRect.bottom > (window.innerHeight - 150);
+          if (openUpward) {
+            menu.style.top = 'auto';
+            menu.style.bottom = `${Math.max(10, window.innerHeight - btnRect.top + 4)}px`;
+          } else {
+            menu.style.bottom = 'auto';
+            menu.style.top = `${btnRect.bottom + 4}px`;
+          }
+        }
+      }
     };
     window.gmCloseAllCharMenus = function() {
       document.querySelectorAll('.gm-char-dropdown-menu').forEach(m => m.style.display = 'none');
     };
     document.addEventListener('click', window.gmCloseAllCharMenus);
+    window.addEventListener('scroll', window.gmCloseAllCharMenus, true);
+
+    function updateWinGMToggleUI() {
+      const lbl = document.getElementById("lblWinToggleGMIncludeChar");
+      const chk = document.getElementById("chkWinGMIncludeCharInParty");
+      if (!lbl || !chk) return;
+
+      let isGM = false;
+      let isIncluded = false;
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener.CampaignManager !== 'undefined') {
+          isGM = window.opener.CampaignManager.isDesignatedGM('local_player');
+          isIncluded = (typeof window.opener.CampaignManager.isGmCharIncludedInParty === 'function' && window.opener.CampaignManager.isGmCharIncludedInParty())
+            || (localStorage.getItem("mm2e_include_gm_char_in_party") === "true");
+        } else if (typeof CampaignManager !== 'undefined') {
+          isGM = CampaignManager.isDesignatedGM('local_player');
+          isIncluded = (typeof CampaignManager.isGmCharIncludedInParty === 'function' && CampaignManager.isGmCharIncludedInParty())
+            || (localStorage.getItem("mm2e_include_gm_char_in_party") === "true");
+        } else {
+          isIncluded = localStorage.getItem("mm2e_include_gm_char_in_party") === "true";
+        }
+      } catch (e) {}
+
+      lbl.style.display = isGM ? "inline-flex" : "none";
+      chk.checked = isIncluded;
+    }
+
+    const chkWinGM = document.getElementById("chkWinGMIncludeCharInParty");
+    if (chkWinGM) {
+      chkWinGM.addEventListener("change", (e) => {
+        const val = e.target.checked;
+        try {
+          if (window.opener && !window.opener.closed) {
+            if (typeof window.opener.CampaignManager !== 'undefined' && typeof window.opener.CampaignManager.setGmCharIncludedInParty === 'function') {
+              window.opener.CampaignManager.setGmCharIncludedInParty(val);
+            }
+            const openerChk = window.opener.document.getElementById("chkGMIncludeCharInParty");
+            if (openerChk) openerChk.checked = val;
+            if (typeof window.opener.syncPartyRosterUI === 'function') {
+              window.opener.syncPartyRosterUI();
+            }
+          }
+        } catch (err) {}
+        try {
+          localStorage.setItem("mm2e_include_gm_char_in_party", val ? "true" : "false");
+        } catch (err) {}
+        if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.setGmCharIncludedInParty === 'function') {
+          CampaignManager.setGmCharIncludedInParty(val);
+        }
+        callOpenerOrBroadcast('syncPartyRosterUI');
+        syncPartyFromOpenerOrLocal();
+      });
+    }
+
+    function renderPartyLocally() {
+      const tableRoster = document.getElementById('tbodySessionPartyRoster');
+      if (!tableRoster || typeof CampaignManager === 'undefined') return;
+      let camp = null;
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener.CampaignManager !== 'undefined') {
+          camp = window.opener.CampaignManager.getActiveCampaign();
+        }
+      } catch (e) {}
+      if (!camp && typeof CampaignManager !== 'undefined' && typeof CampaignManager.getActiveCampaign === 'function') {
+        camp = CampaignManager.getActiveCampaign();
+      }
+      if (!camp) {
+        camp = { acceptedPlayers: [], npcs: [], savedCharacters: [] };
+      }
+
+      const roster = [];
+      const designatedGMId = (typeof CampaignManager !== 'undefined' && CampaignManager.getGMPlayerId) ? CampaignManager.getGMPlayerId() : 'local_player';
+      const isNetworkClient = (typeof SessionNetwork !== 'undefined') && SessionNetwork.getStatus().role === 'CLIENT';
+      const isLocalGM = !isNetworkClient && (typeof CampaignManager !== 'undefined' ? CampaignManager.isDesignatedGM('local_player') : true);
+
+      const includeGmChar = (typeof CampaignManager !== 'undefined' && typeof CampaignManager.isGmCharIncludedInParty === 'function' && CampaignManager.isGmCharIncludedInParty())
+        || ((typeof localStorage !== 'undefined') && localStorage.getItem("mm2e_include_gm_char_in_party") === "true");
+
+      let activeHero = null;
+      let isEditingNpc = false;
+      let activeEditorNpcId = null;
+
+      try {
+        if (window.opener && !window.opener.closed) {
+          if (window.opener.activeEditorNpcId) {
+            activeEditorNpcId = window.opener.activeEditorNpcId;
+            isEditingNpc = true;
+          }
+          if (window.opener.char && window.opener.char.name) {
+            activeHero = window.opener.char;
+          }
+        }
+      } catch (e) {}
+
+      if (!activeHero) {
+        try {
+          const rawHero = localStorage.getItem('mm2e_active_editor_hero');
+          if (rawHero) activeHero = JSON.parse(rawHero);
+        } catch (e) {}
+      }
+
+      if (!activeHero) {
+        try {
+          const rawChar = localStorage.getItem('mm2e_character_data');
+          if (rawChar) {
+            const parsed = JSON.parse(rawChar);
+            activeHero = parsed.character || parsed;
+          }
+        } catch (e) {}
+      }
+
+      const partyIds = (typeof CampaignManager !== 'undefined' && typeof CampaignManager.getPartyCharacterIds === 'function') ? CampaignManager.getPartyCharacterIds() : [];
+      const hasExplicitParty = partyIds && partyIds.length > 0;
+
+      const hasExternalPartyMembers = ((camp.acceptedPlayers || []).length > 0) || ((camp.npcs || []).length > 0);
+      const isLocalHeroInParty = hasExplicitParty
+        ? (partyIds.includes('local_hero') || (activeHero && partyIds.includes(activeHero.name)) || includeGmChar || (!isLocalGM))
+        : (!isLocalGM || includeGmChar || !hasExternalPartyMembers);
+
+      const shouldIncludeLocalHero = isLocalHeroInParty && !!(activeHero && activeHero.name);
+
+      const configuredGM = (typeof CampaignManager !== 'undefined' && CampaignManager.getGMUserName) ? CampaignManager.getGMUserName() : null;
+      const accountObj = (typeof CampaignManager !== 'undefined' && CampaignManager.getUserAccount) ? CampaignManager.getUserAccount() : null;
+      const savedPlayerName = (typeof localStorage !== 'undefined') ? localStorage.getItem("mm2e_player_name") : null;
+      const resolvedGMName = (configuredGM && configuredGM.trim() && configuredGM.trim() !== 'GM')
+        ? configuredGM.trim()
+        : ((activeHero?.playerName && activeHero.playerName.trim() && activeHero.playerName.trim() !== 'GM')
+          ? activeHero.playerName.trim()
+          : ((accountObj?.userName && accountObj.userName.trim() && accountObj.userName.trim() !== 'GM')
+            ? accountObj.userName.trim()
+            : ((savedPlayerName && savedPlayerName.trim() && savedPlayerName.trim() !== 'GM')
+              ? savedPlayerName.trim()
+              : (configuredGM || 'GM'))));
+
+      const getAbilRankSafe = (sheet, key) => {
+        if (!sheet) return 0;
+        if (typeof sheet.getAbilityRank === 'function') {
+          const r = sheet.getAbilityRank(key);
+          return r !== null ? r : 0;
+        }
+        if (sheet.absentAbilities && sheet.absentAbilities[key]) return 0;
+        const val = sheet.abilities ? sheet.abilities[key] : null;
+        if (val === null || val === undefined) return 0;
+        if (val > 5 || sheet.abilityFormat === 'score') {
+          const enh = sheet.enhancedTraits?.abilities?.[key] || 0;
+          return Math.floor(((val + enh) - 10) / 2);
+        }
+        return Number(val) || 0;
+      };
+
+      // 1. Current local hero
+      if (shouldIncludeLocalHero && !isEditingNpc) {
+        let localUserName;
+        if (isLocalGM) {
+          localUserName = resolvedGMName;
+        } else {
+          localUserName = (activeHero.playerName && activeHero.playerName.trim())
+            || accountObj?.userName
+            || savedPlayerName
+            || "You";
+        }
+        const isSilenced = CampaignManager.isCharacterSilent("local_hero") || CampaignManager.isCharacterSilent(activeHero.name);
+        const effFeats = activeHero.effectiveFeats || {};
+        const impInit = effFeats["Improved Initiative"] || 0;
+        const dexMod = getAbilRankSafe(activeHero, "DEX");
+        const conMod = getAbilRankSafe(activeHero, "CON");
+        const localInitMod = (activeHero.derivedStats && typeof activeHero.derivedStats.initiative === 'number')
+          ? activeHero.derivedStats.initiative
+          : (dexMod + (impInit * 4));
+        const localInitRoll = activeHero.trackerState?.initiativeRoll ?? null;
+
+        roster.push({
+          id: "local_hero",
+          isLocal: true,
+          isNPC: false,
+          isGM: isLocalGM,
+          sheetHistoryCount: 1,
+          playerName: `${localUserName} (Local Sheet)`,
+          characterName: activeHero.name,
+          initiativeMod: localInitMod,
+          initiativeRoll: localInitRoll,
+          powerLevel: activeHero.powerLevel || 10,
+          defense: activeHero.combat?.DEF || 0,
+          toughness: (activeHero.purchasedResistances?.Toughness || 0) + conMod,
+          bruises: activeHero.trackerState?.conditions?.Bruised || 0,
+          injured: activeHero.trackerState?.conditions?.Injured || 0,
+          conditions: activeHero.trackerState?.conditions || {},
+          heroPoints: (typeof activeHero.heroPoints === 'number' && !isNaN(activeHero.heroPoints)) ? activeHero.heroPoints : 1,
+          isSilent: isSilenced
+        });
+      }
+
+      // 2. Connected/Approved Players
+      (camp.acceptedPlayers || []).forEach(p => {
+        const isAlreadyRepresentedByLocalHero = shouldIncludeLocalHero && !isLocalGM && (p.characterName === activeHero?.name || p.id === 'local_hero');
+        if (!isAlreadyRepresentedByLocalHero) {
+          const isPlayerInParty = hasExplicitParty
+            ? (partyIds.includes(p.id) || partyIds.includes(p.characterName) || (p.playerName && partyIds.includes(p.playerName)))
+            : true;
+
+          if (isPlayerInParty) {
+            const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
+            const isSilenced = CampaignManager.isCharacterSilent(p.id) || CampaignManager.isCharacterSilent(p.characterName);
+            const pInitMod = p.characterSummary?.initiative !== undefined
+              ? p.characterSummary.initiative
+              : (p.characterSheet?.derivedStats?.initiative ?? (getAbilRankSafe(p.characterSheet, 'DEX') + ((p.characterSheet?.feats?.['Improved Initiative'] || 0) * 4)));
+            const pInitRoll = p.characterSummary?.initiativeRoll !== undefined ? p.characterSummary.initiativeRoll : (p.initiativeRoll ?? null);
+
+            roster.push({
+              id: p.id,
+              isLocal: false,
+              isNPC: false,
+              isGM: designatedGMId === p.id,
+              sheetHistoryCount: histCount,
+              playerName: (p.playerName && p.playerName !== 'GM' ? p.playerName : (designatedGMId === p.id ? resolvedGMName : (p.playerName || 'Player'))).replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim(),
+              characterName: p.characterName,
+              initiativeMod: pInitMod,
+              initiativeRoll: pInitRoll,
+              powerLevel: p.characterSummary?.powerLevel || 10,
+              defense: p.characterSummary?.defense || 10,
+              toughness: p.characterSummary?.toughness || 10,
+              bruises: p.currentBruises || 0,
+              injured: p.currentInjured || 0,
+              conditions: p.conditions || {},
+              heroPoints: p.heroPoints !== undefined ? p.heroPoints : 1,
+              isSilent: isSilenced
+            });
+          }
+        }
+      });
+
+      // 3. Saved Campaign Characters in party (if not online)
+      if (hasExplicitParty) {
+        (camp.savedCharacters || []).forEach(sc => {
+          const isInParty = partyIds.includes(sc.id) || partyIds.includes(sc.characterName);
+          if (isInParty) {
+            const alreadyInRoster = roster.some(r => r.characterName === sc.characterName || r.id === sc.id || (sc.ownerPlayerId && r.id === sc.ownerPlayerId));
+            if (!alreadyInRoster) {
+              const isSilenced = CampaignManager.isCharacterSilent(sc.id) || CampaignManager.isCharacterSilent(sc.characterName);
+              const scInitMod = sc.characterData?.derivedStats?.initiative !== undefined
+                ? sc.characterData.derivedStats.initiative
+                : (getAbilRankSafe(sc.characterData, 'DEX') + ((sc.characterData?.feats?.['Improved Initiative'] || 0) * 4));
+
+              roster.push({
+                id: sc.id,
+                isLocal: false,
+                isNPC: false,
+                isGM: false,
+                isSavedOffline: true,
+                sheetHistoryCount: 1,
+                playerName: `${sc.playerName} (Offline)`,
+                characterName: sc.characterName,
+                initiativeMod: scInitMod,
+                initiativeRoll: null,
+                powerLevel: sc.powerLevel || sc.characterData?.powerLevel || 10,
+                defense: sc.characterData?.combat?.DEF || 10,
+                toughness: (sc.characterData?.purchasedResistances?.Toughness || 0) + getAbilRankSafe(sc.characterData, 'CON'),
+                bruises: sc.characterData?.trackerState?.conditions?.Bruised || 0,
+                injured: sc.characterData?.trackerState?.conditions?.Injured || 0,
+                conditions: sc.characterData?.trackerState?.conditions || {},
+                heroPoints: (typeof sc.characterData?.heroPoints === 'number') ? sc.characterData.heroPoints : (sc.heroPoints !== undefined ? sc.heroPoints : 1),
+                isSilent: isSilenced
+              });
+            }
+          }
+        });
+      }
+
+      // 4. Attached Party NPCs
+      (camp.npcs || []).forEach(n => {
+        const isCurrentlyInEditor = isEditingNpc && (n.id === activeEditorNpcId || n.name === activeHero?.name);
+        const liveChar = isCurrentlyInEditor ? activeHero : null;
+
+        const isSilenced = (typeof CampaignManager !== 'undefined' && typeof CampaignManager.isCharacterSilent === 'function') ? CampaignManager.isCharacterSilent(n.id) : false;
+        const nInitMod = liveChar
+          ? ((liveChar.derivedStats && typeof liveChar.derivedStats.initiative === 'number')
+              ? liveChar.derivedStats.initiative
+              : (getAbilRankSafe(liveChar, 'DEX') + (((liveChar.effectiveFeats || liveChar.feats || {})['Improved Initiative'] || 0) * 4)))
+          : (n.characterData?.derivedStats?.initiative !== undefined
+              ? n.characterData.derivedStats.initiative
+              : (getAbilRankSafe(n.characterData, 'DEX') + ((n.characterData?.feats?.['Improved Initiative'] || 0) * 4)));
+        const nInitRoll = liveChar
+          ? (liveChar.trackerState?.initiativeRoll ?? (n.characterData?.trackerState?.initiativeRoll ?? n.initiativeRoll ?? null))
+          : (n.characterData?.trackerState?.initiativeRoll ?? (n.initiativeRoll ?? null));
+
+        const npcOwner = resolvedGMName;
+
+        roster.push({
+          id: n.id,
+          isLocal: false,
+          isNPC: true,
+          isGM: false,
+          isInEditor: isCurrentlyInEditor,
+          sheetHistoryCount: 1,
+          playerName: `${npcOwner} (NPC)`,
+          characterName: n.name,
+          initiativeMod: nInitMod,
+          initiativeRoll: nInitRoll,
+          powerLevel: liveChar ? (liveChar.powerLevel || n.powerLevel || 10) : (n.powerLevel || 10),
+          defense: liveChar ? (liveChar.combat?.DEF || 10) : (n.characterData?.combat?.DEF || 10),
+          toughness: liveChar
+            ? (liveChar.derivedStats && typeof liveChar.derivedStats.toughness === 'number' ? liveChar.derivedStats.toughness : ((liveChar.purchasedResistances?.Toughness || 0) + getAbilRankSafe(liveChar, 'CON')))
+            : ((n.characterData?.purchasedResistances?.Toughness || 0) + getAbilRankSafe(n.characterData, 'CON')),
+          bruises: liveChar ? (liveChar.trackerState?.conditions?.Bruised || 0) : (n.currentBruises || 0),
+          injured: liveChar ? (liveChar.trackerState?.conditions?.Injured || 0) : (n.currentInjured || 0),
+          conditions: liveChar ? (liveChar.trackerState?.conditions || {}) : (n.conditions || {}),
+          heroPoints: liveChar
+            ? ((typeof liveChar.heroPoints === 'number' && !isNaN(liveChar.heroPoints)) ? liveChar.heroPoints : 0)
+            : ((typeof n.heroPoints === 'number') ? n.heroPoints : (typeof n.characterData?.heroPoints === 'number' ? n.characterData.heroPoints : 0)),
+          isSilent: isSilenced
+        });
+      });
+
+      let rowsHtml = roster.map(item => {
+        const activeCondKeys = Object.keys(item.conditions || {}).filter(k => {
+          return !!item.conditions[k] && k !== 'Bruised' && k !== 'Injured';
+        });
+
+        const pillsHtml = activeCondKeys.length > 0
+          ? activeCondKeys.map(c => `
+              <span class="gm-active-cond-pill" onclick="window.gmToggleCondition('${item.id}', ${item.isNPC}, '${c}')" title="Click to remove ${c}">
+                ${c} <span class="cond-remove-x">✕</span>
+              </span>
+            `).join('')
+          : `<span class="gm-cond-normal">Normal</span>`;
+
+        const condPickerHtml = `
+          <select class="gm-add-cond-select" onchange="window.gmAddConditionSelect('${item.id}', ${item.isNPC}, this)" title="Add condition to ${item.characterName}">
+            <option value="" selected disabled>+ Condition</option>
+            <optgroup label="Damage &amp; Fatigue">
+              <option value="Dazed">Dazed</option>
+              <option value="Staggered">Staggered</option>
+              <option value="Disabled">Disabled</option>
+              <option value="Unconscious">Unconscious</option>
+              <option value="Fatigued">Fatigued</option>
+              <option value="Exhausted">Exhausted</option>
+              <option value="Dying">Dying</option>
+              <option value="Dead">Dead</option>
+            </optgroup>
+            <optgroup label="Tactical &amp; Impairment">
+              <option value="Stunned">Stunned</option>
+              <option value="Paralyzed">Paralyzed</option>
+              <option value="Blind">Blind</option>
+              <option value="Deaf">Deaf</option>
+              <option value="Prone">Prone</option>
+              <option value="Bound">Bound</option>
+              <option value="Entangled">Entangled</option>
+              <option value="Flat-Footed">Flat-Footed</option>
+              <option value="Helpless">Helpless</option>
+              <option value="Nauseated">Nauseated</option>
+              <option value="Panicked">Panicked</option>
+              <option value="Pinned">Pinned</option>
+              <option value="Shaken">Shaken</option>
+              <option value="Sickened">Sickened</option>
+              <option value="Slowed">Slowed</option>
+              <option value="Fascinated">Fascinated</option>
+            </optgroup>
+            <optgroup label="Combat States">
+              <option value="Stable">Stable</option>
+              <option value="Total Defense">Total Defense</option>
+              <option value="Invisible">Invisible</option>
+            </optgroup>
+          </select>
+        `;
+
+        const clearAllHtml = activeCondKeys.length > 0
+          ? `<button type="button" class="gm-cond-clear-btn" onclick="window.gmClearAllConditions('${item.id}', ${item.isNPC})" title="Clear all conditions for ${item.characterName}">↺</button>`
+          : '';
+
+        const silencedClass = item.isSilent ? 'char-silenced' : '';
+        const muteIcon = item.isSilent ? `<span class="char-mute-icon" title="Logged roll output muted">🔇</span>` : '';
+
+        const initModStr = item.initiativeMod >= 0 ? `+${item.initiativeMod}` : `${item.initiativeMod}`;
+        const initRollDisplay = (item.initiativeRoll !== null && item.initiativeRoll !== undefined)
+          ? `<strong style="font-size: 15px; color: var(--accent-primary); line-height: 1.1;">${item.initiativeRoll}</strong><div style="font-size: var(--font-size-fine-print); color: var(--text-muted);">${initModStr} mod</div>`
+          : `<strong style="font-size: 13px;">${initModStr}</strong>`;
+        const localRollBtn = item.isLocal
+          ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 4px; font-size: 10px; margin-top: 2px; height: 18px; line-height: 1; max-width: 48px; width: 100%;">🎲 Roll</button>`
+          : '';
+
+        const canRemoveFromParty = isLocalGM || item.isLocal || (activeHero && activeHero.name === item.characterName);
+        const isControlled = isLocalGM || item.isLocal || (activeHero && activeHero.name && activeHero.name.trim().toLowerCase() === (item.characterName || '').trim().toLowerCase());
+        const isMyCharacter = item.isLocal || (activeHero && activeHero.name && activeHero.name.trim().toLowerCase() === (item.characterName || '').trim().toLowerCase());
+
+        const removeBtnHtml = canRemoveFromParty
+          ? `
+            <div class="gm-char-menu-divider"></div>
+            <button type="button" class="gm-char-menu-item" style="color: #ef4444;" onclick="window.confirmRemoveCharacterFromParty('${item.id}', '${escapeHtml(item.characterName).replace(/'/g, "\\'")}', ${item.isNPC}); window.gmCloseAllCharMenus();">
+              🚫 Remove from Party
+            </button>
+          `
+          : '';
+
+        const charNameHighlightStyle = isMyCharacter
+          ? 'background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.45); border-radius: 4px; padding: 2px 6px; box-shadow: 0 0 4px rgba(99, 102, 241, 0.2);'
+          : '';
+        const youBadge = isMyCharacter
+          ? `<span class="badge" style="background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;">YOU</span>`
+          : '';
+
+        const inEditorBadge = item.isInEditor
+          ? `<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7; border: 1px solid #0284c7; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;" title="Currently loaded in editor">IN EDITOR</span>`
+          : '';
+
+        let nameAndMenuHtml = '';
+        if (isControlled) {
+          nameAndMenuHtml = `
+            <div class="gm-char-menu-wrapper" style="position: relative; display: inline-block;">
+              <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, '${item.id}')" title="Click for actions, HP options, or sheet operations" style="${charNameHighlightStyle} border: ${isMyCharacter ? '1px solid rgba(99, 102, 241, 0.45)' : 'none'}; background: ${isMyCharacter ? 'rgba(99, 102, 241, 0.12)' : 'none'}; font-weight: 700; font-size: 13px; color: var(--accent-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                ${escapeHtml(item.characterName)} ${youBadge} ${inEditorBadge} ${muteIcon} <span style="font-size: var(--font-size-fine-print); opacity: 0.7;">▾</span>
+              </button>
+              <div id="gmCharMenu_${item.id}" class="gm-char-dropdown-menu" style="display: none;">
+                <button type="button" class="gm-char-menu-item" onclick="window.openUseHeroPointModal('${item.id}'); window.gmCloseAllCharMenus();">
+                  ✨ Hero Point Options...
+                </button>
+                <div class="gm-char-menu-divider"></div>
+                ${isLocalGM && !item.isLocal && !item.isNPC ? `
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmPullSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    📥 Pull Sheet to GM Editor
+                  </button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmPushCurrentSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    📤 Push Editor Sheet to Player
+                  </button>
+                ` : ''}
+                ${item.isNPC ? `
+                  ${window.activeEditorNpcId === item.id ? `
+                    <button type="button" class="gm-char-menu-item" style="color: #0284c7; font-weight: bold;" onclick="window.gmReturnToPrimarySheet(); window.gmCloseAllCharMenus();">
+                      ↩ Return to GM Sheet
+                    </button>
+                  ` : `
+                    <button type="button" class="gm-char-menu-item" onclick="window.gmLoadNpcToEditor('${item.id}'); window.gmCloseAllCharMenus();">
+                      👁️ Load into Editor
+                    </button>
+                  `}
+                  ${isLocalGM ? `
+                    <button type="button" class="gm-char-menu-item" onclick="window.duplicateNPC('${item.id}'); window.gmCloseAllCharMenus();">
+                      📋 Duplicate NPC
+                    </button>
+                  ` : ''}
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    💾 Export NPC (.mm2e)
+                  </button>
+                ` : `
+                  ${(item.isGM || item.isLocal) ? `
+                    <button type="button" class="gm-char-menu-item" style="color: #10b981; font-weight: bold;" onclick="window.gmReturnToPrimarySheet(); window.gmCloseAllCharMenus();">
+                      👤 Return to GM Sheet
+                    </button>
+                    <div class="gm-char-menu-divider"></div>
+                  ` : ''}
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmOpenCharHistory('${item.id}'); window.gmCloseAllCharMenus();">
+                    📜 Version History (${item.sheetHistoryCount || 0})
+                  </button>
+                  <button type="button" class="gm-char-menu-item" onclick="window.gmExportCharSheet('${item.id}'); window.gmCloseAllCharMenus();">
+                    💾 Export Sheet (.mm2e)
+                  </button>
+                `}
+                <div class="gm-char-menu-divider"></div>
+                <button type="button" class="gm-char-menu-item" onclick="window.gmTogglePlayerSilentBtn('${item.id}'); window.gmCloseAllCharMenus();">
+                  ${item.isSilent ? '📡 Unmute Roll Output' : '🔇 Mute Roll Output'}
+                </button>
+                ${removeBtnHtml}
+                <div class="gm-char-menu-divider"></div>
+                <button type="button" class="gm-char-menu-item" style="color: var(--text-muted);" onclick="window.gmCloseAllCharMenus()">✕ Close Menu</button>
+              </div>
+            </div>
+          `;
+        } else {
+          nameAndMenuHtml = `
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-main); display: inline-flex; align-items: center; gap: 4px; padding: 2px 0;">
+              ${escapeHtml(item.characterName)} ${inEditorBadge} ${muteIcon}
+            </div>
+          `;
+        }
+
+        return `
+          <tr class="${silencedClass}" style="border-bottom: 1px solid var(--border-color); background: ${item.isNPC ? 'rgba(2, 132, 199, 0.04)' : 'transparent'};">
+            <td style="padding: 6px 10px;">
+              ${nameAndMenuHtml}
+              <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 2px;">
+                ${item.isNPC ? '<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #0284c7; font-size: var(--font-size-fine-print);">NPC</span>' : '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: var(--font-size-fine-print);">PC</span>'}
+                ${escapeHtml((item.playerName || '').replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim())} ${item.isGM ? '<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; font-weight: bold; font-size: var(--font-size-fine-print);">👑 GM</span>' : ''}
+              </div>
+            </td>
+            <td style="width: 55px; text-align: center; vertical-align: middle; padding: 2px 4px;">
+              <div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center;">
+                ${initRollDisplay}
+                ${localRollBtn}
+              </div>
+            </td>
+            <td style="text-align: center; font-size: 13px;">
+              <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px;">Power Level ${item.powerLevel}</div>
+              <div style="color: var(--text-muted); font-size: var(--font-size-fine-print);">Def ${item.defense} / Tgh ${item.toughness}</div>
+              <div style="margin-top: 4px;">
+                <button type="button" class="btn-hp-roster-badge" onclick="window.sessionSpendHeroPoint('${item.id}', 'Hero Point spent');" title="Click to spend 1 Hero Point for ${escapeHtml(item.characterName)} (${typeof item.heroPoints === 'number' ? item.heroPoints : 0} HP remaining)" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5); color: #f59e0b; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
+                  ⭐ ${typeof item.heroPoints === 'number' ? item.heroPoints : 0} HP
+                </button>
+              </div>
+            </td>
+            <td style="text-align: center; padding: 4px;">
+              <div style="display: inline-flex; flex-direction: column; gap: 2px; align-items: center;">
+                <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Bruised (Non-Lethal, -1 to saves)">
+                  <span style="font-size: var(--font-size-fine-print); min-width: 44px; text-align: right; color: var(--text-muted);">Bruised:</span>
+                  <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', -1)">−</button>
+                  <span style="min-width: 18px; text-align: center; font-weight: bold; font-size: 13px; color: ${item.bruises > 0 ? '#f59e0b' : 'var(--text-main)'};">${item.bruises}</span>
+                  <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Bruised', 1)">+</button>
+                </div>
+                <div class="tracker-stepper" style="display: inline-flex; align-items: center; gap: 3px;" title="Injured (Lethal, -1 to saves)">
+                  <span style="font-size: var(--font-size-fine-print); min-width: 44px; text-align: right; color: var(--text-muted);">Injured:</span>
+                  <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', -1)">−</button>
+                  <span style="min-width: 18px; text-align: center; font-weight: bold; font-size: 13px; color: ${item.injured > 0 ? '#ef4444' : 'var(--text-main)'};">${item.injured}</span>
+                  <button type="button" class="modifier-stepper-btn" onclick="window.gmStepBruises('${item.id}', ${item.isNPC}, 'Injured', 1)">+</button>
+                </div>
+              </div>
+            </td>
+            <td style="padding: 4px 8px;">
+              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                ${pillsHtml}
+                ${condPickerHtml}
+                ${clearAllHtml}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      if (roster.length === 0) {
+        rowsHtml = `
+          <tr style="border-bottom: 1px dashed var(--border-color); height: 44px; opacity: 0.5;">
+            <td colspan="5" style="text-align: center; color: var(--text-muted); font-size: var(--font-size-fine-print); padding: 12px; font-style: italic;">
+              ${isLocalGM
+                ? 'No player characters connected or party NPCs attached yet. Connected players appear automatically, or check "Include Editor Sheet" above.'
+                : 'No characters in party. Enter your user name above to log in, or load a hero into the editor.'}
+            </td>
+          </tr>
+        `;
+      }
+
+      tableRoster.innerHTML = rowsHtml;
+    }
+    window.renderPartyLocally = renderPartyLocally;
 
     function syncPartyFromOpenerOrLocal() {
+      updateWinGMToggleUI();
       const tableRoster = document.getElementById('tbodySessionPartyRoster');
       if (!tableRoster) return;
 
-      // 1. Try reading from opener safely
+      // 1. Try reading fresh HTML from opener if accessible
       try {
         if (window.opener && !window.opener.closed && window.opener.document) {
           const openerTbody = window.opener.document.getElementById('tbodySessionPartyRoster');
-          if (openerTbody && openerTbody.innerHTML && openerTbody.innerHTML.trim().length > 0) {
+          if (openerTbody && openerTbody.innerHTML && openerTbody.innerHTML.trim().length > 0 &&
+              !openerTbody.innerHTML.includes('<!-- Dynamically populated') &&
+              !openerTbody.innerHTML.includes('No player characters connected') &&
+              !openerTbody.innerHTML.includes('No characters in party')) {
             tableRoster.innerHTML = openerTbody.innerHTML;
+            updateWinHeaderUI();
             return;
           }
         }
       } catch (e) {}
 
-      // 2. Request fresh HTML from main window via broadcast
+      // 2. Try reading cached HTML from localStorage
+      try {
+        const cachedHtml = localStorage.getItem('mm2e_party_roster_html');
+        if (cachedHtml && cachedHtml.trim().length > 0 &&
+            !cachedHtml.includes('<!-- Dynamically populated') &&
+            !cachedHtml.includes('No player characters connected') &&
+            !cachedHtml.includes('No characters in party')) {
+          tableRoster.innerHTML = cachedHtml;
+          updateWinHeaderUI();
+          return;
+        }
+      } catch (e) {}
+
+      // 3. Request fresh HTML from main window via broadcast
       try {
         if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
           SessionNetwork.sendLocalBroadcast({ type: 'PARTY_REQ_ROSTER' });
         }
       } catch (e) {}
+
+      // 4. Autonomous Local Rendering Fallback from CampaignManager
+      renderPartyLocally();
+      updateWinHeaderUI();
     }
 
     // Initialize BroadcastChannel via SessionNetwork
@@ -383,7 +1025,15 @@
       SessionNetwork.addEventListener('onRoll', () => syncPartyFromOpenerOrLocal());
       SessionNetwork.addEventListener('onHeroPointSpent', () => syncPartyFromOpenerOrLocal());
       SessionNetwork.addEventListener('onRosterUpdate', () => syncPartyFromOpenerOrLocal());
-      SessionNetwork.addEventListener('onStateSync', () => syncPartyFromOpenerOrLocal());
+      SessionNetwork.addEventListener('onStateSync', (st) => {
+        syncPartyFromOpenerOrLocal();
+        if (st && st.sessionState) updateWinHeaderUI(st.sessionState);
+      });
+      SessionNetwork.addEventListener('onSessionStatus', (state) => updateWinHeaderUI(state));
+      SessionNetwork.addEventListener('onSessionCancel', (packet) => {
+        syncPartyFromOpenerOrLocal();
+        updateWinHeaderUI(packet?.sessionState);
+      });
       SessionNetwork.addEventListener('onThemeChange', (packet) => {
         if (packet && packet.theme) {
           localStorage.setItem('mm2e_theme', packet.theme);
@@ -392,9 +1042,107 @@
       });
     }
 
+    // Storage event listener for guaranteed cross-window synchronization
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'mm2e_party_roster_html' && e.newValue) {
+        const tableRoster = document.getElementById('tbodySessionPartyRoster');
+        if (tableRoster) tableRoster.innerHTML = e.newValue;
+      } else if (e.key === 'mm2e_campaigns_data' || e.key === 'mm2e_include_gm_char_in_party' || e.key === 'mm2e_active_editor_hero') {
+        syncPartyFromOpenerOrLocal();
+      }
+    });
+
+    function formatWinDuration(ms) {
+      if (!ms || ms < 0) ms = 0;
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const pad = (n) => String(n).padStart(2, '0');
+      return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+    }
+
+    let winCurrentSessionState = null;
+
+    function updateWinSessionStatusUI(state) {
+      if (state) winCurrentSessionState = state;
+      const badge = document.getElementById('lblPartyWinSessionBadge');
+      const clock = document.getElementById('lblPartyWinSessionClock');
+      if (!badge) return;
+
+      const s = winCurrentSessionState || (typeof CampaignManager !== 'undefined' ? CampaignManager.getSessionState() : null);
+      if (!s || s.status === 'ended') {
+        badge.textContent = 'Standby';
+        badge.style.color = 'var(--text-muted)';
+        badge.style.borderColor = 'var(--border-color)';
+        badge.style.background = 'rgba(107, 114, 128, 0.15)';
+        if (clock) clock.style.display = 'none';
+        return;
+      }
+
+      let elapsed = s.totalElapsedMs || 0;
+      if (s.status === 'active' && s.startedAt) {
+        elapsed += (Date.now() - s.startedAt);
+      }
+
+      if (s.status === 'active') {
+        badge.textContent = `🟢 Session #${s.sessionNumber || 1}: Active`;
+        badge.style.color = '#10b981';
+        badge.style.borderColor = '#10b981';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        if (clock) {
+          clock.textContent = formatWinDuration(elapsed);
+          clock.style.display = 'inline-block';
+        }
+      } else if (s.status === 'paused') {
+        badge.textContent = `⏸️ Session #${s.sessionNumber || 1}: Paused`;
+        badge.style.color = '#f59e0b';
+        badge.style.borderColor = '#f59e0b';
+        badge.style.background = 'rgba(245, 158, 11, 0.15)';
+        if (clock) {
+          clock.textContent = formatWinDuration(s.totalElapsedMs || 0);
+          clock.style.display = 'inline-block';
+        }
+      }
+    }
+
+    function updateWinHeaderUI(state) {
+      updateWinSessionStatusUI(state);
+      const camp = (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null;
+      const s = state || winCurrentSessionState || (typeof CampaignManager !== 'undefined' ? CampaignManager.getSessionState() : null);
+
+      const lblCamp = document.getElementById('lblPartyWinCampaignName');
+      if (lblCamp) lblCamp.textContent = camp ? camp.name : 'Campaign';
+
+      const lblNum = document.getElementById('lblPartyWinSessionNumber');
+      if (lblNum) lblNum.textContent = `Session #${s?.sessionNumber || 1}`;
+
+      const lblDate = document.getElementById('lblPartyWinDateTime');
+      if (lblDate) {
+        const now = new Date();
+        lblDate.textContent = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+
+      const lblUser = document.getElementById('lblPartyWinUserRoleBadge');
+      if (lblUser) {
+        const isGM = (typeof CampaignManager !== 'undefined') ? CampaignManager.isDesignatedGM('local_player') : false;
+        const gmName = (typeof CampaignManager !== 'undefined') ? CampaignManager.getGMUserName() : 'GM';
+        const pName = localStorage.getItem('mm2e_player_name') || 'Player';
+        const accObj = (typeof CampaignManager !== 'undefined' && CampaignManager.getUserAccount) ? CampaignManager.getUserAccount() : null;
+        const resolvedGM = (gmName && gmName !== 'GM') ? gmName : (accObj?.userName || pName || 'GM');
+        lblUser.innerHTML = isGM ? `👑 GM: <strong>${escapeHtml(resolvedGM)}</strong>` : `👤 <strong>${escapeHtml(pName)}</strong>`;
+      }
+    }
+    window.updateWinHeaderUI = updateWinHeaderUI;
+
     // Initial render and interval sync
     syncPartyFromOpenerOrLocal();
+    window.addEventListener('DOMContentLoaded', syncPartyFromOpenerOrLocal);
+    window.addEventListener('load', syncPartyFromOpenerOrLocal);
     setInterval(syncPartyFromOpenerOrLocal, 2000);
+    setInterval(() => {
+      updateWinHeaderUI();
+    }, 1000);
   </script>
 </body>
 </html>

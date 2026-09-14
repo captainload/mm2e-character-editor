@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Status & Combat Tracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=42">
+  <link rel="stylesheet" href="styles.css?v=62">
   <script>
     (function() {
       function getActiveTheme() {
@@ -392,14 +392,15 @@
 
   <!-- Scripts -->
   <script src="dice_notation.js?v=3"></script>
-  <script src="campaign_manager.js?v=7"></script>
-  <script src="session_network.js?v=9"></script>
+  <script src="campaign_manager.js?v=18"></script>
+  <script src="session_network.js?v=19"></script>
   <script>
-    const STORAGE_KEY_BOUNDS = 'mm2e_tracker_bounds';
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialHeroName = urlParams.get('heroName');
 
     // Local tracker state cache (if opener unavailable)
     let localTracker = {
-      heroName: 'Hero',
+      heroName: (initialHeroName && initialHeroName.trim()) ? initialHeroName.trim() : 'Hero',
       initiativeRoll: null,
       initiativeModifier: { dexMod: 0, initFeat: 0, totalMod: 0 },
       generalD20Roll: null,
@@ -410,11 +411,17 @@
       powers: []
     };
 
+    const STORAGE_KEY_BOUNDS = 'mm2e_tracker_bounds';
+
     // ==========================================
     // 1. RE-DOCKING LOGIC
     // ==========================================
     function redockTrackerWindow() {
       saveWindowBounds();
+
+      try {
+        localStorage.setItem('mm2e_tracker_docked', Date.now().toString());
+      } catch (e) {}
 
       // 1. Broadcast docking notification over mm2e_session_channel
       try {
@@ -434,8 +441,13 @@
 
       // 2. Safe call to opener if permitted
       try {
-        if (window.opener && !window.opener.closed && typeof window.opener.redockTracker === 'function') {
-          window.opener.redockTracker();
+        if (window.opener && !window.opener.closed) {
+          if (typeof window.opener.redockTracker === 'function') {
+            window.opener.redockTracker();
+          } else if (typeof window.opener.updateTrackerDockMode === 'function') {
+            window.opener.updateTrackerDockMode(false);
+          }
+          try { window.opener.focus(); } catch (e) {}
         }
       } catch (e) {}
 
@@ -524,14 +536,22 @@
     window.addEventListener('beforeunload', () => {
       saveWindowBounds();
       try {
+        localStorage.setItem('mm2e_tracker_docked', Date.now().toString());
+      } catch (e) {}
+      try {
         if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
           SessionNetwork.sendLocalBroadcast({ type: 'TRACKER_DOCKED' });
           SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
         }
       } catch (e) {}
       try {
-        if (window.opener && !window.opener.closed && typeof window.opener.redockTracker === 'function') {
-          window.opener.redockTracker();
+        if (window.opener && !window.opener.closed) {
+          if (typeof window.opener.redockTracker === 'function') {
+            window.opener.redockTracker();
+          } else if (typeof window.opener.updateTrackerDockMode === 'function') {
+            window.opener.updateTrackerDockMode(false);
+          }
+          try { window.opener.focus(); } catch (e) {}
         }
       } catch (e) {}
     });
@@ -959,7 +979,9 @@
           if (typeof window.opener.getTrackerPopoutData === 'function') {
             const data = window.opener.getTrackerPopoutData();
             if (data) {
-              localTracker.heroName = data.heroName || 'Hero';
+              if (data.heroName && data.heroName.trim()) {
+                localTracker.heroName = data.heroName.trim();
+              }
               localTracker.initiativeRoll = data.initiativeRoll;
               localTracker.initiativeModifier = data.initiativeModifier || { dexMod: 0, initFeat: 0, totalMod: 0 };
               localTracker.generalD20Roll = data.generalD20Roll;
@@ -973,7 +995,9 @@
             }
           } else if (window.opener.char) {
             const ch = window.opener.char;
-            localTracker.heroName = ch.name || 'Hero';
+            if (ch.name && ch.name.trim()) {
+              localTracker.heroName = ch.name.trim();
+            }
             if (ch.trackerState) {
               localTracker.initiativeRoll = ch.trackerState.initiativeRoll;
               localTracker.generalD20Roll = ch.trackerState.generalD20Roll;
@@ -987,7 +1011,7 @@
             // Calc init mod from opener
             const dexMod = (typeof ch.getAbilityRank === 'function') 
               ? (ch.getAbilityRank("DEX") !== null ? ch.getAbilityRank("DEX") : -5) 
-              : (ch.abilities?.DEX || 0);
+              : ((ch.abilities?.DEX > 5 || ch.abilityFormat === 'score') ? Math.floor(((ch.abilities?.DEX || 10) + (ch.enhancedTraits?.abilities?.DEX || 0) - 10) / 2) : (ch.abilities?.DEX || 0));
             const effFeats = ch.effectiveFeats || ch.feats || {};
             const initFeat = effFeats["Improved Initiative"] || 0;
             const totalMod = (ch.derivedStats && typeof ch.derivedStats.initiative === 'number')
@@ -1000,7 +1024,16 @@
         }
       } catch (e) {}
 
-      // Opener not directly accessible, render current localTracker
+      // Opener not directly accessible, check localStorage
+      try {
+        const rawHero = localStorage.getItem('mm2e_active_editor_hero');
+        if (rawHero) {
+          const h = JSON.parse(rawHero);
+          if (h && h.name && h.name.trim()) localTracker.heroName = h.name.trim();
+        }
+      } catch (e) {}
+
+      // Render current localTracker
       renderAllTrackerUI();
     }
     window.syncTrackerFromOpener = syncTrackerFromOpener;
@@ -1013,6 +1046,12 @@
         if (event.data.type === 'TRACKER_SYNC_STATE' && event.data.state) {
           const s = event.data.state;
           Object.assign(localTracker, s);
+          if (s.heroName && s.heroName.trim()) {
+            localTracker.heroName = s.heroName.trim();
+          }
+          renderAllTrackerUI();
+        } else if (event.data.type === 'HERO_NAME_CHANGE' && event.data.name) {
+          localTracker.heroName = event.data.name.trim();
           renderAllTrackerUI();
         } else if (event.data.type === 'THEME_CHANGE' && event.data.theme) {
           localStorage.setItem('mm2e_theme', event.data.theme);
@@ -1020,6 +1059,18 @@
         }
       });
     }
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'mm2e_active_editor_hero' && e.newValue) {
+        try {
+          const h = JSON.parse(e.newValue);
+          if (h && h.name && h.name.trim()) {
+            localTracker.heroName = h.name.trim();
+            renderAllTrackerUI();
+          }
+        } catch (err) {}
+      }
+    });
 
     // Initial render and interval sync
     syncTrackerFromOpener();

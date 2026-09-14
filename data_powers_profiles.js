@@ -615,7 +615,7 @@ const POWER_PROFILES_LIST = [
   },
   {
     "name": "Device",
-    "effectName": "Container",
+    "effectName": "Device",
     "type": "General",
     "action": "None",
     "range": "Touch",
@@ -765,7 +765,7 @@ const POWER_PROFILES_LIST = [
   },
   {
     "name": "Duplication",
-    "effectName": "Summon",
+    "effectName": "Duplication",
     "type": "Alteration",
     "action": "Standard",
     "range": "Personal",

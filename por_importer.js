@@ -417,6 +417,11 @@
     return res;
   }
 
+  function capitalizeFirstLetter(str) {
+    if (!str) return "";
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
   // ==========================================================================
   // POWER NAME DECONSTRUCTOR
   // ==========================================================================
@@ -657,6 +662,89 @@
     }
   };
 
+  /**
+   * Directly extracts the primary character data model from a .por portfolio file
+   * without applying it to the active editor sheet or triggering editor UI updates.
+   * Ideal for campaign NPC and encounter enemy ingestion.
+   */
+  window.loadCharacterDataFromPor = async function(file) {
+    if (typeof JSZip === 'undefined') {
+      throw new Error("JSZip library not found. Cannot unzip POR file.");
+    }
+
+    const zip = await JSZip.loadAsync(file);
+
+    // Check for index.xml
+    let indexFile = zip.file("index.xml");
+    if (!indexFile) {
+      let fallbackXml = null;
+      zip.folder("statblocks_xml").forEach((rel, f) => {
+        if (!fallbackXml && rel.endsWith(".xml")) fallbackXml = f;
+      });
+
+      if (!fallbackXml) {
+        throw new Error("No character XML or index found in POR archive.");
+      }
+
+      const xmlStr = await fallbackXml.async("string");
+      const doc = new DOMParser().parseFromString(xmlStr, "text/xml");
+      const leadNode = doc.querySelector("character");
+      if (!leadNode) {
+        throw new Error("Invalid character XML structure.");
+      }
+      const { character, audit } = await parsePorCharacterData(zip, doc, leadNode, file.name);
+      return { character, name: character.name, powerLevel: character.powerLevel, audit };
+    }
+
+    // Parse index.xml
+    const indexStr = await indexFile.async("string");
+    const indexDoc = new DOMParser().parseFromString(indexStr, "text/xml");
+
+    const characters = Array.from(indexDoc.querySelectorAll("characters > character"));
+    if (characters.length === 0) {
+      throw new Error("No characters listed in portfolio manifest.");
+    }
+
+    let selectedCharacterNode = null;
+    if (characters.length === 1) {
+      selectedCharacterNode = characters[0];
+    } else {
+      selectedCharacterNode = await findIntendedLeadCharacter(zip, characters, file.name);
+    }
+    if (!selectedCharacterNode) {
+      selectedCharacterNode = characters[0];
+    }
+
+    const xmlStatblock = selectedCharacterNode.querySelector('statblocks > statblock[format="xml"]');
+    let xmlPath = null;
+    if (xmlStatblock) {
+      const folder = xmlStatblock.getAttribute("folder") || "statblocks_xml";
+      const filename = xmlStatblock.getAttribute("filename");
+      xmlPath = `${folder}/${filename}`;
+    }
+
+    let fileInZip = xmlPath ? (zip.file(xmlPath) || findZipFile(zip, xmlPath)) : null;
+    if (!fileInZip) {
+      fileInZip = findZipFile(zip, "statblocks_xml");
+    }
+
+    if (!fileInZip) {
+      throw new Error("Could not locate XML statblock for " + selectedCharacterNode.getAttribute("name"));
+    }
+
+    const xmlStr = await fileInZip.async("string");
+    const doc = new DOMParser().parseFromString(xmlStr, "text/xml");
+    const leadNode = doc.querySelector("character");
+    if (!leadNode) {
+      throw new Error("Invalid character XML structure.");
+    }
+
+    const leadIdx = selectedCharacterNode.getAttribute("herolableadindex") || "1";
+    const otherChars = characters.filter(c => c !== selectedCharacterNode);
+    const { character, audit } = await parsePorCharacterData(zip, doc, leadNode, file.name, otherChars, leadIdx);
+    return { character, name: character.name, powerLevel: character.powerLevel, audit };
+  };
+
   // ==========================================================================
   // MULTI-CHARACTER SELECTION MODAL
   // ==========================================================================
@@ -702,7 +790,7 @@
     charNodes.forEach((node, idx) => {
       const name = node.getAttribute("name") || `Character #${idx + 1}`;
       const summary = node.getAttribute("summary") || "Hero";
-      const player = node.getAttribute("playername") || "";
+      const player = (node.getAttribute("playername") || "").replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim();
       const minionNodes = Array.from(node.querySelectorAll("minions > character"));
       const minionNames = minionNodes.map(m => m.getAttribute("name")).filter(Boolean);
 
@@ -784,9 +872,73 @@
   }
 
   // ==========================================================================
+  // CUSTOM USER-CREATED SKILL NAME EXTRACTOR FROM LEAD XML (e.g. Profession)
+  // ==========================================================================
+  function extractCustomSkillMapFromLead(leadXmlStr) {
+    const map = {
+      byCacheIndex: {},
+      byThing: {},
+      allCustomSkills: [],
+      traitModSkillMap: []
+    };
+    if (!leadXmlStr) return map;
+    const pickRegex = /<pick\b[^>]*\bthing="(sk[a-zA-Z0-9_]+)"[^>]*\bindex="(\d+)"[^>]*>([\s\S]*?)<\/pick>/g;
+    let m;
+    while ((m = pickRegex.exec(leadXmlStr)) !== null) {
+      const thing = m[1];
+      const idx = m[2];
+      const inner = m[3];
+      const userMatch = inner.match(/<field\b[^>]*id="skUserName"[^>]*text="([^"]+)"/i);
+      if (userMatch && userMatch[1]) {
+        const userText = userMatch[1].trim();
+        let baseCategory = "Profession";
+        if (thing.startsWith("skProf")) baseCategory = "Profession";
+        else if (thing.startsWith("skCraf")) baseCategory = "Craft";
+        else if (thing.startsWith("skKnow")) baseCategory = "Knowledge";
+        else if (thing.startsWith("skPerf")) baseCategory = "Perform";
+
+        const fullSkillName = `${baseCategory} (${userText})`;
+        map.byCacheIndex[idx] = fullSkillName;
+        map.byThing[thing] = fullSkillName;
+
+        const baseMatch = inner.match(/<field\b[^>]*id="Base"[^>]*user="([\d.]+)"/i);
+        const userRanks = baseMatch ? Math.round(parseFloat(baseMatch[1])) : null;
+
+        map.allCustomSkills.push({
+          baseCategory,
+          userText,
+          fullSkillName,
+          index: idx,
+          thing,
+          userRanks
+        });
+      }
+    }
+
+    const traitModRegex = /<pick\b[^>]*\bthing="TraitMod"[^>]*>([\s\S]*?)<\/pick>/g;
+    let tmM;
+    while ((tmM = traitModRegex.exec(leadXmlStr)) !== null) {
+      const inner = tmM[1];
+      const rMatch = inner.match(/<field\b[^>]*id="modRanks"[^>]*user="([\d.]+)"/i);
+      const cMatch = inner.match(/<field\b[^>]*id="modChosen"[^>]*cacheindex="(\d+)"/i);
+      const ranks = rMatch ? parseFloat(rMatch[1]) : null;
+      const cacheIdx = cMatch ? cMatch[1] : null;
+      if (cacheIdx && map.byCacheIndex[cacheIdx]) {
+        map.traitModSkillMap.push({
+          cacheIndex: cacheIdx,
+          fullSkillName: map.byCacheIndex[cacheIdx],
+          ranks: ranks
+        });
+      }
+    }
+
+    return map;
+  }
+
+  // ==========================================================================
   // RECURSIVE CHARACTER & XML INGESTION
   // ==========================================================================
-  async function executeImport(zip, doc, rootCharNode, fileName, otherCharacters = [], leadIndex = "1") {
+  async function parsePorCharacterData(zip, doc, rootCharNode, fileName, otherCharacters = [], leadIndex = "1") {
     const resNode = getDirectChild(rootCharNode, "resources");
     const totalPpAttr = resNode?.getAttribute("totalpp");
     let totalAllowed = totalPpAttr ? parseInt(totalPpAttr) : null;
@@ -796,10 +948,13 @@
       totalAllowed = ppVal > 0 ? ppVal : (plVal * 15);
     }
 
+    const rawPlayerName = rootCharNode.getAttribute("playername") || "";
+    const cleanPlayerName = rawPlayerName.replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim();
+
     const audit = {
       fileName: fileName,
       heroName: rootCharNode.getAttribute("name") || "Imported Hero",
-      playerName: rootCharNode.getAttribute("playername") || "",
+      playerName: cleanPlayerName,
       powerLevel: parseInt(getDirectChild(rootCharNode, "powerlevel")?.getAttribute("value") || 10),
       heroLabTotalPP: totalAllowed,
       heroLabSpent: {},
@@ -839,8 +994,49 @@
       });
     }
 
+    // Build index.xml characterindex -> name map for companion name resolution
+    const minionIndexNameMap = {};
+    if (zip) {
+      try {
+        const idxFile = zip.file("index.xml") || findZipFile(zip, "index.xml");
+        if (idxFile) {
+          const idxStr = await idxFile.async("string");
+          if (idxStr) {
+            const idxDoc = new DOMParser().parseFromString(idxStr, "text/xml");
+            const allIndexChars = Array.from(idxDoc.querySelectorAll("character"));
+            allIndexChars.forEach(cNode => {
+              const cIdx = cNode.getAttribute("characterindex");
+              const cName = cNode.getAttribute("name");
+              if (cIdx && cName && cName.trim() && cName.toLowerCase() !== "minion" && cName.toLowerCase() !== "asset") {
+                minionIndexNameMap[cIdx] = cName.trim();
+              }
+            });
+          }
+        }
+      } catch (idxErr) {
+        console.warn("Could not parse index.xml for minion names:", idxErr);
+      }
+    }
+
+    // Ingest lead XML for custom user-created skills (e.g. Profession, Craft) and library
+    let leadXmlStr = "";
+    if (zip) {
+      try {
+        let leadXmlFile = zip.file(`herolab/lead${leadIndex}.xml`) || findZipFile(zip, `herolab/lead${leadIndex}.xml`);
+        if (!leadXmlFile) {
+          leadXmlFile = zip.file("herolab/lead1.xml") || findZipFile(zip, "herolab/lead1.xml");
+        }
+        if (leadXmlFile) {
+          leadXmlStr = await leadXmlFile.async("string");
+        }
+      } catch (leadErr) {
+        console.warn("Could not load lead XML for custom skills:", leadErr);
+      }
+    }
+    const customSkillMap = extractCustomSkillMapFromLead(leadXmlStr);
+
     // Parse primary character
-    const primaryData = parseCharacterNode(rootCharNode, audit, true);
+    const primaryData = parseCharacterNode(rootCharNode, audit, true, minionIndexNameMap, customSkillMap);
 
     // Recursively collect companion character nodes without DOM bleeding
     function collectCompanionsRecursively(parentCharNode) {
@@ -859,7 +1055,17 @@
     companionNodes.forEach(mNode => {
       const nature = mNode.getAttribute("nature") || "";
       const type = mNode.getAttribute("type") || "";
-      const mName = mNode.getAttribute("name") || "Asset";
+      let mName = mNode.getAttribute("name") ||
+                  mNode.getAttribute("heroname") ||
+                  mNode.getAttribute("charname") ||
+                  getDirectChild(mNode, "personal")?.getAttribute("charname") ||
+                  getDirectChild(mNode, "personal")?.getAttribute("name") ||
+                  "";
+      const mIdxAttr = mNode.getAttribute("characterindex");
+      if ((!mName || mName.toLowerCase() === "minion" || mName.toLowerCase() === "asset") && mIdxAttr && minionIndexNameMap[mIdxAttr]) {
+        mName = minionIndexNameMap[mIdxAttr];
+      }
+      if (!mName) mName = "Asset";
 
       if (nature === "headquarters" || type.startsWith("HQ:")) {
         // Convert to Headquarters / Installation
@@ -867,21 +1073,50 @@
         primaryData.installations.push(hqObj);
         audit.installations.push(hqObj);
       } else {
-        // Convert to Minion, Mecha, or Metamorph Form Companion
-        const compChar = parseCharacterNode(mNode, audit, false);
+        // Convert to Minion, Mecha, Duplicate, Summon, or Metamorph Form Companion
+        const compChar = parseCharacterNode(mNode, audit, false, minionIndexNameMap, customSkillMap);
         let compType = "minion";
-        if (nature === "mecha" || type.toLowerCase() === "mecha" || compChar.isMecha) {
+        const rawTypeLower = (type || "").toLowerCase();
+        const rawNatureLower = (nature || "").toLowerCase();
+        const mNameLower = (mName || "").toLowerCase();
+
+        if (rawNatureLower === "mecha" || rawTypeLower === "mecha" || compChar.isMecha) {
           compType = "mecha";
-        } else if (mName.toLowerCase().includes("metamorph") || type.toLowerCase().includes("metamorph")) {
+        } else if (mNameLower.includes("metamorph") || rawTypeLower.includes("metamorph")) {
           compType = "metamorph";
-        } else if (type.toLowerCase().includes("sidekick")) {
+        } else if (rawTypeLower.includes("sidekick") || mNameLower.includes("sidekick")) {
           compType = "sidekick";
+        } else if (rawTypeLower.includes("duplicate") || mNameLower.includes("duplicate") || mNameLower.includes("clone")) {
+          compType = "duplicate";
+        } else if (rawTypeLower.includes("summon") || mNameLower.includes("summon")) {
+          compType = "summon";
+        } else {
+          // Check if parent hero has a matching Summon or Duplication power
+          const summonPower = primaryData.powers.find(p => {
+            const pName = (p.name || "").toLowerCase();
+            return pName.includes("summon") || (p.effects && p.effects.some(e => e.effectName === "Summon"));
+          });
+          const dupPower = primaryData.powers.find(p => {
+            const pName = (p.name || "").toLowerCase();
+            return pName.includes("duplication") || pName.includes("clone") || (p.effects && p.effects.some(e => e.effectName === "Duplication"));
+          });
+          const hasMinionsFeat = primaryData.feats && (primaryData.feats["Minions"] || primaryData.feats["Minion"]);
+
+          if (summonPower && (!hasMinionsFeat || mNameLower.includes(summonPower.name.toLowerCase().split("(")[0].trim().toLowerCase()))) {
+            compType = "summon";
+          } else if (dupPower && (!hasMinionsFeat || mNameLower.includes("dup") || mNameLower.includes("clone"))) {
+            compType = "duplicate";
+          }
         }
+
+        const resolvedName = (mName && mName !== "Minion" && mName !== "Asset")
+          ? mName
+          : (compChar.name && compChar.name !== "Minion" && compChar.name !== "Asset" ? compChar.name : `${primaryData.name}'s ${capitalizeFirstLetter(compType)}`);
 
         const compEntry = {
           id: "comp_" + Math.random().toString(36).substr(2, 9),
           type: compType,
-          name: compChar.name,
+          name: resolvedName,
           powerLevel: compChar.powerLevel || primaryData.powerLevel,
           totalPointsAllowed: compChar.totalPointsAllowed || (compChar.powerLevel * 15),
           characterData: compChar
@@ -893,16 +1128,9 @@
 
     // Ingest Hero Lab Library Table into Blueprints / Plans
     try {
-      let leadXmlFile = zip ? (zip.file(`herolab/lead${leadIndex}.xml`) || findZipFile(zip, `herolab/lead${leadIndex}.xml`)) : null;
-      if (!leadXmlFile && zip) {
-        leadXmlFile = zip.file("herolab/lead1.xml") || findZipFile(zip, "herolab/lead1.xml");
-      }
-      if (leadXmlFile) {
-        const leadXmlStr = await leadXmlFile.async("string");
-        if (leadXmlStr) {
-          ingestHeroLabLibrary(leadXmlStr, primaryData, audit);
-          ingestHeroLabInPlayState(leadXmlStr, primaryData, audit);
-        }
+      if (leadXmlStr) {
+        ingestHeroLabLibrary(leadXmlStr, primaryData, audit, customSkillMap);
+        ingestHeroLabInPlayState(leadXmlStr, primaryData, audit);
       }
     } catch (libErr) {
       console.warn("Failed to parse Hero Lab library table:", libErr);
@@ -910,6 +1138,12 @@
 
     // Point Reconciliation Engine: Validate MM2CE model cost against declared Hero Lab costs
     reconcileCharacterPoints(primaryData, audit);
+
+    return { character: primaryData, audit };
+  }
+
+  async function executeImport(zip, doc, rootCharNode, fileName, otherCharacters = [], leadIndex = "1") {
+    const { character: primaryData, audit } = await parsePorCharacterData(zip, doc, rootCharNode, fileName, otherCharacters, leadIndex);
 
     // Apply primary hero to active sheet
     if (window.primaryHero) {
@@ -975,7 +1209,7 @@
   // ==========================================================================
   // PARSE SINGLE CHARACTER XML NODE (Primary Hero, Minion, or Form)
   // ==========================================================================
-  function parseCharacterNode(charNode, audit, isPrimary = true) {
+  function parseCharacterNode(charNode, audit, isPrimary = true, minionIndexNameMap = {}, customSkillMap = null) {
     const rawNature = charNode.getAttribute("nature") || "";
     const rawType = charNode.getAttribute("type") || "";
     const isMecha = rawNature === "mecha" || rawType.toLowerCase() === "mecha";
@@ -989,9 +1223,23 @@
       totalAllowed = ppVal > 0 ? ppVal : (plVal * 15);
     }
 
+    let resolvedCharName = charNode.getAttribute("name") ||
+                           charNode.getAttribute("heroname") ||
+                           charNode.getAttribute("charname") ||
+                           getDirectChild(charNode, "personal")?.getAttribute("charname") ||
+                           getDirectChild(charNode, "personal")?.getAttribute("name") ||
+                           "";
+    const charIdx = charNode.getAttribute("characterindex");
+    if ((!resolvedCharName || resolvedCharName.toLowerCase() === "minion" || resolvedCharName.toLowerCase() === "asset") && charIdx && minionIndexNameMap && minionIndexNameMap[charIdx]) {
+      resolvedCharName = minionIndexNameMap[charIdx];
+    }
+    if (!resolvedCharName) {
+      resolvedCharName = isPrimary ? "Imported Hero" : "Minion";
+    }
+
     const charObj = {
-      name: charNode.getAttribute("name") || (isPrimary ? "Imported Hero" : "Minion"),
-      playerName: charNode.getAttribute("playername") || "",
+      name: resolvedCharName,
+      playerName: (charNode.getAttribute("playername") || "").replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim(),
       powerLevel: parseInt(getDirectChild(charNode, "powerlevel")?.getAttribute("value") || 10),
       totalPointsAllowed: totalAllowed,
       sizeCategory: getDirectChild(charNode, "size")?.getAttribute("name") || "Medium",
@@ -1061,15 +1309,16 @@
             charObj.absentAbilities[key] = true;
             charObj.abilities[key] = 0;
           } else {
-            let rank = 0;
-            if (!isNaN(costVal)) {
-              rank = costVal / 2;
-            } else if (isMecha) {
-              rank = Math.round(baseVal / 2);
-            } else {
-              rank = (baseVal - 10) / 2;
+            let score = 10;
+            if (!isNaN(baseVal)) {
+              score = baseVal;
+            } else if (!isNaN(costVal)) {
+              score = 10 + costVal;
             }
-            charObj.abilities[key] = rank;
+            charObj.abilities[key] = score;
+
+            // Calculate modifier rank for audit tracking and validation
+            const rank = Math.floor((baseVal - 10) / 2);
           }
         }
       });
@@ -1127,6 +1376,25 @@
         if (userRanks > 0) {
           const lowerName = rawSkName.toLowerCase();
           let canonicalName = SKILL_NAME_NORMALIZATION_MAP[lowerName] || rawSkName;
+
+          // Match specialized user-created skill name (e.g. Profession (Archeologist))
+          if (customSkillMap && customSkillMap.allCustomSkills && customSkillMap.allCustomSkills.length > 0) {
+            const matchingCustom = customSkillMap.allCustomSkills.filter(cs =>
+              cs.baseCategory.toLowerCase() === lowerName ||
+              cs.baseCategory.toLowerCase() === canonicalName.toLowerCase()
+            );
+            if (matchingCustom.length === 1) {
+              canonicalName = matchingCustom[0].fullSkillName;
+            } else if (matchingCustom.length > 1) {
+              const rankMatch = matchingCustom.find(cs => cs.userRanks === userRanks && !charObj.skills[cs.fullSkillName]);
+              if (rankMatch) {
+                canonicalName = rankMatch.fullSkillName;
+              } else {
+                const unassigned = matchingCustom.find(cs => !charObj.skills[cs.fullSkillName]);
+                if (unassigned) canonicalName = unassigned.fullSkillName;
+              }
+            }
+          }
 
           // Remap legacy / non-canonical skills
           if (lowerName === "gamble") {
@@ -1244,7 +1512,7 @@
     if (powersContainer) {
       const rootPowers = getDirectChildren(powersContainer, "power");
       rootPowers.forEach((pNode, pIdx) => {
-        const container = parsePowerContainer(pNode, pIdx, audit);
+        const container = parsePowerContainer(pNode, pIdx, audit, customSkillMap);
         if (container && container.effects && container.effects.length > 0) {
           charObj.powers.push(container);
         }
@@ -1280,7 +1548,7 @@
   // ==========================================================================
   // POWER CONTAINER & CANONICAL UP MAPPING
   // ==========================================================================
-  function parsePowerContainer(powerNode, index, audit) {
+  function parsePowerContainer(powerNode, index, audit, customSkillMap = null) {
     const rawName = powerNode.getAttribute("name");
     const summary = powerNode.getAttribute("summary") || "";
     const declaredCost = parseInt(getDirectChild(powerNode, "cost")?.getAttribute("value") || 0);
@@ -1368,7 +1636,7 @@
         container.deviceRank = containerRank;
         container.deviceModifiers = containerModifiers;
         otherPowers.forEach((childPower, cIdx) => {
-          const childEff = parseSinglePowerEffect(childPower, cIdx, audit, "primary");
+          const childEff = parseSinglePowerEffect(childPower, cIdx, audit, "primary", customSkillMap);
           if (childEff) {
             container.effects.push(childEff);
           }
@@ -1378,7 +1646,7 @@
             const featsContainer = getDirectChild(altNode, "powerfeats");
             const altFeats = featsContainer ? getDirectChildren(featsContainer, "powerfeat") : [];
             const isDynamic = altFeats.some(pf => pf.getAttribute("name") === "Dynamic");
-            const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate");
+            const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate", customSkillMap);
             if (altEff) {
               container.effects.push(altEff);
             }
@@ -1412,7 +1680,7 @@
         const featsContainer = getDirectChild(altNode, "powerfeats");
         const altFeats = featsContainer ? getDirectChildren(featsContainer, "powerfeat") : [];
         const isDynamic = altFeats.some(pf => pf.getAttribute("name") === "Dynamic");
-        const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate");
+        const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate", customSkillMap);
         if (altEff) {
           container.effects.push(altEff);
         }
@@ -1438,7 +1706,7 @@
       }
 
       // Primary effect
-      const primaryEff = parseSinglePowerEffect(powerNode, 0, audit, "primary");
+      const primaryEff = parseSinglePowerEffect(powerNode, 0, audit, "primary", customSkillMap);
 
       if (primaryEff) {
         // For non-device arrays with declared cost (like Enhanced Trait 13.25):
@@ -1457,7 +1725,7 @@
         const featsContainer = getDirectChild(altNode, "powerfeats");
         const altFeats = featsContainer ? getDirectChildren(featsContainer, "powerfeat") : [];
         const isDynamic = altFeats.some(pf => pf.getAttribute("name") === "Dynamic");
-        const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate");
+        const altEff = parseSinglePowerEffect(altNode, aIdx + 1, audit, isDynamic ? "dynamic" : "alternate", customSkillMap);
         if (altEff) {
           container.effects.push(altEff);
         }
@@ -1465,6 +1733,7 @@
 
       if (isArray) {
         let matchedDefault = false;
+        const hasExplicitActiveAlt = container.effects.slice(1).some(e => e.association === "alternate" && e.active);
         if (defaultPowerName) {
           const matchTarget = defaultPowerName.toLowerCase();
           for (let i = 1; i < container.effects.length; i++) {
@@ -1472,15 +1741,19 @@
             const effName = (eff.name || "").toLowerCase();
             const effType = (eff.effectName || "").toLowerCase();
             if (effName === matchTarget || effType === matchTarget || effName.includes(matchTarget) || matchTarget.includes(effName)) {
-              eff.active = (primaryEff ? primaryEff.active !== false : true);
               eff.isDefaultPower = true;
+              if (!hasExplicitActiveAlt) {
+                eff.active = (primaryEff ? primaryEff.active !== false : true);
+              } else {
+                eff.active = false;
+              }
               matchedDefault = true;
               break;
             }
           }
         }
         // If primary effect is a dummy "Array" card and no alternate power was activated, activate the first alternate power if array is active
-        if (!matchedDefault && primaryEff && primaryEff.effectName === "Array" && primaryEff.active !== false && container.effects.length > 1) {
+        if (!matchedDefault && !hasExplicitActiveAlt && primaryEff && primaryEff.effectName === "Array" && primaryEff.active !== false && container.effects.length > 1) {
           container.effects[1].active = true;
           container.effects[1].isDefaultPower = true;
         }
@@ -1548,9 +1821,9 @@
     pwUPDamage: "Damage",
     pwUPEarCon: "Earth Control",
     pwUPExorci: "Exorcism",
-    pwUPFeatur: "Feature",
+    pwUPFeatur: "Features",
     pwUPForceC: "Force Constructs",
-    pwUPGadget: "Gadgets",
+    pwUPGadget: "Device",
     pwUPHypnos: "Hypnosis",
     pwUPImFort: "Immunity",
     pwUPImmort: "Immortality",
@@ -1874,7 +2147,13 @@
     skProfession: "Profession"
   };
 
-  function resolveHlTraitModLabel(menuThing) {
+  function resolveHlTraitModLabel(menuThing, customSkillMap = null, cacheIndex = null) {
+    if (cacheIndex && customSkillMap && customSkillMap.byCacheIndex && customSkillMap.byCacheIndex[cacheIndex]) {
+      return customSkillMap.byCacheIndex[cacheIndex];
+    }
+    if (menuThing && customSkillMap && customSkillMap.byThing && customSkillMap.byThing[menuThing]) {
+      return customSkillMap.byThing[menuThing];
+    }
     if (!menuThing) return "Trait";
     if (HL_LIB_TRAIT_MOD_MAP[menuThing]) {
       return HL_LIB_TRAIT_MOD_MAP[menuThing];
@@ -1898,12 +2177,27 @@
     return formatted || menuThing;
   }
 
-  function parseHeroLabSingleEffectPick(powerPick, baseThing) {
-    const canonicalName = HL_LIB_POWER_MAP[baseThing] || "Power";
-    let customName = canonicalName;
+  function parseHeroLabSingleEffectPick(powerPick, baseThing, customSkillMap = null) {
+    let canonicalName = HL_LIB_POWER_MAP[baseThing] || "Power";
+    if (canonicalName === "Feature") canonicalName = "Features";
+    if (canonicalName === "Duplicate") canonicalName = "Duplication";
+
+    let matchedProfileName = "";
+    if (typeof POWER_EFFECTS_LIST !== 'undefined' && !POWER_EFFECTS_LIST.some(e => e.name === canonicalName)) {
+      if (typeof POWER_PROFILES_LIST !== 'undefined') {
+        const matchedProfile = POWER_PROFILES_LIST.find(p => p.name.toLowerCase() === canonicalName.toLowerCase());
+        if (matchedProfile && matchedProfile.effectName) {
+          matchedProfileName = canonicalName;
+          canonicalName = matchedProfile.effectName;
+        }
+      }
+    }
+
+    let customName = matchedProfileName || canonicalName;
     let ranks = 1;
     let isEasyToLose = false;
     let restrictedTo = "";
+    let notes = "";
 
     const children = Array.from(powerPick.children || []);
     const gizmo = children.find(c => c.tagName.toLowerCase() === "gizmo");
@@ -1923,6 +2217,9 @@
       const nameField = fields.find(f => f.getAttribute("id") === "pwhName");
       if (nameField && nameField.getAttribute("text")) customName = nameField.getAttribute("text");
 
+      const notesField = fields.find(f => f.getAttribute("id") === "pwhNotes");
+      if (notesField && notesField.getAttribute("text")) notes = notesField.getAttribute("text");
+
       const rankField = fields.find(f => f.getAttribute("id") === "pwhRankUsr" || f.getAttribute("id") === "pwhRank");
       if (rankField) {
         const rVal = parseFloat(rankField.getAttribute("user") || rankField.getAttribute("value") || "1");
@@ -1941,9 +2238,24 @@
       const th = cp.getAttribute("thing");
       if (th === "PowerHelp") continue;
 
+      // Nested power inside varSet (e.g. Gadgets / powVarSet)
+      if (th === "powVarSet" || th.startsWith("pwVar") || th.startsWith("var")) {
+        const varGizmo = Array.from(cp.children || []).find(c => c.tagName.toLowerCase() === "gizmo");
+        const varContainer = varGizmo ? Array.from(varGizmo.children || []).find(c => c.tagName.toLowerCase() === "container") : null;
+        const varChildPicks = varContainer ? Array.from(varContainer.children || []).filter(c => c.tagName.toLowerCase() === "pick") : [];
+        for (const vp of varChildPicks) {
+          const vth = vp.getAttribute("thing");
+          if (vth && vth.startsWith("pw") && vth !== "pwMods" && vth !== "pwDescs" && vth !== "pwOptions") {
+            const nestedEff = parseHeroLabSingleEffectPick(vp, vth, customSkillMap);
+            if (nestedEff) nestedPowerEffects.push(nestedEff);
+          }
+        }
+        continue;
+      }
+
       // Nested power inside device
       if (th.startsWith("pw") && th !== "pwMods" && th !== "pwDescs" && th !== "pwOptions") {
-        const nestedEff = parseHeroLabSingleEffectPick(cp, th);
+        const nestedEff = parseHeroLabSingleEffectPick(cp, th, customSkillMap);
         if (nestedEff) nestedPowerEffects.push(nestedEff);
         continue;
       }
@@ -1956,7 +2268,8 @@
         const cField = cpFields.find(f => f.getAttribute("id") === "modChosen");
         const modRanks = rField ? parseFloat(rField.getAttribute("user") || rField.getAttribute("value") || "1") : 1;
         const menuThing = cField ? cField.getAttribute("menuthing") : "";
-        const label = resolveHlTraitModLabel(menuThing);
+        const cacheIndex = cField ? cField.getAttribute("cacheindex") : "";
+        const label = resolveHlTraitModLabel(menuThing, customSkillMap, cacheIndex);
 
         const lowerName = label.toLowerCase().trim();
         const abilityMap = {
@@ -2016,7 +2329,11 @@
             matchedSkill = normSkill;
           } else if (typeof SKILLS_LIST !== 'undefined') {
             const skObj = SKILLS_LIST.find(s => s.name.toLowerCase() === lowerName || lowerName.startsWith(s.name.toLowerCase()));
-            if (skObj) matchedSkill = skObj.name;
+            if (skObj) {
+              matchedSkill = label.includes(" (") ? label : skObj.name;
+            }
+          } else if (label.includes(" (")) {
+            matchedSkill = label;
           }
           if (matchedSkill) {
             subPowers.push({
@@ -2196,7 +2513,7 @@
       }
     }
 
-    const isDevice = (canonicalName === "Device");
+    const isDevice = (canonicalName === "Device" || baseThing === "pwDevice" || baseThing === "pwUPGadget");
     if (isDevice) {
       if (isEasyToLose) {
         modifiers.unshift({
@@ -2235,6 +2552,7 @@
       id: "eff_" + Math.random().toString(36).substr(2, 9),
       name: customName || canonicalName,
       effectName: canonicalName,
+      profile: matchedProfileName || "",
       rank: finalRank,
       ranks: finalRank,
       baseCost: baseData ? baseData.baseCost : 1,
@@ -2245,7 +2563,8 @@
       modifiers: modifiers,
       subPowers: subPowers,
       descriptors: descriptors,
-      drawbacks: drawbacks
+      drawbacks: drawbacks,
+      details: notes || ""
     };
 
     return {
@@ -2256,7 +2575,7 @@
     };
   }
 
-  function ingestHeroLabLibrary(leadXmlStr, primaryData, audit) {
+  function ingestHeroLabLibrary(leadXmlStr, primaryData, audit, customSkillMap = null) {
     if (!leadXmlStr) return;
     const doc = (typeof DOMParser !== 'undefined') ? new DOMParser().parseFromString(leadXmlStr, "text/xml") : null;
     if (!doc) return;
@@ -2280,7 +2599,7 @@
       const activeField = pFields.find(f => f.getAttribute("id") === "pwActive");
       const isActive = (activeField && (activeField.getAttribute("user") === "1." || activeField.getAttribute("value") === "1.")) || p.getAttribute("default") !== "yes";
 
-      const parsed = parseHeroLabSingleEffectPick(p, baseThing);
+      const parsed = parseHeroLabSingleEffectPick(p, baseThing, customSkillMap);
       if (!parsed) return;
 
       let containerType = "normal";
@@ -2593,7 +2912,7 @@
   // ==========================================================================
   // PARSE SINGLE EFFECT & MODIFIERS
   // ==========================================================================
-  function parseSinglePowerEffect(pNode, index, audit, association = "primary") {
+  function parseSinglePowerEffect(pNode, index, audit, association = "primary", customSkillMap = null) {
     const rawName = pNode.getAttribute("name");
     const rawRanks = parseFloat(pNode.getAttribute("ranks") || 1);
     const summary = pNode.getAttribute("summary") || "";
@@ -2627,9 +2946,29 @@
       const traitModNodes = getDirectChildren(traitContainer, "traitmod");
       let traitNotes = [];
       traitModNodes.forEach(tm => {
-        const tmName = tm.getAttribute("name");
+        let tmName = tm.getAttribute("name");
         const tmBonusStr = tm.getAttribute("bonus") || "+0";
         const tmBonus = parseInt(tmBonusStr.replace("+", "")) || 0;
+
+        if (customSkillMap) {
+          const lowerTm = tmName.toLowerCase().trim();
+          if (customSkillMap.traitModSkillMap && customSkillMap.traitModSkillMap.length > 0) {
+            const tmMatch = customSkillMap.traitModSkillMap.find(m =>
+              m.ranks === Math.abs(tmBonus) &&
+              m.fullSkillName.toLowerCase().startsWith(lowerTm)
+            );
+            if (tmMatch) {
+              tmName = tmMatch.fullSkillName;
+            }
+          }
+          if (tmName === tm.getAttribute("name") && customSkillMap.allCustomSkills) {
+            const catMatches = customSkillMap.allCustomSkills.filter(cs => cs.baseCategory.toLowerCase() === lowerTm);
+            if (catMatches.length === 1) {
+              tmName = catMatches[0].fullSkillName;
+            }
+          }
+        }
+
         traitNotes.push(`${tmName} ${tmBonusStr}`);
 
         const lowerName = tmName.toLowerCase().trim();
@@ -2662,12 +3001,13 @@
 
         if (abilityMap[lowerName]) {
           const abName = abilityMap[lowerName];
-          const abRank = tmBonus / 2;
+          // In M&M 2E Enhanced Trait, 1 rank = +1 ability score, costing 1 PP per rank
+          const abRank = Math.abs(tmBonus);
           parsedSubPowers.push({
             name: `${abName} (+${tmBonus})`,
             type: abName,
             rank: abRank,
-            baseCost: 2,
+            baseCost: 1,
             costType: "per_rank",
             details: "",
             modifiers: [],
@@ -2705,7 +3045,11 @@
             matchedSkill = normSkill;
           } else if (typeof SKILLS_LIST !== 'undefined') {
             const skObj = SKILLS_LIST.find(s => s.name.toLowerCase() === lowerName || lowerName.startsWith(s.name.toLowerCase()));
-            if (skObj) matchedSkill = skObj.name;
+            if (skObj) {
+              matchedSkill = tmName.includes(" (") ? tmName : skObj.name;
+            }
+          } else if (tmName.includes(" (")) {
+            matchedSkill = tmName;
           }
 
           if (matchedSkill) {
@@ -2747,6 +3091,30 @@
         const traitSummary = "Enhanced: " + traitNotes.join(", ");
         userNotes = userNotes ? `${userNotes} | ${traitSummary}` : traitSummary;
       }
+    }
+
+    // Chained Feats (e.g. Feats granted by Enhanced Trait or Powers)
+    const chainedContainer = getDirectChild(pNode, "chainedfeats");
+    if (chainedContainer) {
+      const chainedFeatNodes = getDirectChildren(chainedContainer, "chainedfeat");
+      chainedFeatNodes.forEach(cf => {
+        const cfName = cf.getAttribute("name");
+        if (cfName) {
+          const parsedCf = deconstructFeatName(cfName, 1);
+          parsedSubPowers.push({
+            name: `${parsedCf.name} (${parsedCf.ranks})`,
+            type: parsedCf.name,
+            rank: parsedCf.ranks,
+            baseCost: 1,
+            costType: "per_rank",
+            details: "",
+            modifiers: [],
+            isReduced: false
+          });
+          const note = `Feats: ${cfName}`;
+          userNotes = userNotes ? `${userNotes} | ${note}` : note;
+        }
+      });
     }
 
     // UP Alias Translation
@@ -3091,6 +3459,20 @@
     if (convertedHlFeats > 0 && summary.feats !== convertedHlFeats) {
       audit.conversions.push(`Feat points re-tallied: ${summary.feats} PP in MM2CE vs. ${convertedHlFeats} PP in Hero Lab.`);
     }
+
+    // Abilities audit & Enhanced Trait breakdown
+    ["STR", "DEX", "CON", "INT", "WIS", "CHA"].forEach(k => {
+      const enh = tempChar.enhancedTraits?.abilities?.[k] || 0;
+      if (enh > 0) {
+        const base = tempChar.getBaseAbilityScore(k);
+        const total = tempChar.getAbilityScore(k);
+        const rank = tempChar.getAbilityRank(k);
+        const sign = rank >= 0 ? `+${rank}` : `${rank}`;
+        const nameMap = { STR: "Strength", DEX: "Dexterity", CON: "Constitution", INT: "Intelligence", WIS: "Wisdom", CHA: "Charisma" };
+        const aName = nameMap[k] || k;
+        audit.conversions.push(`${aName} Enhanced Trait: Base purchased score ${base} (${Math.max(0, base - 10)} PP) + ${enh} Enhanced Trait from powers/devices = Total effective score ${total} (${sign} modifier).`);
+      }
+    });
 
     // Execute comprehensive Rule Compliance & Costing / Bundling Audit
     auditRuleComplianceAndCosting(charData, audit, tempChar);

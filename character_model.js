@@ -10,9 +10,11 @@ class CharacterModel {
     this.massRank = 3;
     this.isMecha = false;
     this.hasAI = false;
+    this.heroPoints = 1;
+    this.heroPointsLocked = false;
 
-    // 6 Core Abilities
-    this.abilities = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
+    // 6 Core Abilities (Scores: 10 is standard human average)
+    this.abilities = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
     this.absentAbilities = { STR: false, CON: false, DEX: false, INT: false, WIS: false, CHA: false };
 
     // Combat Abilities
@@ -80,8 +82,10 @@ class CharacterModel {
     this.massRank = 3;
     this.isMecha = false;
     this.hasAI = false;
+    this.heroPoints = 1;
+    this.heroPointsLocked = false;
 
-    this.abilities = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
+    this.abilities = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
     this.absentAbilities = { STR: false, CON: false, DEX: false, INT: false, WIS: false, CHA: false };
 
     this.combat = { ATK: 0, DEF: 0 };
@@ -140,6 +144,7 @@ class CharacterModel {
         massRank: this.massRank,
         isMecha: this.isMecha || false,
         hasAI: this.hasAI || false,
+        abilityFormat: "score",
         abilities: { ...this.abilities },
         absentAbilities: { ...this.absentAbilities },
         combat: { ...this.combat },
@@ -178,7 +183,7 @@ class CharacterModel {
     const data = (raw.format === "MM2E_CHARACTER" && raw.character) ? raw.character : raw;
 
     this.name = ((data.name && data.name !== "New Hero") ? data.name : "").slice(0, 45);
-    this.playerName = (data.playerName || "").slice(0, 45);
+    this.playerName = (data.playerName || "").replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').slice(0, 45).trim();
     this.powerLevel = typeof data.powerLevel === "number" ? data.powerLevel : (data.pl || 10);
     this.totalPointsAllowed = typeof data.totalPointsAllowed === "number" ? data.totalPointsAllowed : (this.powerLevel * 15);
     this.heroPoints = typeof data.heroPoints === "number" ? data.heroPoints : 1;
@@ -188,8 +193,33 @@ class CharacterModel {
     this.isMecha = !!(data.isMecha || data.nature === "mecha" || data.type === "Mecha");
     this.hasAI = !!data.hasAI;
 
-    // Abilities
-    this.abilities = { STR: 0, CON: 0, DEX: 0, INT: 0, WIS: 0, CHA: 0, ...(data.abilities || {}) };
+    // Abilities (sanitizing any fractional ranks like 0.5 into integers)
+    const rawAbil = data.abilities || {};
+    const rawSTR = Math.floor(Number(rawAbil.STR) || 0);
+    const rawCON = Math.floor(Number(rawAbil.CON) || 0);
+    const rawDEX = Math.floor(Number(rawAbil.DEX) || 0);
+    const rawINT = Math.floor(Number(rawAbil.INT) || 0);
+    const rawWIS = Math.floor(Number(rawAbil.WIS) || 0);
+    const rawCHA = Math.floor(Number(rawAbil.CHA) || 0);
+
+    // Detect if this character was saved with legacy modifier ranks (e.g. 0 to 5) instead of scores (10+)
+    const isLegacyRankFormat = !data.abilityFormat && (raw.abilityFormat !== "score") &&
+      Math.max(rawSTR, rawCON, rawDEX, rawINT, rawWIS, rawCHA) <= 5;
+
+    const toScore = (val, key) => {
+      if (isLegacyRankFormat) return 10 + (val * 2);
+      if (val === 0 && !data.absentAbilities?.[key]) return 10;
+      return val;
+    };
+
+    this.abilities = {
+      STR: toScore(rawSTR, "STR"),
+      CON: toScore(rawCON, "CON"),
+      DEX: toScore(rawDEX, "DEX"),
+      INT: toScore(rawINT, "INT"),
+      WIS: toScore(rawWIS, "WIS"),
+      CHA: toScore(rawCHA, "CHA")
+    };
     this.absentAbilities = { STR: false, CON: false, DEX: false, INT: false, WIS: false, CHA: false, ...(data.absentAbilities || {}) };
 
     // Combat
@@ -367,7 +397,10 @@ class CharacterModel {
       boostAbilities: { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 }
     };
 
-    const powerContainers = this.powers || [];
+    const powerContainers = [
+      ...(this.powers || []),
+      ...(this.blueprints || []).filter(bp => bp.active !== false)
+    ];
     powerContainers.forEach(container => {
       if (container.active === false) return;
       const effects = Array.isArray(container.effects) ? container.effects : [container];
@@ -402,9 +435,30 @@ class CharacterModel {
             res.saves.Reflex += r;
           } else if (/^Will\b/i.test(clean)) {
             res.saves.Will += r;
-          } else if (typeof SKILLS_LIST !== 'undefined' && SKILLS_LIST.some(s => s.name.toLowerCase() === clean.toLowerCase())) {
-            const sk = SKILLS_LIST.find(s => s.name.toLowerCase() === clean.toLowerCase());
-            const skName = sk ? sk.name : clean;
+          } else if (
+            (typeof SKILLS_LIST !== 'undefined' && (
+              SKILLS_LIST.some(s => s.name.toLowerCase() === clean.toLowerCase()) ||
+              (clean.includes(" (") && SKILLS_LIST.some(s => s.name.toLowerCase() === clean.split(" (")[0].trim().toLowerCase()))
+            )) ||
+            (this.skills && Object.keys(this.skills).some(k => k.toLowerCase() === clean.toLowerCase())) ||
+            /^(craft|knowledge|perform|profession)\b/i.test(clean) ||
+            ["gambling", "navigation"].includes(clean.toLowerCase())
+          ) {
+            let skName = clean;
+            if (this.skills) {
+              let inChar = Object.keys(this.skills).find(k => k.toLowerCase() === clean.toLowerCase());
+              if (!inChar && ["profession", "craft", "knowledge", "perform"].includes(clean.toLowerCase())) {
+                const candidates = Object.keys(this.skills).filter(k => k.toLowerCase().startsWith(clean.toLowerCase() + " ("));
+                if (candidates.length === 1) {
+                  inChar = candidates[0];
+                }
+              }
+              if (inChar) skName = inChar;
+            }
+            if (skName === clean && typeof SKILLS_LIST !== 'undefined' && !clean.includes(" (")) {
+              const exact = SKILLS_LIST.find(s => s.name.toLowerCase() === clean.toLowerCase());
+              if (exact) skName = exact.name;
+            }
             res.skills[skName] = (res.skills[skName] || 0) + r;
           } else if (this.houseRules && this.houseRules.enhancedTraitBoostsEffects && typeof POWER_EFFECTS_LIST !== 'undefined' && POWER_EFFECTS_LIST.some(p => p.name.toLowerCase() === clean.toLowerCase())) {
             const pwr = POWER_EFFECTS_LIST.find(p => p.name.toLowerCase() === clean.toLowerCase());
@@ -499,16 +553,29 @@ class CharacterModel {
     return combined;
   }
 
+  getBaseAbilityScore(key) {
+    if (this.absentAbilities[key]) return null;
+    return (this.abilities && typeof this.abilities[key] === "number") ? this.abilities[key] : 10;
+  }
+
   getBaseAbilityRank(key) {
     if (this.absentAbilities[key]) return null;
-    return Number(this.abilities[key]) || 0;
+    const score = this.getBaseAbilityScore(key);
+    return score !== null ? Math.floor((score - 10) / 2) : null;
+  }
+
+  getAbilityScore(key) {
+    if (this.absentAbilities[key]) return null;
+    const base = this.getBaseAbilityScore(key);
+    if (base === null) return null;
+    const enh = (this.enhancedTraits && this.enhancedTraits.abilities[key]) ? this.enhancedTraits.abilities[key] : 0;
+    return base + enh;
   }
 
   getAbilityRank(key) {
     if (this.absentAbilities[key]) return null;
-    const base = Number(this.abilities[key]) || 0;
-    const enh = (this.enhancedTraits && this.enhancedTraits.abilities[key]) ? this.enhancedTraits.abilities[key] : 0;
-    return base + enh;
+    const totalScore = this.getAbilityScore(key);
+    return totalScore !== null ? Math.floor((totalScore - 10) / 2) : null;
   }
 
   getEffectiveAbilityRank(key) {
@@ -574,7 +641,7 @@ class CharacterModel {
   static isContainerEffect(eff) {
     if (!eff) return false;
     const name = (eff.effectName || eff.name || "").trim();
-    return name === "Battle Form" || name === "Container" || name.includes("Alternate Form") || !!eff.isContainer;
+    return name === "Battle Form" || name === "Container" || name === "Device" || name.includes("Alternate Form") || !!eff.isContainer || !!eff.isDevice;
   }
 
   static getContainerPool(eff) {
@@ -610,10 +677,19 @@ class CharacterModel {
     return Math.round(ft).toLocaleString() + " ft";
   }
 
-  static getCarryingCapacity(strRank) {
-    if (strRank === null) return "0 lbs";
-    const heavyLoad = 100 * Math.pow(2, (strRank - 10) / 5);
-    return this.formatWeight(heavyLoad);
+  static getCarryingCapacity(strScore) {
+    if (strScore === null || strScore === undefined || strScore <= 0) return "0 lbs";
+    let maxLbs;
+    if (strScore <= 10) {
+      maxLbs = strScore * 20;
+    } else {
+      const table = [200, 230, 260, 300, 350];
+      const offset = strScore - 10;
+      const cycle = Math.floor(offset / 5);
+      const rem = offset % 5;
+      maxLbs = table[rem] * Math.pow(2, cycle);
+    }
+    return this.formatWeight(maxLbs);
   }
 
   static getSpeedDistance(speedRank) {
@@ -654,7 +730,7 @@ class CharacterModel {
       let totalSubCost = 0;
       let totalRank = 0;
       
-      if (effect.effectName === "Summon" || effect.effectName === "Illusion" || effect.effectName === "Battle Form" || effect.effectName === "Container" || (effect.name && effect.name.includes("Alternate Form"))) {
+      if (effect.effectName === "Summon" || effect.effectName === "Duplication" || effect.effectName === "Duplicate" || effect.effectName === "Illusion" || effect.effectName === "Battle Form" || effect.effectName === "Container" || effect.effectName === "Device" || (effect.name && effect.name.includes("Alternate Form"))) {
         totalRank = parseInt(effect.rank) || 1;
         totalSubCost = (parseInt(effect.rank) || 1) * pBaseCost;
       } else if (effect.effectName === "Morph") {
@@ -909,6 +985,7 @@ class CharacterModel {
   // Aggregated benefits from active power effects
   get powerTraitModifiers() {
     let protectionToughness = 0;
+    let shieldDefense = 0;
     let speedBonus = 0;
     let flightRank = null;
     let swimRank = 0;
@@ -917,36 +994,42 @@ class CharacterModel {
     const enhSaves = (this.enhancedTraits && this.enhancedTraits.saves) ? this.enhancedTraits.saves : { Toughness: 0, Fortitude: 0, Reflex: 0, Will: 0 };
     protectionToughness += (enhSaves.Toughness || 0);
 
-    if (this.powers && Array.isArray(this.powers)) {
-      this.powers.forEach(container => {
-        if (container.active === false) return;
-        const effects = Array.isArray(container.effects) ? container.effects : [container];
-        effects.forEach(p => {
-          if (p.active === false) return;
-          const rank = Number(p.rank) || 0;
-          if (p.effectName === "Protection") protectionToughness += rank;
-          if (p.effectName === "Speed") speedBonus += rank;
-          if (p.effectName === "Flight") flightRank = (flightRank === null ? rank : Math.max(flightRank, rank));
-          if (p.effectName === "Swimming") swimRank += rank;
-          if (p.effectName === "Lifting") extraLifting += rank;
+    const allContainers = [
+      ...(this.powers || []),
+      ...(this.blueprints || []).filter(bp => bp.active !== false)
+    ];
 
-          if (CharacterModel.isContainerEffect(p) && p.active !== false && p.formActive !== false && Array.isArray(p.containedPowers)) {
-            p.containedPowers.forEach(cp => {
-              const cRank = Number(cp.rank) || 0;
-              const cpName = cp.effectName || cp.name;
-              if (cpName === "Protection") protectionToughness += cRank;
-              if (cpName === "Speed") speedBonus += cRank;
-              if (cpName === "Flight") flightRank = (flightRank === null ? cRank : Math.max(flightRank, cRank));
-              if (cpName === "Swimming") swimRank += cRank;
-              if (cpName === "Lifting" || cpName === "Super-Strength") extraLifting += cRank;
-            });
-          }
-        });
+    allContainers.forEach(container => {
+      if (container.active === false) return;
+      const effects = Array.isArray(container.effects) ? container.effects : [container];
+      effects.forEach(p => {
+        if (p.active === false) return;
+        const rank = Number(p.rank) || 0;
+        if (p.effectName === "Protection" || p.effectName === "Force Field") protectionToughness += rank;
+        if (p.effectName === "Shield") shieldDefense += rank;
+        if (p.effectName === "Speed") speedBonus += rank;
+        if (p.effectName === "Flight") flightRank = (flightRank === null ? rank : Math.max(flightRank, rank));
+        if (p.effectName === "Swimming") swimRank += rank;
+        if (p.effectName === "Lifting" || p.effectName === "Super-Strength") extraLifting += rank;
+
+        if (CharacterModel.isContainerEffect(p) && p.active !== false && p.formActive !== false && Array.isArray(p.containedPowers)) {
+          p.containedPowers.forEach(cp => {
+            const cRank = Number(cp.rank) || 0;
+            const cpName = cp.effectName || cp.name;
+            if (cpName === "Protection" || cpName === "Force Field") protectionToughness += cRank;
+            if (cpName === "Shield") shieldDefense += cRank;
+            if (cpName === "Speed") speedBonus += cRank;
+            if (cpName === "Flight") flightRank = (flightRank === null ? cRank : Math.max(flightRank, cRank));
+            if (cpName === "Swimming") swimRank += cRank;
+            if (cpName === "Lifting" || cpName === "Super-Strength") extraLifting += cRank;
+          });
+        }
       });
-    }
+    });
 
     return {
       protectionToughness,
+      shieldDefense,
       speedBonus,
       flightRank,
       swimRank,
@@ -1040,7 +1123,9 @@ class CharacterModel {
     const knockback = -Math.floor(toughness / 2);
 
     const baseSpeed = (sizeData.speed || 0) + pMods.speedBonus;
-    const liftRank = (str === null ? -5 : str) + pMods.extraLifting;
+    const strScore = this.getAbilityScore("STR");
+    const liftScore = (strScore === null) ? null : (strScore + (pMods.extraLifting * 5));
+    const liftRank = (liftScore !== null) ? liftScore : 0;
 
     return {
       defenseClass,
@@ -1078,18 +1163,19 @@ class CharacterModel {
     let abilityPP = 0;
     if (this.isMecha) {
       // Mecha & Manga rules: Mecha only purchase STR and DEX (and mental scores if AI equipped)
-      abilityPP += ((this.abilities.STR || 0) * 2) + ((this.abilities.DEX || 0) * 2);
+      if (!this.absentAbilities.STR) abilityPP += ((this.getBaseAbilityScore("STR") ?? 10) - 10);
+      if (!this.absentAbilities.DEX) abilityPP += ((this.getBaseAbilityScore("DEX") ?? 10) - 10);
       if (this.hasAI) {
-        if (!this.absentAbilities.INT) abilityPP += ((this.abilities.INT || 0) * 2);
-        if (!this.absentAbilities.WIS) abilityPP += ((this.abilities.WIS || 0) * 2);
-        if (!this.absentAbilities.CHA) abilityPP += ((this.abilities.CHA || 0) * 2);
+        if (!this.absentAbilities.INT) abilityPP += ((this.getBaseAbilityScore("INT") ?? 10) - 10);
+        if (!this.absentAbilities.WIS) abilityPP += ((this.getBaseAbilityScore("WIS") ?? 10) - 10);
+        if (!this.absentAbilities.CHA) abilityPP += ((this.getBaseAbilityScore("CHA") ?? 10) - 10);
       }
     } else {
       for (const key of Object.keys(this.abilities)) {
         if (this.absentAbilities[key]) {
           abilityPP -= 10;
         } else {
-          abilityPP += (this.abilities[key] * 2);
+          abilityPP += ((this.getBaseAbilityScore(key) ?? 10) - 10);
         }
       }
     }

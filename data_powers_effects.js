@@ -503,6 +503,67 @@ const POWER_EFFECTS_LIST = [
     ]
   },
   {
+    "name": "Device",
+    "type": "Power Structure",
+    "action": "None (passive)",
+    "range": "Personal",
+    "duration": "Continuous",
+    "savingThrow": "None",
+    "baseCost": 4,
+    "book": "Core Rulebook",
+    "fullText": "<p>A Device is an item (a weapon, suit of armor, magical talisman, gadget, etc.) granting you 5 power points per rank to spend on traits and powers.</p>\n<p>Devices are Hard to Lose (4 points per rank) by default, requiring the wearer to be pinned, helpless, or out of combat to remove. Devices that can be knocked away or taken in combat with a disarm check are Easy to Lose (3 points per rank, representing the Easy to Lose flaw).</p>\n<p><strong>POWER FEATS</strong></p>\n<p>• Indestructible: The device cannot be destroyed by normal means or damage; it requires specialized effort or tools to destroy.</p>\n<p>• Innate: The device cannot be nullified or disenchanted.</p>\n<p>• Progression: Used for devices that create multiple copies or affect multiple subjects.</p>\n<p>• Restricted: Only characters meeting certain conditions (abilities, traits, alignment, DNA) can use the device.</p>\n<p>• Subtle: The device does not appear to be a device (e.g. looks like normal clothing or ordinary jewelry).</p>\n<p><strong>EXTRAS</strong></p>\n<p>• Affects Others: The device can grant its benefits to someone else.</p>\n<p><strong>FLAWS</strong></p>\n<p>• Easy to Lose (–1): The device can be snatched away or disarmed in combat (costs 3 PP/r).</p>\n<p>• Hard to Lose: The device cannot be easily removed in combat (costs 4 PP/r).</p>",
+    "specificExtras": [
+      {
+        "name": "Affects Others",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Affects Others (+1): The device can grant its benefits to other characters."
+      }
+    ],
+    "specificFlaws": [
+      {
+        "name": "Easy to Lose",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Easy to Lose (–1): The device can be easily removed or snatched away in combat with a disarm check (net 3 PP/r)."
+      }
+    ],
+    "specificFeats": [
+      {
+        "name": "Indestructible",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Indestructible: The device cannot be destroyed by normal damage or attacks."
+      },
+      {
+        "name": "Innate",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Innate: The device cannot be nullified or disenchanted."
+      },
+      {
+        "name": "Progression",
+        "cost": 1,
+        "costType": "flat",
+        "hasRanks": true,
+        "maxRanks": 20,
+        "desc": "Progression: Increases number created or subjects."
+      },
+      {
+        "name": "Restricted",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Restricted: The device is usable only by characters meeting specific conditions."
+      },
+      {
+        "name": "Subtle",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Subtle: The device appears to be an ordinary, innocuous object."
+      }
+    ]
+  },
+  {
     "name": "Drain",
     "type": "Trait",
     "action": "Standard",
@@ -511,6 +572,79 @@ const POWER_EFFECTS_LIST = [
     "savingThrow": "Fortitude",
     "baseCost": 1,
     "fullText": "<p>You can temporarily lower one of a target’s traits: an ability, skill, feat, or power, chosen when you acquire this power. You must touch the target, making a normal melee attack roll, and the target makes a Fortitude save. If the save fails, each rank of Drain removes 1 power point from the affected trait. The lost points return at a rate of 1 per round, except for inanimate objects, which do not recover drained Toughness and must be repaired. This rate can be reduced with the Slow Fade power feat.</p>\n<p>Drain’s cost per rank determines the affected traits:</p>\n<p>• 1 point: Drain affects a single trait (such as Strength score or Will save bonus).</p>\n<p>• 2 points: Drain affects any one trait, one at a time.</p>\n<p>• 3 points: Drain affects all traits of a single type (ability scores, skills, feats, one type of power effect, or all powers of a particular descriptor) all at once.</p>\n<p>• 4 points: Drain reduces all powers at once.</p>\n<p>• 5 points: Drain reduces all traits at once.</p>"
+  },
+  {
+    "name": "Duplication",
+    "type": "Alteration",
+    "action": "Standard (active)",
+    "range": "Personal",
+    "duration": "Sustained",
+    "savingThrow": "None",
+    "baseCost": 2,
+    "book": "Core Rulebook",
+    "fullText": "<p>You can create a duplicate of yourself. Your duplicate is a minion with the same capabilities as you, except for this power.</p>\n<p>Duplicates are subject to normal minion rules unless you purchase the Heroic extra. Duplicates are created with a standard action; they act on the round after they are created. If you are incapacitated or killed, all duplicates vanish unless you have the Survival extra.</p>\n<p><strong>POWER FEATS</strong></p>\n<p>• Mental Link: You have a mental link with your duplicate(s), allowing you to communicate with them over any distance.</p>\n<p>• Progression: You can create multiple duplicates (2, 5, 10, etc.) following the Progression Table. Ranks can be purchased up to the power level limit.</p>\n<p>• Sacrifice: When you are hit with an attack requiring a saving throw, you can spend a hero point to have an adjacent duplicate suffer the attack instead.</p>\n<p><strong>EXTRAS</strong></p>\n<p>• Heroic (+1): Your duplicates are not subject to the minion rules; they are treated as normal characters.</p>\n<p>• Horde (+1): You can create all of your duplicates in a single standard action rather than one at a time.</p>\n<p>• Survival (+1): If you are killed or incapacitated, one of your duplicates immediately becomes the real you.</p>\n<p><strong>FLAWS</strong></p>\n<p>• Feedback (–1): When a duplicate suffers damage or is affected by an attack, you must make a saving throw against the same effect.</p>\n<p>• Real (–1): Your duplicates are divided portions of yourself. When you create duplicates, you suffer a cumulative –1 penalty to all physical ability scores per duplicate created.</p>\n<p>• Sequential (–1): You must create duplicates one at a time, taking a standard action for each duplicate.</p>",
+    "specificExtras": [
+      {
+        "name": "Heroic",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Heroic (+1): Your duplicates are not subject to minion rules, but treated like normal characters."
+      },
+      {
+        "name": "Horde",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Horde (+1): You can create up to your maximum number of duplicates with one standard action."
+      },
+      {
+        "name": "Survival",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Survival (+1): If you are killed or incapacitated, one of your duplicates immediately becomes the real you."
+      }
+    ],
+    "specificFlaws": [
+      {
+        "name": "Feedback",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Feedback (–1): When a duplicate suffers damage, you must make a saving throw against the same effect."
+      },
+      {
+        "name": "Real",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Real (–1): You divide your physical form into duplicates; you suffer –1 to physical ability scores per duplicate."
+      },
+      {
+        "name": "Sequential",
+        "cost": 1,
+        "costType": "per_rank",
+        "desc": "Sequential (–1): You must create duplicates one at a time, taking a standard action for each."
+      }
+    ],
+    "specificFeats": [
+      {
+        "name": "Mental Link",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Mental Link: You have a mental link with your duplicate(s), allowing communication over any distance."
+      },
+      {
+        "name": "Progression",
+        "cost": 1,
+        "costType": "flat",
+        "hasRanks": true,
+        "maxRanks": 20,
+        "desc": "Progression: Move your total number of duplicates one step up the Progression Table (2, 5, 10, etc.)."
+      },
+      {
+        "name": "Sacrifice",
+        "cost": 1,
+        "costType": "flat",
+        "desc": "Sacrifice: Spend a hero point to shift a harmful effect to an adjacent duplicate."
+      }
+    ]
   },
   {
     "name": "Elongation",

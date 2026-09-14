@@ -4954,7 +4954,7 @@ function setupSessionAndGMHub() {
         ? `<strong style="font-size: 15px; color: var(--accent-primary); line-height: 1.1;">${item.initiativeRoll}</strong><div style="font-size: var(--font-size-fine-print); color: var(--text-muted);">${initModStr} mod</div>`
         : `<strong style="font-size: 13px;">${initModStr}</strong>`;
       const localRollBtn = item.isLocal
-        ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 4px; font-size: 10px; margin-top: 2px; height: 18px; line-height: 1; max-width: 48px; width: 100%;">🎲 Roll</button>`
+        ? `<button type="button" class="btn btn-secondary" onclick="window.rollInitiativeCheck()" title="Roll Initiative Check" style="padding: 1px 4px; font-size: 11px; margin-top: 2px; height: 18px; line-height: 1; max-width: 48px; width: 100%;">🎲 Roll</button>`
         : '';
 
       const canRemoveFromParty = isLocalGM || item.isLocal || (char && char.name === item.characterName);
@@ -4974,11 +4974,11 @@ function setupSessionAndGMHub() {
         ? 'background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.45); border-radius: 4px; padding: 2px 6px; box-shadow: 0 0 4px rgba(99, 102, 241, 0.2);'
         : '';
       const youBadge = isMyCharacter
-        ? `<span class="badge" style="background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;">YOU</span>`
+        ? `<span class="badge" style="background: var(--accent-primary); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;">YOU</span>`
         : '';
 
       const inEditorBadge = item.isInEditor
-        ? `<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7; border: 1px solid #0284c7; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;" title="Currently loaded in editor">IN EDITOR</span>`
+        ? `<span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #0284c7; border: 1px solid #0284c7; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; margin-left: 2px;" title="Currently loaded in editor">IN EDITOR</span>`
         : '';
 
       let nameAndMenuHtml = '';
@@ -6094,7 +6094,7 @@ function setupSessionAndGMHub() {
       list.innerHTML = filtered.map((c, idx) => `
         <div class="mention-item ${idx === activeMentionIdx ? 'active' : ''}" data-value="${escapeHtml(c.value)}" onclick="window.insertMentionCandidate('${escapeHtml(c.value)}')">
           <span>${c.label}</span>
-          <span style="font-size: 10px; color: var(--text-muted); opacity: 0.8;">@${c.value}</span>
+          <span style="font-size: 11px; color: var(--text-muted); opacity: 0.85;">@${c.value}</span>
         </div>
       `).join('');
 
@@ -6601,31 +6601,31 @@ function setupSessionAndGMHub() {
       let badgesHtml = "";
       if (roll.isNat20) {
         totalColor = "#10b981";
-        badgesHtml += `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 10.5px; padding: 1.5px 5px; font-weight: 700;">★ Nat 20</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 11px; padding: 1.5px 5px; font-weight: 700;">★ Nat 20</span>`;
       } else if (roll.isNat1) {
         totalColor = "#ef4444";
-        badgesHtml += `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 10.5px; padding: 1.5px 5px; font-weight: 700;">⚠️ Nat 1</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 11px; padding: 1.5px 5px; font-weight: 700;">⚠️ Nat 1</span>`;
       }
 
       if (roll.hpBonus > 0) {
-        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10.5px; padding: 1.5px 5px; font-weight: 600;">✨ +${roll.hpBonus} HP</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 11px; padding: 1.5px 5px; font-weight: 600;">✨ +${roll.hpBonus} HP</span>`;
       } else if (roll.isHPRerolled) {
-        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10.5px; padding: 1.5px 5px; font-weight: 600;">✨ HP Reroll</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 11px; padding: 1.5px 5px; font-weight: 600;">✨ HP Reroll</span>`;
       }
 
       const timeStr = roll.timestamp 
         ? new Date(roll.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
         : '';
       const rankBadge = isLatest
-        ? `<span style="font-size: 10.5px; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.3px;">Latest</span>`
-        : `<span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">#${idx + 1}</span>`;
+        ? `<span style="font-size: 11px; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.3px;">Latest</span>`
+        : `<span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">#${idx + 1}</span>`;
 
       let resultHtml = '';
       if (roll.result) {
         const isHit = roll.result.toLowerCase().includes('hit') || roll.result.toLowerCase().includes('success');
         const isFail = roll.result.toLowerCase().includes('fail') || roll.result.toLowerCase().includes('miss');
         const resColor = isHit ? '#10b981' : (isFail ? '#ef4444' : 'var(--text-muted)');
-        resultHtml = `<span style="font-size: 11.5px; font-weight: 600; color: ${resColor};">${escapeHtml(roll.result)}</span>`;
+        resultHtml = `<span style="font-size: 12px; font-weight: 600; color: ${resColor};">${escapeHtml(roll.result)}</span>`;
       }
 
       const cardStyle = isLatest
@@ -6639,7 +6639,7 @@ function setupSessionAndGMHub() {
               ${rankBadge}
               <span style="font-weight: 600; font-size: 12px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 115px;" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
             </div>
-            <span style="font-size: 10.5px; color: var(--text-muted); flex-shrink: 0;">${timeStr}</span>
+            <span style="font-size: 11px; color: var(--text-muted); flex-shrink: 0;">${timeStr}</span>
           </div>
           <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px; margin: 2px 0;">
             <div style="display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap;">
@@ -6648,7 +6648,7 @@ function setupSessionAndGMHub() {
             </div>
             ${resultHtml}
           </div>
-          <div style="font-size: 11.5px; color: var(--text-muted); word-break: break-word; line-height: 1.3; margin-top: 1px;">
+          <div style="font-size: 12px; color: var(--text-muted); word-break: break-word; line-height: 1.3; margin-top: 1px;">
             ${escapeHtml(roll.breakdown || `${totalVal}`)}
           </div>
         </div>
@@ -7434,7 +7434,7 @@ function setupSessionAndGMHub() {
         <div class="gm-char-menu-wrapper" style="position: relative; display: inline-flex; align-items: center; gap: 6px;">
           <button type="button" class="gm-char-name-btn" onclick="window.gmToggleCharMenu(event, 'gm_tab_${n.id}')" title="Click for NPC actions" style="background: none; border: none; font-weight: 700; font-size: 13px; color: #0284c7; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0;">
             ${escapeHtml(n.name)} <span style="font-size: var(--font-size-fine-print); opacity: 0.7;">▾</span>
-            ${isCurrentlyEdited ? '<span class="badge" style="background: #0284c7; color: #fff; font-size: 10px; padding: 1px 4px;">In Editor</span>' : ''}
+            ${isCurrentlyEdited ? '<span class="badge" style="background: #0284c7; color: #fff; font-size: 11px; padding: 1px 4px;">In Editor</span>' : ''}
           </button>
           <div id="gmCharMenu_gm_tab_${n.id}" class="gm-char-dropdown-menu" style="display: none;">
             ${isCurrentlyEdited ? `
@@ -8902,7 +8902,7 @@ function setupSessionAndGMHub() {
           <span class="gm-log-badge ${l.type}">${l.type.replace('_', ' ')}</span>
           <div style="flex: 1;">
             <div>${l.message}</div>
-            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${timeStr}</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${timeStr}</div>
           </div>
         </div>
       `;

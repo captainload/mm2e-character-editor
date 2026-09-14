@@ -6581,8 +6581,8 @@ function setupSessionAndGMHub() {
     if (rolls.length === 0) {
       boxContainer.innerHTML = `
         <div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 8px; font-size: 12px; text-align: center; color: var(--text-muted);">
-          <div id="lblDiceRollerLastTitle" style="font-weight: 600; font-size: 12px; color: var(--text-main); margin-bottom: 2px;">No rolls yet</div>
-          <div id="lblDiceRollerLastBreakdown" style="font-size: 11px; color: var(--text-muted); font-style: italic;">Roll from sheet, chat, or roller</div>
+          <div id="lblDiceRollerLastTitle" style="font-weight: 600; font-size: 13px; color: var(--text-main); margin-bottom: 2px;">No rolls yet</div>
+          <div id="lblDiceRollerLastBreakdown" style="font-size: 12px; color: var(--text-muted); font-style: italic;">Roll from sheet, chat, or roller</div>
         </div>
       `;
       return;
@@ -6601,31 +6601,31 @@ function setupSessionAndGMHub() {
       let badgesHtml = "";
       if (roll.isNat20) {
         totalColor = "#10b981";
-        badgesHtml += `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 9px; padding: 1px 4px; font-weight: 700;">★ Nat 20</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 10.5px; padding: 1.5px 5px; font-weight: 700;">★ Nat 20</span>`;
       } else if (roll.isNat1) {
         totalColor = "#ef4444";
-        badgesHtml += `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 9px; padding: 1px 4px; font-weight: 700;">⚠️ Nat 1</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 10.5px; padding: 1.5px 5px; font-weight: 700;">⚠️ Nat 1</span>`;
       }
 
       if (roll.hpBonus > 0) {
-        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 9px; padding: 1px 4px; font-weight: 600;">✨ +${roll.hpBonus} HP</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10.5px; padding: 1.5px 5px; font-weight: 600;">✨ +${roll.hpBonus} HP</span>`;
       } else if (roll.isHPRerolled) {
-        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 9px; padding: 1px 4px; font-weight: 600;">✨ HP Reroll</span>`;
+        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10.5px; padding: 1.5px 5px; font-weight: 600;">✨ HP Reroll</span>`;
       }
 
       const timeStr = roll.timestamp 
         ? new Date(roll.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
         : '';
       const rankBadge = isLatest
-        ? `<span style="font-size: 9px; font-weight: 700; color: var(--accent-primary); text-transform: uppercase;">Latest</span>`
-        : `<span style="font-size: 9px; color: var(--text-muted); font-weight: 600;">#${idx + 1}</span>`;
+        ? `<span style="font-size: 10.5px; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.3px;">Latest</span>`
+        : `<span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">#${idx + 1}</span>`;
 
       let resultHtml = '';
       if (roll.result) {
         const isHit = roll.result.toLowerCase().includes('hit') || roll.result.toLowerCase().includes('success');
         const isFail = roll.result.toLowerCase().includes('fail') || roll.result.toLowerCase().includes('miss');
         const resColor = isHit ? '#10b981' : (isFail ? '#ef4444' : 'var(--text-muted)');
-        resultHtml = `<span style="font-size: 10px; font-weight: 600; color: ${resColor};">${escapeHtml(roll.result)}</span>`;
+        resultHtml = `<span style="font-size: 11.5px; font-weight: 600; color: ${resColor};">${escapeHtml(roll.result)}</span>`;
       }
 
       const cardStyle = isLatest
@@ -6633,22 +6633,22 @@ function setupSessionAndGMHub() {
         : "background: var(--bg-panel); border: 1px solid var(--border-color); opacity: 0.9;";
 
       return `
-        <div class="dice-roller-recent-card ${isLatest ? 'is-latest' : ''}" style="${cardStyle} border-radius: 6px; padding: 6px 8px; font-size: 11px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-            <div style="display: flex; align-items: center; gap: 4px; overflow: hidden;">
+        <div class="dice-roller-recent-card ${isLatest ? 'is-latest' : ''}" style="${cardStyle} border-radius: 6px; padding: 7px 9px; font-size: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <div style="display: flex; align-items: center; gap: 5px; overflow: hidden;">
               ${rankBadge}
-              <span style="font-weight: 600; font-size: 11px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 115px;" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
+              <span style="font-weight: 600; font-size: 12px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 115px;" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
             </div>
-            <span style="font-size: 9px; color: var(--text-muted); flex-shrink: 0;">${timeStr}</span>
+            <span style="font-size: 10.5px; color: var(--text-muted); flex-shrink: 0;">${timeStr}</span>
           </div>
           <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px; margin: 2px 0;">
-            <div style="display: flex; align-items: baseline; gap: 5px;">
-              <span style="font-size: ${isLatest ? '17px' : '14px'}; font-weight: 800; color: ${totalColor}; line-height: 1;">${totalVal}</span>
+            <div style="display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap;">
+              <span style="font-size: ${isLatest ? '18px' : '15px'}; font-weight: 800; color: ${totalColor}; line-height: 1;">${totalVal}</span>
               ${badgesHtml}
             </div>
             ${resultHtml}
           </div>
-          <div style="font-size: 10px; color: var(--text-muted); word-break: break-all; line-height: 1.2;">
+          <div style="font-size: 11.5px; color: var(--text-muted); word-break: break-word; line-height: 1.3; margin-top: 1px;">
             ${escapeHtml(roll.breakdown || `${totalVal}`)}
           </div>
         </div>

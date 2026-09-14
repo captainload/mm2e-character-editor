@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=66">
+  <link rel="stylesheet" href="styles.css?v=67">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -2287,15 +2287,15 @@
   <script src="data_powers_modifiers.js?v=13"></script>
   <script src="data_measurements.js?v=8"></script>
   <script src="data_equipment.js?v=6"></script>
-  <script src="character_model.js?v=30"></script>
+  <script src="character_model.js?v=31"></script>
   <script src="por_importer.js?v=33"></script>
-  <script src="print.js?v=18"></script>
+  <script src="print.js?v=19"></script>
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=18"></script>
   <script src="session_network.js?v=19"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=151"></script>
+  <script src="app.js?v=154"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
@@ -2305,7 +2305,7 @@
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=100').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=103').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Session Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=51">
+  <link rel="stylesheet" href="styles.css?v=67">
   <script>
     (function() {
       function applySavedThemeAndFonts() {
@@ -449,77 +449,169 @@
     });
 
     // --- Window Bounds Persistence (Size & Position) ---
-    function saveWindowBounds() {
-      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-      const width = window.outerWidth || window.innerWidth;
-      const height = window.outerHeight || window.innerHeight;
+    const STORAGE_KEY_BOUNDS = 'mm2e_session_log_bounds';
 
-      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 200) {
-        try {
-          localStorage.setItem('mm2e_session_log_bounds', JSON.stringify({
-            left,
-            top,
-            width,
-            height
-          }));
-        } catch (e) {}
-      }
-    }
-
-    function restoreWindowBounds() {
+    function getInitialBounds() {
+      const fallback = { width: 750, height: 600, left: 160, top: 160 };
       try {
-        const saved = localStorage.getItem('mm2e_session_log_bounds');
+        const p = new URLSearchParams(window.location.search);
+        const urlW = parseInt(p.get('w'), 10);
+        const urlH = parseInt(p.get('h'), 10);
+        const urlX = parseInt(p.get('x'), 10);
+        const urlY = parseInt(p.get('y'), 10);
+        if (urlW >= 250 && urlH >= 200) {
+          return {
+            width: urlW,
+            height: urlH,
+            left: !isNaN(urlX) ? urlX : fallback.left,
+            top: !isNaN(urlY) ? urlY : fallback.top
+          };
+        }
+      } catch (e) {}
+
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
         if (saved) {
           const b = JSON.parse(saved);
-          if (b.width && b.height && (window.outerWidth !== b.width || window.outerHeight !== b.height)) {
-            try { window.resizeTo(b.width, b.height); } catch (e) {}
+          if (b && b.width >= 250 && b.height >= 200) {
+            return {
+              width: Math.round(b.width),
+              height: Math.round(b.height),
+              left: Math.round(b.left ?? fallback.left),
+              top: Math.round(b.top ?? fallback.top)
+            };
           }
-          if (typeof b.left === 'number' && typeof b.top === 'number' && (window.screenX !== b.left || window.screenY !== b.top)) {
-            try { window.moveTo(b.left, b.top); } catch (e) {}
-          }
+        }
+      } catch (e) {}
+
+      return fallback;
+    }
+
+    let _isInitialLoad = true;
+    setTimeout(() => { _isInitialLoad = false; }, 800);
+    let _isRestoringBounds = false;
+
+    window._lastBounds = getInitialBounds();
+
+    function saveWindowBounds() {
+      try {
+        const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+        const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+        const width = Math.round(window.innerWidth || window.outerWidth);
+        const height = Math.round(window.innerHeight || window.outerHeight);
+
+        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+          const bounds = { left, top, width, height };
+          try {
+            localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
+          } catch (e) {}
+
+          try {
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage({
+                type: 'MM2E_WINDOW_BOUNDS',
+                key: STORAGE_KEY_BOUNDS,
+                popupType: 'log',
+                bounds: bounds
+              }, '*');
+            }
+          } catch (e) {}
+
+          try {
+            if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+              SessionNetwork.sendLocalBroadcast({ type: 'LOG_BOUNDS_UPDATE', bounds });
+            }
+          } catch (e) {}
         }
       } catch (e) {}
     }
 
-    // Try restoring bounds on start
-    restoreWindowBounds();
+    function restoreWindowBounds() {
+      try {
+        const b = getInitialBounds();
+        if (!b) return;
+
+        const curW = window.innerWidth || window.outerWidth;
+        const curH = window.innerHeight || window.outerHeight;
+        const curX = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+        const curY = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+
+        if (!curW || !curH || curW < 100 || curH < 100) return;
+
+        _isRestoringBounds = true;
+        try {
+          if (typeof b.left === 'number' && typeof b.top === 'number') {
+            if (Math.abs(curX - b.left) > 25 || Math.abs(curY - b.top) > 25) {
+              window.moveTo(b.left, b.top);
+            }
+          }
+          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 250 && b.height >= 200) {
+            if (Math.abs(curW - b.width) > 40 || Math.abs(curH - b.height) > 40) {
+              const chromeW = (window.outerWidth && window.innerWidth) ? (window.outerWidth - window.innerWidth) : 16;
+              const chromeH = (window.outerHeight && window.innerHeight) ? (window.outerHeight - window.innerHeight) : 40;
+              window.resizeTo(b.width + chromeW, b.height + chromeH);
+            }
+          }
+        } catch (e) {}
+        setTimeout(() => { _isRestoringBounds = false; }, 400);
+      } catch (e) {
+        _isRestoringBounds = false;
+      }
+    }
+
+    // Try restoring bounds after DOM is ready
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(restoreWindowBounds, 50);
+    });
+    window.addEventListener('load', restoreWindowBounds);
 
     // Track resize
     window.addEventListener('resize', () => {
+      if (_isRestoringBounds || _isInitialLoad) return;
       clearTimeout(window._resTimer);
       window._resTimer = setTimeout(saveWindowBounds, 250);
     });
 
     // Periodic poll for position changes (handling user dragging the window)
     setInterval(() => {
-      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-      const width = window.outerWidth || window.innerWidth;
-      const height = window.outerHeight || window.innerHeight;
+      if (_isInitialLoad || _isRestoringBounds) return;
+      const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+      const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+      const width = Math.round(window.innerWidth || window.outerWidth);
+      const height = Math.round(window.innerHeight || window.outerHeight);
+
+      if (width < 250 || height < 200) return;
 
       if (!window._lastBounds ||
-          window._lastBounds.left !== left ||
-          window._lastBounds.top !== top ||
-          window._lastBounds.width !== width ||
-          window._lastBounds.height !== height) {
+          Math.abs(window._lastBounds.left - left) > 4 ||
+          Math.abs(window._lastBounds.top - top) > 4 ||
+          Math.abs(window._lastBounds.width - width) > 4 ||
+          Math.abs(window._lastBounds.height - height) > 4) {
         window._lastBounds = { left, top, width, height };
         saveWindowBounds();
       }
-    }, 1000);
+    }, 500);
 
     window.addEventListener('beforeunload', () => {
       saveWindowBounds();
-      if (typeof SessionNetwork !== 'undefined') {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: 'log' }, '*');
+        }
+      } catch (e) {}
+      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
         SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
       }
     });
 
-    window.addEventListener('unload', saveWindowBounds);
-
     function redockWindow() {
       saveWindowBounds();
-      if (typeof SessionNetwork !== 'undefined') {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: 'log' }, '*');
+        }
+      } catch (e) {}
+      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
         SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
       }
       window.close();

@@ -644,6 +644,14 @@ class CharacterModel {
     return name === "Battle Form" || name === "Container" || name === "Device" || name.includes("Alternate Form") || !!eff.isContainer || !!eff.isDevice;
   }
 
+  static isDevicePower(power) {
+    if (!power) return false;
+    if (power.containerType === 'device_hard' || power.containerType === 'device_easy' || power.planType === 'device' || power.isDevice) return true;
+    if (power.descriptors && (power.descriptors === 'Device' || power.descriptors.includes('Device'))) return true;
+    if (Array.isArray(power.effects) && power.effects.some(e => e && (e.effectName === 'Device' || e.name === 'Device' || e.isDevice))) return true;
+    return false;
+  }
+
   static getContainerPool(eff) {
     if (!eff) return 0;
     const rank = Math.max(1, parseInt(eff.rank) || 1);
@@ -1329,6 +1337,10 @@ class CharacterModel {
       }
     }
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.isDevicePower = CharacterModel.isDevicePower;
 }
 
 if (typeof module !== 'undefined') {

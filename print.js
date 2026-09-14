@@ -63,6 +63,14 @@ function calculateEffectSaveDc(eff, effectiveRank = null) {
   return null;
 }
 
+function isDevicePower(power) {
+  if (!power) return false;
+  if (power.containerType === 'device_hard' || power.containerType === 'device_easy' || power.planType === 'device' || power.isDevice) return true;
+  if (power.descriptors && (power.descriptors === 'Device' || power.descriptors.includes('Device'))) return true;
+  if (Array.isArray(power.effects) && power.effects.some(e => e && (e.effectName === 'Device' || e.name === 'Device' || e.isDevice))) return true;
+  return false;
+}
+
 function extractHeroAttacks(char) {
   const attacks = [];
   const derived = char.derivedStats || {};
@@ -76,7 +84,7 @@ function extractHeroAttacks(char) {
 
   // 1. Unarmed Strike
   attacks.push({
-    name: "Unarmed Strike",
+    name: "👊 Unarmed Strike",
     bonus: meleeBonus >= 0 ? `+${meleeBonus}` : `${meleeBonus}`,
     range: "Touch",
     saveDc: `Toughness DC ${15 + strRank}`,
@@ -92,7 +100,7 @@ function extractHeroAttacks(char) {
       const dmg = parseInt(item.damage) || 0;
       const crit = item.crit || "20";
       attacks.push({
-        name: item.name || "Weapon",
+        name: `⚔️ ${item.name || "Weapon"}`,
         bonus: bonus >= 0 ? `+${bonus}` : `${bonus}`,
         range: item.range || (isRanged ? "Ranged" : "Touch"),
         saveDc: `Toughness DC ${15 + dmg}`,
@@ -103,6 +111,8 @@ function extractHeroAttacks(char) {
 
   // 3. Powers with Attack Effects
   (char.powers || []).forEach(power => {
+    const isDev = isDevicePower(power);
+    const pIcon = isDev ? '⚙️ ' : '⚡ ';
     (power.effects || []).forEach(eff => {
       const effName = eff.effectName || "";
       const isAttack = ATTACK_EFFECT_NAMES.has(effName) || eff.isAttack;
@@ -136,8 +146,8 @@ function extractHeroAttacks(char) {
 
         const isAlt = eff.association === 'alternate';
         const displayName = (eff.name && eff.name !== "New Effect" && eff.name !== effName)
-          ? `${eff.name} [${effName} ${rank}]`
-          : `${power.name || effName} [Rank ${rank}]`;
+          ? `${pIcon}${eff.name} [${effName} ${rank}]`
+          : `${pIcon}${power.name || effName} [Rank ${rank}]`;
 
         attacks.push({
           name: isAlt ? `${displayName} (Alt)` : displayName,
@@ -887,16 +897,25 @@ function generatePrintSheetHtml(customOptions = null) {
       char.powers.forEach(power => {
         const ptCost = char.calculateTotalPowerCost ? char.calculateTotalPowerCost(power) : (power.cost || 0);
         const descr = power.descriptors ? `<span class="print-muted" style="font-weight: normal; font-size: 8pt;"> [${escapeHtml(power.descriptors)}]</span>` : '';
-        
+        const isDevice = isDevicePower(power);
+        const cardIcon = isDevice ? '⚙️' : '⚡';
+        const cardTypeTitle = isDevice ? 'Device' : 'Superpower';
+
         let containerLabel = "";
         if (power.containerType === 'array') containerLabel = "Array";
         else if (power.containerType === 'device_hard') containerLabel = "Device (Hard to Lose)";
         else if (power.containerType === 'device_easy') containerLabel = "Device (Easy to Lose)";
+        else if (isDevice) containerLabel = "Device";
 
         html += `
           <div class="print-power-card print-avoid-break">
             <div class="print-power-card-header">
-              <span><strong>${escapeHtml(power.name || 'Unnamed Power')}</strong>${descr}${containerLabel ? ` <span class="print-badge-type">[${containerLabel}]</span>` : ''}</span>
+              <span>
+                <span class="print-power-icon" style="margin-right: 3px;" title="${cardTypeTitle}">${cardIcon}</span>
+                <strong>${escapeHtml(power.name || (isDevice ? 'Unnamed Device' : 'Unnamed Power'))}</strong>
+                ${descr}
+                ${containerLabel ? ` <span class="print-badge-type">[${containerLabel}]</span>` : ''}
+              </span>
               <span class="print-value">${ptCost} PP</span>
             </div>
             <div class="print-power-card-body">
@@ -911,12 +930,14 @@ function generatePrintSheetHtml(customOptions = null) {
             const customName = (eff.name && eff.name !== 'New Effect' && eff.name !== effName) ? eff.name : '';
             const saveDc = calculateEffectSaveDc(eff);
             const dcBadge = saveDc ? `<span class="print-dc-badge">${escapeHtml(saveDc)}</span>` : '';
+            const effIcon = isDevice ? '⚙️' : '⚡';
 
             html += `
               <div class="print-power-effect-row ${isAlt ? 'print-power-alt' : 'print-power-primary'}">
                 <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px;">
                   <span>
                     ${isAlt ? '<span class="print-alt-bullet">• Alt:</span> ' : ''}
+                    <span class="print-effect-icon" style="font-size: 8pt; margin-right: 2px;">${effIcon}</span>
                     <strong>${escapeHtml(customName || effName)}</strong>
                     ${customName ? ` <span class="print-muted" style="font-size: 8pt;">(${escapeHtml(effName)} ${effRank})</span>` : ` (Rank ${effRank})`}
                     <span class="print-muted" style="font-size: 8pt;">— Action: ${escapeHtml(eff.action || 'Standard')}, Range: ${escapeHtml(eff.range || 'Touch')}</span>

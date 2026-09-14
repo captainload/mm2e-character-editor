@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Party Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=62">
+  <link rel="stylesheet" href="styles.css?v=67">
   <script>
     (function() {
       function getActiveTheme() {
@@ -176,6 +176,49 @@
   <script>
     const STORAGE_KEY_BOUNDS = 'mm2e_party_display_bounds';
 
+    function getInitialBounds() {
+      const fallback = { width: 840, height: 480, left: 120, top: 120 };
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const urlW = parseInt(p.get('w'), 10);
+        const urlH = parseInt(p.get('h'), 10);
+        const urlX = parseInt(p.get('x'), 10);
+        const urlY = parseInt(p.get('y'), 10);
+        if (urlW >= 250 && urlH >= 200) {
+          return {
+            width: urlW,
+            height: urlH,
+            left: !isNaN(urlX) ? urlX : fallback.left,
+            top: !isNaN(urlY) ? urlY : fallback.top
+          };
+        }
+      } catch (e) {}
+
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (b && b.width >= 250 && b.height >= 200) {
+            return {
+              width: Math.round(b.width),
+              height: Math.round(b.height),
+              left: Math.round(b.left ?? fallback.left),
+              top: Math.round(b.top ?? fallback.top)
+            };
+          }
+        }
+      } catch (e) {}
+
+      return fallback;
+    }
+
+    let _isInitialLoad = true;
+    setTimeout(() => { _isInitialLoad = false; }, 800);
+    let _isRestoringBounds = false;
+
+    // Seed _lastBounds immediately so poll interval doesn't overwrite with transient values
+    window._lastBounds = getInitialBounds();
+
     // ==========================================
     // 1. RE-DOCKING LOGIC (Declared first so it's always ready)
     // ==========================================
@@ -186,7 +229,14 @@
         localStorage.setItem('mm2e_party_docked', Date.now().toString());
       } catch (e) {}
 
-      // 1. Broadcast docking notification over mm2e_session_channel
+      // Cross-origin and file:/// safe postMessage to opener
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: 'party' }, '*');
+        }
+      } catch (e) {}
+
+      // Broadcast docking notification over mm2e_session_channel
       try {
         if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
           SessionNetwork.sendLocalBroadcast({ type: 'PARTY_DISPLAY_DOCKED' });
@@ -202,11 +252,11 @@
         }
       } catch (e) {}
 
-      // 2. Safe call to opener if permitted
+      // Safe call to opener if same-origin permitted
       try {
         if (window.opener && !window.opener.closed) {
           if (typeof window.opener.redockPartyDisplay === 'function') {
-            window.opener.redockPartyDisplay();
+            window.opener.redockPartyDisplay(false);
           } else if (typeof window.opener.updatePartyDisplayDockMode === 'function') {
             window.opener.updatePartyDisplayDockMode(false);
           }
@@ -214,7 +264,7 @@
         }
       } catch (e) {}
 
-      // 3. Always close this window
+      // Close this window
       try {
         window.close();
       } catch (e) {}
@@ -232,14 +282,39 @@
     // ==========================================
     function saveWindowBounds() {
       try {
-        const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-        const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-        const width = window.outerWidth || window.innerWidth;
-        const height = window.outerHeight || window.innerHeight;
+        const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+        const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+        const width = Math.round(window.innerWidth || window.outerWidth);
+        const height = Math.round(window.innerHeight || window.outerHeight);
 
-        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
+        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
           const bounds = { left, top, width, height };
-          localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
+
+          // 1. Save in popout's local storage
+          try {
+            localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
+          } catch (e) {}
+
+          // 2. Post message to opener window (cross-origin and file:/// safe!)
+          try {
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage({
+                type: 'MM2E_WINDOW_BOUNDS',
+                key: STORAGE_KEY_BOUNDS,
+                popupType: 'party',
+                bounds: bounds
+              }, '*');
+            }
+          } catch (e) {}
+
+          // 3. Direct opener call fallback if same origin
+          try {
+            if (window.opener && !window.opener.closed && typeof window.opener.savePartyDisplayBoundsDirect === 'function') {
+              window.opener.savePartyDisplayBoundsDirect(bounds);
+            }
+          } catch (e) {}
+
+          // 4. SessionNetwork broadcast
           try {
             if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
               SessionNetwork.sendLocalBroadcast({ type: 'PARTY_BOUNDS_UPDATE', bounds });
@@ -252,46 +327,65 @@
 
     function restoreWindowBounds() {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
-        if (saved) {
-          const b = JSON.parse(saved);
-          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 200 && b.height >= 150) {
-            if (window.outerWidth !== b.width || window.outerHeight !== b.height) {
-              try { window.resizeTo(b.width, b.height); } catch (e) {}
-            }
-          }
+        const b = getInitialBounds();
+        if (!b) return;
+
+        const curW = window.innerWidth || window.outerWidth;
+        const curH = window.innerHeight || window.outerHeight;
+        const curX = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
+        const curY = (window.screenY !== undefined) ? window.screenY : window.screenTop;
+
+        if (!curW || !curH || curW < 100 || curH < 100) return;
+
+        _isRestoringBounds = true;
+        try {
           if (typeof b.left === 'number' && typeof b.top === 'number') {
-            if (window.screenX !== b.left || window.screenY !== b.top) {
-              try { window.moveTo(b.left, b.top); } catch (e) {}
+            if (Math.abs(curX - b.left) > 25 || Math.abs(curY - b.top) > 25) {
+              window.moveTo(b.left, b.top);
             }
           }
-        }
-      } catch (e) {}
+          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 250 && b.height >= 200) {
+            if (Math.abs(curW - b.width) > 40 || Math.abs(curH - b.height) > 40) {
+              const chromeW = (window.outerWidth && window.innerWidth) ? (window.outerWidth - window.innerWidth) : 16;
+              const chromeH = (window.outerHeight && window.innerHeight) ? (window.outerHeight - window.innerHeight) : 40;
+              window.resizeTo(b.width + chromeW, b.height + chromeH);
+            }
+          }
+        } catch (e) {}
+        setTimeout(() => { _isRestoringBounds = false; }, 400);
+      } catch (e) {
+        _isRestoringBounds = false;
+      }
     }
 
-    // Restore bounds immediately and on load
-    restoreWindowBounds();
-    window.addEventListener('DOMContentLoaded', restoreWindowBounds);
+    // Try restoring bounds after DOM is ready
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(restoreWindowBounds, 50);
+    });
     window.addEventListener('load', restoreWindowBounds);
 
     // Track resize
     window.addEventListener('resize', () => {
+      if (_isRestoringBounds || _isInitialLoad) return;
       clearTimeout(window._resTimer);
-      window._resTimer = setTimeout(saveWindowBounds, 200);
+      window._resTimer = setTimeout(saveWindowBounds, 250);
     });
 
     // Periodic poll for position changes (handling user dragging the window)
     setInterval(() => {
-      const left = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-      const top = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-      const width = window.outerWidth || window.innerWidth;
-      const height = window.outerHeight || window.innerHeight;
+      if (_isInitialLoad || _isRestoringBounds) return;
+      const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+      const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+      const width = Math.round(window.innerWidth || window.outerWidth);
+      const height = Math.round(window.innerHeight || window.outerHeight);
+
+      if (width < 250 || height < 200) return;
 
       if (!window._lastBounds ||
-          window._lastBounds.left !== left ||
-          window._lastBounds.top !== top ||
-          window._lastBounds.width !== width ||
-          window._lastBounds.height !== height) {
+          Math.abs(window._lastBounds.left - left) > 4 ||
+          Math.abs(window._lastBounds.top - top) > 4 ||
+          Math.abs(window._lastBounds.width - width) > 4 ||
+          Math.abs(window._lastBounds.height - height) > 4) {
         window._lastBounds = { left, top, width, height };
         saveWindowBounds();
       }
@@ -299,6 +393,11 @@
 
     window.addEventListener('beforeunload', () => {
       saveWindowBounds();
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: 'party' }, '*');
+        }
+      } catch (e) {}
       try {
         localStorage.setItem('mm2e_party_docked', Date.now().toString());
       } catch (e) {}
@@ -311,17 +410,25 @@
       try {
         if (window.opener && !window.opener.closed) {
           if (typeof window.opener.redockPartyDisplay === 'function') {
-            window.opener.redockPartyDisplay();
+            window.opener.redockPartyDisplay(false);
           } else if (typeof window.opener.updatePartyDisplayDockMode === 'function') {
             window.opener.updatePartyDisplayDockMode(false);
           }
-          try { window.opener.focus(); } catch (e) {}
         }
       } catch (e) {}
     });
 
-    window.addEventListener('unload', saveWindowBounds);
-    window.addEventListener('pagehide', saveWindowBounds);
+    // Cross-origin message listener for data push from opener
+    window.addEventListener('message', (event) => {
+      if (!event.data) return;
+      if (event.data.type === 'PARTY_ROSTER_HTML' && event.data.html) {
+        const tableRoster = document.getElementById('tbodySessionPartyRoster');
+        if (tableRoster) {
+          tableRoster.innerHTML = event.data.html;
+          if (typeof updateWinHeaderUI === 'function') updateWinHeaderUI();
+        }
+      }
+    });
 
     // ==========================================
     // 3. TWO-WAY ACTION FORWARDING & LIVE SYNC
@@ -343,6 +450,13 @@
           const res = window.opener[fnName](...args);
           syncPartyFromOpenerOrLocal();
           return res;
+        }
+      } catch (e) {}
+
+      // 1b. Post message to opener across file:/// origin barrier
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'PARTY_ACTION', action: fnName, args: args }, '*');
         }
       } catch (e) {}
 

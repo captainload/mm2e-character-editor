@@ -582,22 +582,23 @@ textarea {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* Device Container Styling (Maintains full visual cohesion with regular power cards) */
 .power-card.is-device {
-  border-color: #0284c7 !important;
-  border-left: 5px solid #0284c7 !important;
-  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.15);
+  border-color: var(--border-power, #64748b) !important;
+  border-left: 2px solid var(--border-power, #64748b) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .power-card.is-device:not(.collapsed) .power-card-header {
-  border-bottom: 2px solid #0284c7;
+  border-bottom: 2px solid var(--border-power, #64748b);
 }
 
 .badge-device {
-  background: rgba(2, 132, 199, 0.15);
-  color: #0284c7;
-  border: 1px solid #0284c7;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
   font-size: var(--font-size-tags);
-  font-weight: bold;
+  font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
   display: inline-flex;
@@ -1937,6 +1938,18 @@ th.sortable.sort-desc::after {
   font-weight: 700;
   color: #0369a1;
   margin-right: 4px;
+}
+
+.print-power-icon {
+  font-size: 8.5pt;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.print-effect-icon {
+  font-size: 8pt;
+  margin-right: 2px;
+  vertical-align: baseline;
 }
 
 .print-effect-details {

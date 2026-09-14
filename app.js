@@ -2368,6 +2368,94 @@ window.poppedOutPartyWindow = null;
 let poppedOutTrackerWindow = null;
 window.poppedOutTrackerWindow = null;
 
+// ================= POPOUT WINDOW BOUNDS & CROSS-ORIGIN BRIDGE =================
+function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120, top: 120 }) {
+  if (!b || typeof b !== 'object') return { ...fallback };
+  const width = Math.round(Number(b.width) || fallback.width);
+  const height = Math.round(Number(b.height) || fallback.height);
+  const left = Math.round((b.left !== undefined && !isNaN(Number(b.left))) ? Number(b.left) : fallback.left);
+  const top = Math.round((b.top !== undefined && !isNaN(Number(b.top))) ? Number(b.top) : fallback.top);
+
+  return {
+    width: Math.max(350, width),
+    height: Math.max(250, height),
+    left: left,
+    top: top
+  };
+}
+window.sanitizeWindowBounds = sanitizeWindowBounds;
+
+function saveTrackerBoundsDirect(b) {
+  const sanitized = sanitizeWindowBounds(b, { width: 880, height: 660, left: 140, top: 140 });
+  try {
+    localStorage.setItem("mm2e_tracker_bounds", JSON.stringify(sanitized));
+  } catch (e) {}
+}
+window.saveTrackerBoundsDirect = saveTrackerBoundsDirect;
+
+function savePartyDisplayBoundsDirect(b) {
+  const sanitized = sanitizeWindowBounds(b, { width: 840, height: 480, left: 120, top: 120 });
+  try {
+    localStorage.setItem("mm2e_party_display_bounds", JSON.stringify(sanitized));
+  } catch (e) {}
+}
+window.savePartyDisplayBoundsDirect = savePartyDisplayBoundsDirect;
+
+// Cross-origin and file:/// safe message bridge between index.html and popouts
+window.addEventListener('message', (event) => {
+  if (!event.data || typeof event.data !== 'object') return;
+  const { type, key, bounds, popupType, action, args } = event.data;
+
+  // Window bounds reporting from popout
+  if (type === 'MM2E_WINDOW_BOUNDS' && key && bounds) {
+    if (key === 'mm2e_tracker_bounds') {
+      saveTrackerBoundsDirect(bounds);
+    } else if (key === 'mm2e_party_display_bounds') {
+      savePartyDisplayBoundsDirect(bounds);
+    } else {
+      try {
+        const sanitized = sanitizeWindowBounds(bounds);
+        localStorage.setItem(key, JSON.stringify(sanitized));
+      } catch (e) {}
+    }
+  }
+
+  // Child requesting saved bounds
+  if (type === 'MM2E_REQ_BOUNDS' && key && event.source) {
+    try {
+      const saved = localStorage.getItem(key);
+      event.source.postMessage({ type: 'MM2E_RESP_BOUNDS', key, bounds: saved ? JSON.parse(saved) : null }, '*');
+    } catch (e) {}
+  }
+
+  // Child notifying that it was closed / redocked
+  if (type === 'MM2E_POPOUT_DOCKED' || type === 'POPOUT_DOCKED' || type === 'TRACKER_DOCKED' || type === 'PARTY_DISPLAY_DOCKED') {
+    if (popupType === 'tracker' || type === 'TRACKER_DOCKED') {
+      if (typeof window.redockTracker === 'function') window.redockTracker(false);
+    } else if (popupType === 'party' || type === 'PARTY_DISPLAY_DOCKED') {
+      if (typeof window.redockPartyDisplay === 'function') window.redockPartyDisplay(false);
+    }
+  }
+
+  // Action forwarding from child
+  if (type === 'TRACKER_ACTION' && action && typeof window[action] === 'function') {
+    try { window[action](...(args || [])); } catch (e) {}
+  }
+  if (type === 'PARTY_ACTION' && action && typeof window[action] === 'function') {
+    try { window[action](...(args || [])); } catch (e) {}
+  }
+
+  // Child requesting party roster HTML
+  if (type === 'PARTY_REQ_ROSTER' && event.source) {
+    try {
+      const tbody = document.getElementById('tbodySessionPartyRoster');
+      if (tbody && tbody.innerHTML) {
+        event.source.postMessage({ type: 'PARTY_ROSTER_HTML', html: tbody.innerHTML }, '*');
+      }
+    } catch (e) {}
+  }
+});
+
 // ================= STATUS & COMBAT TRACKER CONTROLLER =================
 function setupStatusTracker() {
     const modal = document.getElementById("statusTrackerModal");
@@ -2405,15 +2493,15 @@ function setupStatusTracker() {
 
     // Popout & Docking Management
     function getSavedTrackerBounds() {
-      let bounds = { width: 880, height: 660, left: 140, top: 140 };
+      const fallback = { width: 880, height: 660, left: 140, top: 140 };
       try {
         const saved = localStorage.getItem("mm2e_tracker_bounds");
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
+          return sanitizeWindowBounds(parsed, fallback);
         }
       } catch (e) {}
-      return bounds;
+      return fallback;
     }
     window.getSavedTrackerBounds = getSavedTrackerBounds;
 
@@ -2422,10 +2510,10 @@ function setupStatusTracker() {
       try {
         const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
         const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
-        const width = win.outerWidth || win.innerWidth;
-        const height = win.outerHeight || win.innerHeight;
-        if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
-          localStorage.setItem("mm2e_tracker_bounds", JSON.stringify({ left, top, width, height }));
+        const width = win.innerWidth || win.outerWidth;
+        const height = win.innerHeight || win.outerHeight;
+        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+          saveTrackerBoundsDirect({ left, top, width, height });
         }
       } catch (e) {}
     }
@@ -2448,10 +2536,17 @@ function setupStatusTracker() {
 
     function openTrackerPopout() {
       const bounds = getSavedTrackerBounds();
-      const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
+      const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 140;
+      const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 140;
+      const openWidth = Math.max(350, Math.min(bounds.width || 880, 5000));
+      let openHeight = Math.max(250, Math.min(bounds.height || 660, 5000));
+      if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
+        openHeight = Math.max(250, window.screen.availHeight - 40);
+      }
+      const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},resizable=yes,scrollbars=yes`;
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
-      poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}`, "MM2CG_TrackerWindow", features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
@@ -2497,10 +2592,12 @@ function setupStatusTracker() {
     }
     window.openTrackerPopout = openTrackerPopout;
 
-    function redockTracker() {
+    function redockTracker(closeRef = true) {
       if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
         saveTrackerBoundsFromRef(poppedOutTrackerWindow);
-        try { poppedOutTrackerWindow.close(); } catch (e) {}
+        if (closeRef) {
+          try { poppedOutTrackerWindow.close(); } catch (e) {}
+        }
       }
       poppedOutTrackerWindow = null;
       window.poppedOutTrackerWindow = null;
@@ -2702,6 +2799,9 @@ function setupStatusTracker() {
             }
             const currentVal = char.trackerState.fadeStates[effId];
 
+            const isDev = (typeof CharacterModel !== 'undefined' && CharacterModel.isDevicePower) ? CharacterModel.isDevicePower(power) : false;
+            const icon = isDev ? '⚙️' : '⚡';
+
             detectedFades.push({
               effId,
               effName,
@@ -2713,6 +2813,7 @@ function setupStatusTracker() {
               currentVal,
               intervalDesc,
               hasTotalFade: !!totalFadeMod,
+              icon,
               pIdx,
               eIdx
             });
@@ -2729,7 +2830,7 @@ function setupStatusTracker() {
         <div style="display: flex; flex-direction: column; gap: 4px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
             <div>
-              <strong style="font-size: var(--font-size-secondary); color: var(--accent-primary);">${f.effName}</strong>
+              <strong style="font-size: var(--font-size-secondary); color: var(--accent-primary);"><span style="margin-right: 3px;">${f.icon}</span>${f.effName}</strong>
               <span class="secondary-text" style="font-size: var(--font-size-fine-print);"> (${f.containerName})</span>
             </div>
             <span class="badge" style="font-size: var(--font-size-tags); background: ${f.currentVal > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${f.currentVal > 0 ? '#10b981' : '#ef4444'};">
@@ -5713,38 +5814,47 @@ function setupSessionAndGMHub() {
   poppedOutPartyWindow = null;
 
   function getSavedPartyDisplayBounds() {
-    let bounds = { width: 840, height: 480, left: 120, top: 120 };
+    const fallback = { width: 840, height: 480, left: 120, top: 120 };
     try {
       const saved = localStorage.getItem("mm2e_party_display_bounds");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.width && parsed.height) bounds = Object.assign(bounds, parsed);
+        return sanitizeWindowBounds(parsed, fallback);
       }
     } catch (e) {}
-    return bounds;
+    return fallback;
   }
+  window.getSavedPartyDisplayBounds = getSavedPartyDisplayBounds;
 
   function savePartyDisplayBoundsFromRef(win) {
     if (!win) return;
     try {
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
-      const width = win.outerWidth || win.innerWidth;
-      const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && typeof top === 'number' && width >= 200 && height >= 150) {
-        localStorage.setItem("mm2e_party_display_bounds", JSON.stringify({ left, top, width, height }));
+      const width = win.innerWidth || win.outerWidth;
+      const height = win.innerHeight || win.outerHeight;
+      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+        savePartyDisplayBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
   }
+  window.savePartyDisplayBoundsFromRef = savePartyDisplayBoundsFromRef;
 
   function openPartyDisplayPopout() {
     // 1. Immediately sync and persist party roster to DOM and localStorage before opening window
     syncPartyRosterUI();
 
     const bounds = getSavedPartyDisplayBounds();
-    const features = `width=${bounds.width},height=${bounds.height},left=${bounds.left},top=${bounds.top},screenX=${bounds.left},screenY=${bounds.top},resizable=yes,scrollbars=yes`;
+    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 120;
+    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 120;
+    const openWidth = Math.max(350, Math.min(bounds.width || 840, 5000));
+    let openHeight = Math.max(250, Math.min(bounds.height || 480, 5000));
+    if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
+      openHeight = Math.max(250, window.screen.availHeight - 40);
+    }
+    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}`, "MM2CG_PartyDisplay", features);
+    poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
@@ -5778,10 +5888,12 @@ function setupSessionAndGMHub() {
   }
   window.openPartyDisplayPopout = openPartyDisplayPopout;
 
-  function redockPartyDisplay() {
+  function redockPartyDisplay(closeRef = true) {
     if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
       savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
-      try { poppedOutPartyWindow.close(); } catch (e) {}
+      if (closeRef) {
+        try { poppedOutPartyWindow.close(); } catch (e) {}
+      }
     }
     poppedOutPartyWindow = null;
     window.poppedOutPartyWindow = null;
@@ -13610,10 +13722,12 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
   try {
     const idPrefix = isBlueprint ? 'bp_' : 'pow_';
     container.innerHTML = powersList.map((powerContainer, pIdx) => {
-    const isDeviceContainer = powerContainer.containerType === "device_hard" || 
-                              powerContainer.containerType === "device_easy" || 
-                              powerContainer.planType === "device" ||
-                              (Array.isArray(powerContainer.effects) && powerContainer.effects.some(e => e.effectName === "Device" || e.name === "Device" || e.isDevice));
+    const isDeviceContainer = (typeof CharacterModel !== 'undefined' && CharacterModel.isDevicePower)
+      ? CharacterModel.isDevicePower(powerContainer)
+      : (powerContainer.containerType === "device_hard" || 
+         powerContainer.containerType === "device_easy" || 
+         powerContainer.planType === "device" ||
+         (Array.isArray(powerContainer.effects) && powerContainer.effects.some(e => e.effectName === "Device" || e.name === "Device" || e.isDevice)));
     let deviceBadgeHtml = "";
     if (isDeviceContainer) {
       let deviceLabel = "⚙️ Device";
@@ -15195,6 +15309,7 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: var(--font-size-tags); display: inline-flex; align-items: center;" title="${isDeviceContainer ? 'Device Trait' : 'Power Effect'}">${isDeviceContainer ? '⚙️' : '⚡'}</span>
                 <span class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">Effect ${eIdx + 1}${powerContainer.effects.length > 1 ? ` of ${powerContainer.effects.length}` : ''}</span>
                 ${masterBadgeHtml}
               </div>
@@ -15340,9 +15455,9 @@ function renderPowersContainer(containerId, powersList, isBlueprint) {
           <div style="display: flex; align-items: center; gap: 8px;">
             <span id="powerCollapseIcon_${pIdx}" style="font-size: var(--font-size-secondary);">${powerContainer.collapsed ? '▶' : '▼'}</span>
             <button type="button" class="btn minor-control-btn btn-power-toggle" style="font-weight: bold; min-width: 44px; background: ${isContainerActive ? '#10b981' : 'var(--bg-app)'}; color: ${isContainerActive ? '#ffffff' : 'var(--text-muted)'}; border: 1px solid ${isContainerActive ? '#10b981' : 'var(--border-color)'};" onclick="event.stopPropagation(); togglePowerContainerActive(${pIdx})" title="${isContainerActive ? 'Power Container is Active (click to turn Off)' : 'Power Container is Inactive (click to turn On)'}">${isContainerActive ? 'On' : 'Off'}</button>
-            ${isBlueprint ? `<span style="font-size: var(--font-size-labels); display: inline-flex; align-items: center;" title="Plan">📐</span>` : ''}
+            ${isBlueprint ? `<span style="font-size: var(--font-size-labels); display: inline-flex; align-items: center;" title="Plan">📐</span>` : (isDeviceContainer ? `<span style="font-size: var(--font-size-labels); display: inline-flex; align-items: center;" title="Device Container">⚙️</span>` : `<span style="font-size: var(--font-size-labels); display: inline-flex; align-items: center;" title="Power Container">⚡</span>`)}
             ${deviceBadgeHtml}
-            <input type="text" id="powerContainerName_${pIdx}" value="${powerContainer.name && powerContainer.name !== 'New Power Container' ? powerContainer.name : ''}" placeholder="${isBlueprint ? 'New Plan' : 'New Container'}" style="font-weight: bold; font-size: var(--font-size-labels); width: 200px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; color: var(--text-main);" onclick="event.stopPropagation();" oninput="updatePowerContainerName(${pIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('container_name');">
+            <input type="text" id="powerContainerName_${pIdx}" value="${powerContainer.name && powerContainer.name !== 'New Power Container' ? powerContainer.name : ''}" placeholder="${isBlueprint ? 'New Plan' : (isDeviceContainer ? 'New Device' : 'New Container')}" style="font-weight: bold; font-size: var(--font-size-labels); width: 200px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; color: var(--text-main);" onclick="event.stopPropagation();" oninput="updatePowerContainerName(${pIdx}, this.value)" onblur="if(window.PowerHistoryManager) window.PowerHistoryManager.recordChange('container_name');">
             <span class="secondary-text" style="font-weight: normal; font-size: var(--font-size-secondary);">(${summaryText})</span>
           </div>
 

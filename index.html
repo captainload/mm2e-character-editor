@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=62">
+  <link rel="stylesheet" href="styles.css?v=66">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -114,12 +114,16 @@
               <span class="file-menu-icon">💾</span><span class="file-menu-label">Save As...</span>
             </button>
             <div class="file-menu-divider"></div>
-            <button type="button" class="file-menu-item" id="btnPrintHero" onclick="window.print()">
-              <span class="file-menu-icon">🖨️</span><span class="file-menu-label">Print Sheet</span>
+            <button type="button" class="file-menu-item" id="btnPrintHero">
+              <span class="file-menu-icon">🖨️</span><span class="file-menu-label">Print &amp; PDF Preview...</span>
             </button>
             <div class="file-menu-divider"></div>
             <button type="button" class="file-menu-item" id="btnMainUsers" onclick="window.openUsersModal ? window.openUsersModal() : (document.getElementById('userManagementModal') &amp;&amp; document.getElementById('userManagementModal').classList.add('active')); document.getElementById('fileDropdownMenu').style.display='none';">
               <span class="file-menu-icon">👤</span><span class="file-menu-label">Users &amp; Whitelist...</span>
+            </button>
+            <div class="file-menu-divider"></div>
+            <button type="button" class="file-menu-item" id="btnAboutApp">
+              <span class="file-menu-icon">ℹ️</span><span class="file-menu-label">About...</span>
             </button>
           </div>
         </div>
@@ -2160,6 +2164,8 @@
         <button type="button" class="btn btn-primary" id="btnConfirmUnsavedRestore">✓ Restore Session</button>
       </div>
     </div>
+  </div>
+
   <!-- Selective Character Extraction Modal Overlay -->
   <div class="modal-overlay" id="charExtractionModal" onclick="if(event.target===this)this.classList.remove('active')">
     <div class="info-popup-box" style="width: 92%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column;">
@@ -2197,6 +2203,78 @@
     </div>
   </div>
 
+  <!-- Print & PDF Preview Modal Overlay -->
+  <div class="modal-overlay" id="printPreviewModal" onclick="if(event.target===this)(window.closePrintPreview ? window.closePrintPreview() : this.classList.remove('active'))">
+    <div class="info-popup-box print-preview-modal-box" style="width: 95%; max-width: 980px; height: 92vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3 id="printPreviewTitle" style="display: flex; align-items: center; gap: 8px;">
+          <span>🖨️</span> Print &amp; PDF Preview
+        </h3>
+        <button class="info-popup-close" id="modalPrintPreviewClose" onclick="window.closePrintPreview ? window.closePrintPreview() : document.getElementById('printPreviewModal').classList.remove('active')">✕</button>
+      </div>
+
+      <div class="print-preview-toolbar">
+        <div class="print-preview-toolbar-top">
+          <div class="print-preview-tip">
+            <span>💡 <strong>Tip for PDF Export:</strong> In the browser print dialog, choose Destination: <strong>Save as PDF</strong>. Enable <strong>Background graphics</strong> to preserve section colors and stat badges.</span>
+          </div>
+          <div class="print-preview-actions">
+            <button type="button" class="btn btn-primary" id="btnTriggerPrintTop" onclick="window.print()">
+              🖨️ Print / Save to PDF
+            </button>
+          </div>
+        </div>
+        <div class="print-preview-options" id="printPreviewOptionsBar">
+          <span class="print-options-title">Detail Options:</span>
+          <label class="print-option-toggle" title="Show full Headquarters stat card with features and toughness rating">
+            <input type="checkbox" id="chkPrintDetailedHq" onchange="window.updatePrintOptions &amp;&amp; window.updatePrintOptions()">
+            <span>🏰 Detailed HQ</span>
+          </label>
+          <label class="print-option-toggle" title="Show full Vehicle stat card with size, speed, defense, and toughness">
+            <input type="checkbox" id="chkPrintDetailedVehicles" onchange="window.updatePrintOptions &amp;&amp; window.updatePrintOptions()">
+            <span>🏎️ Detailed Vehicles</span>
+          </label>
+          <label class="print-option-toggle" title="Show full Blueprint &amp; Ritual cards with all modifiers instead of compact table">
+            <input type="checkbox" id="chkPrintDetailedPlans" onchange="window.updatePrintOptions &amp;&amp; window.updatePrintOptions()">
+            <span>📐 Detailed Plans &amp; Rituals</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="info-popup-body print-preview-body" id="printPreviewViewport">
+        <div id="printPreviewContent" class="print-preview-pages">
+          <!-- Dynamically generated print content rendered here -->
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid var(--border-color); background: var(--bg-card); gap: 10px;">
+        <button type="button" class="btn" id="btnClosePrintPreview" onclick="window.closePrintPreview ? window.closePrintPreview() : document.getElementById('printPreviewModal').classList.remove('active')">Close</button>
+        <button type="button" class="btn btn-primary" id="btnTriggerPrint" onclick="window.print()">🖨️ Print / Save to PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- About / Readme Modal Overlay -->
+  <div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 92%; max-width: 860px; max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3 id="aboutModalTitle" style="display: flex; align-items: center; gap: 8px;">
+          <span>ℹ️</span> About M&amp;M 2E Hero Builder
+        </h3>
+        <button class="info-popup-close" id="modalAboutClose" onclick="document.getElementById('aboutModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body about-modal-body" id="aboutModalBody" style="flex: 1; overflow-y: auto; padding: 18px 24px; line-height: 1.6;">
+        <!-- Readme markdown content loaded dynamically -->
+      </div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); background: var(--bg-card); gap: 10px;">
+        <a href="https://github.com/captainload/mm2e-character-editor" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
+          🌐 GitHub Repository
+        </a>
+        <button type="button" class="btn" id="btnCloseAbout" onclick="document.getElementById('aboutModal').classList.remove('active')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <div id="print-layout" class="print-only"></div>
@@ -2211,23 +2289,23 @@
   <script src="data_equipment.js?v=6"></script>
   <script src="character_model.js?v=30"></script>
   <script src="por_importer.js?v=33"></script>
-  <script src="print.js?v=15"></script>
+  <script src="print.js?v=18"></script>
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=18"></script>
   <script src="session_network.js?v=19"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=147"></script>
+  <script src="app.js?v=151"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
-    // Service Worker Registration for Offline PWA Capabilities
-    if ('serviceWorker' in navigator) {
+    // Service Worker Registration for Offline PWA Capabilities (HTTP/HTTPS only)
+    if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=96').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=100').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

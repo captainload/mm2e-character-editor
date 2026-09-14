@@ -219,6 +219,10 @@
         break;
 
       case 'ROLL':
+        // If received from remote peer, mark as not local
+        if (source === 'p2p' && packet.roll) {
+          packet.roll.isLocal = false;
+        }
         // If this roll was sent over broadcast channel to our pop-out window or from peer
         emit('onRoll', packet.roll);
         break;
@@ -633,7 +637,8 @@
         isHPRerolled: !!rollData.isHPRerolled,
         hpAnnouncement: rollData.hpAnnouncement || '',
         rerollInfo: rollData.rerollInfo || '',
-        isSilent: isSilent
+        isSilent: isSilent,
+        isLocal: (rollData.isLocal !== undefined) ? rollData.isLocal : true
       }
     };
 

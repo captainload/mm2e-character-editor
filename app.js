@@ -1037,12 +1037,17 @@ window.showDiceRollModal = function(config) {
     isHPRerolled: !!config.isHPRerolled,
     hpAnnouncement: hpAnnouncementText,
     rerollInfo: config.rerollInfo || "",
-    result: config.resultOutcome || ""
+    result: config.resultOutcome || "",
+    isLocal: true,
+    timestamp: new Date().toISOString()
   };
   if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendRoll === 'function') {
     SessionNetwork.sendRoll(rollEntry);
   } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
     CampaignManager.addLogEntry(rollEntry);
+  }
+  if (typeof window.updateSidebarLastRoll === 'function') {
+    window.updateSidebarLastRoll(rollEntry);
   }
 };
 
@@ -6268,7 +6273,9 @@ function setupSessionAndGMHub() {
             hpBonus: 0,
             isHPRerolled: true,
             hpAnnouncement: `HP Reroll: ${outcomeDesc}`,
-            rerollInfo: outcomeDesc
+            rerollInfo: outcomeDesc,
+            isLocal: true,
+            timestamp: new Date().toISOString()
           };
 
           if (typeof SessionNetwork !== 'undefined') {
@@ -6277,6 +6284,9 @@ function setupSessionAndGMHub() {
             if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
             sessionLocalLog.push(rollEntry);
             renderSessionFeed();
+          }
+          if (typeof window.updateSidebarLastRoll === 'function') {
+            window.updateSidebarLastRoll(rollEntry);
           }
 
           // If diceRollModal is currently open, update it
@@ -6347,7 +6357,9 @@ function setupSessionAndGMHub() {
           isNat1: !!roll.isNat1,
           hpBonus: roll.hpBonus,
           isHPRerolled: roll.isHPRerolled,
-          hpAnnouncement: roll.hpAnnouncement
+          hpAnnouncement: roll.hpAnnouncement,
+          isLocal: true,
+          timestamp: new Date().toISOString()
         };
 
         window.lastRollConfig = {
@@ -6379,7 +6391,9 @@ function setupSessionAndGMHub() {
           total: res.total,
           breakdown: res.breakdown || `${res.total}`,
           isNat20: !!res.isNat20,
-          isNat1: !!res.isNat1
+          isNat1: !!res.isNat1,
+          isLocal: true,
+          timestamp: new Date().toISOString()
         };
         if (typeof SessionNetwork !== 'undefined') {
           SessionNetwork.sendRoll(rollEntry);
@@ -6445,95 +6459,235 @@ function setupSessionAndGMHub() {
     btnSendChat.addEventListener("click", handleSendChatInput);
   }
 
-  // --- Interactive Session Dice Roller Sidebar ---
-  function renderSidebarLastRoll() {
-    const lblLastTitle = document.getElementById("lblDiceRollerLastTitle");
-    const lblLastTotal = document.getElementById("lblDiceRollerLastTotal");
-    const lblLastBadges = document.getElementById("lblDiceRollerLastBadges");
-    const lblLastBreakdown = document.getElementById("lblDiceRollerLastBreakdown");
-    const lblLastTag = document.getElementById("lblDiceRollerLastTag");
+  // --- Interactive Session Dice Roller Sidebar: Recent Rolls (Last 3) ---
+  function isPlayerRoll(rollData) {
+    if (!rollData) return false;
+    if (rollData.isLocal === true) return true;
+    if (rollData.isLocal === false) return false;
 
-    if (!lblLastTotal) return;
+    const netInfo = (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.getPlayerInfo === 'function') 
+      ? SessionNetwork.getPlayerInfo() : null;
+    const netPlayer = (netInfo?.playerName || '').trim().toLowerCase();
+    const netChar = (netInfo?.characterName || '').trim().toLowerCase();
 
-    let roll = window.lastPlayerRoll;
-    if (!roll) {
-      if (window.lastRollConfig) {
-        roll = window.lastRollConfig;
+    const rollPlayer = (rollData.playerName || '').trim().toLowerCase();
+    const rollChar = (rollData.characterName || '').trim().toLowerCase();
+
+    const localSavedPlayer = (typeof localStorage !== 'undefined' ? (localStorage.getItem("mm2e_player_name") || '') : '').trim().toLowerCase();
+    const localCharName = (typeof char !== 'undefined' && char && char.name ? char.name : '').trim().toLowerCase();
+    const localCharPlayer = (typeof char !== 'undefined' && char && char.playerName ? char.playerName : '').trim().toLowerCase();
+
+    if (rollPlayer && netPlayer && rollPlayer === netPlayer) return true;
+    if (rollPlayer && localSavedPlayer && rollPlayer === localSavedPlayer) return true;
+    if (rollPlayer && localCharPlayer && rollPlayer === localCharPlayer) return true;
+    if (rollChar && netChar && rollChar === netChar) return true;
+    if (rollChar && localCharName && rollChar === localCharName) return true;
+
+    // If no remote network peers are connected, every roll recorded in the local session belongs to this user
+    const hasRemotePeers = typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.getConnectedPeers === 'function' && SessionNetwork.getConnectedPeers().length > 0;
+    if (!hasRemotePeers) return true;
+
+    return false;
+  }
+
+  function normalizePlayerRoll(rollData) {
+    if (!rollData) return null;
+    const totalVal = (rollData.total !== undefined) ? rollData.total : (rollData.result ?? rollData.d20 ?? 0);
+    const titleText = rollData.title || rollData.rollType || "d20 Check";
+    let breakdownText = rollData.breakdown;
+    if (!breakdownText) {
+      if (rollData.d20 !== undefined) {
+        const modStr = (rollData.mod !== undefined && rollData.mod !== 0) 
+          ? (rollData.mod > 0 ? ` + ${rollData.mod}` : ` - ${Math.abs(rollData.mod)}`) 
+          : '';
+        breakdownText = `1d20 (${rollData.d20})${modStr} = ${totalVal}`;
       } else {
-        try {
-          const saved = localStorage.getItem("mm2e_last_player_roll");
-          if (saved) roll = JSON.parse(saved);
-        } catch (e) {}
+        breakdownText = `${totalVal}`;
       }
     }
 
-    if (!roll || (roll.total === undefined && roll.d20 === undefined)) {
-      if (lblLastTitle) lblLastTitle.textContent = "No rolls yet";
-      lblLastTotal.textContent = "--";
-      lblLastTotal.style.color = "var(--text-muted)";
-      if (lblLastBadges) lblLastBadges.innerHTML = "";
-      if (lblLastBreakdown) lblLastBreakdown.textContent = "Roll from sheet, chat, or roller";
-      if (lblLastTag) lblLastTag.textContent = "";
+    const charName = rollData.characterName || (typeof char !== 'undefined' && char && char.name ? char.name : "Hero");
+
+    return {
+      id: rollData.id || ('r_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+      title: titleText,
+      characterName: charName,
+      playerName: rollData.playerName || (typeof char !== 'undefined' && char && char.playerName ? char.playerName : "Player"),
+      total: totalVal,
+      breakdown: breakdownText,
+      isNat20: !!rollData.isNat20 || rollData.d20 === 20 || (rollData.rawD20 === 20 && !rollData.isHPRerolled),
+      isNat1: !!rollData.isNat1 || rollData.d20 === 1 || rollData.rawD20 === 1,
+      hpBonus: rollData.hpBonus || 0,
+      isHPRerolled: !!rollData.isHPRerolled,
+      hpAnnouncement: rollData.hpAnnouncement || '',
+      result: rollData.resultOutcome || rollData.result || '',
+      timestamp: rollData.timestamp || new Date().toISOString(),
+      isLocal: true
+    };
+  }
+
+  function getPlayerRecentRolls() {
+    let rolls = Array.isArray(window.lastPlayerRolls) ? [...window.lastPlayerRolls] : [];
+
+    if (rolls.length === 0) {
+      try {
+        const saved = localStorage.getItem("mm2e_last_player_rolls");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            rolls = parsed.map(normalizePlayerRoll).filter(Boolean);
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Backfill from sessionLocalLog if fewer than 3
+    if (rolls.length < 3 && Array.isArray(sessionLocalLog)) {
+      for (let i = sessionLocalLog.length - 1; i >= 0 && rolls.length < 3; i--) {
+        const item = sessionLocalLog[i];
+        if (item && (item.type === 'ROLL' || item.type === 'roll') && isPlayerRoll(item)) {
+          const norm = normalizePlayerRoll(item);
+          if (norm && !rolls.some(r => (norm.id && r.id === norm.id) || (r.timestamp === norm.timestamp && r.total === norm.total && r.breakdown === norm.breakdown))) {
+            rolls.push(norm);
+          }
+        }
+      }
+    }
+
+    // Fallback to single roll if empty
+    if (rolls.length === 0) {
+      let legacy = window.lastPlayerRoll || window.lastRollConfig;
+      if (!legacy) {
+        try {
+          const savedSingle = localStorage.getItem("mm2e_last_player_roll");
+          if (savedSingle) legacy = JSON.parse(savedSingle);
+        } catch (e) {}
+      }
+      if (legacy) {
+        const norm = normalizePlayerRoll(legacy);
+        if (norm) rolls.push(norm);
+      }
+    }
+
+    return rolls.slice(0, 3);
+  }
+
+  function renderSidebarLastRoll() {
+    const boxContainer = document.getElementById("boxDiceRollerLastResult");
+    if (!boxContainer) return;
+
+    const rolls = getPlayerRecentRolls();
+
+    if (rolls.length === 0) {
+      boxContainer.innerHTML = `
+        <div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 8px; font-size: 12px; text-align: center; color: var(--text-muted);">
+          <div id="lblDiceRollerLastTitle" style="font-weight: 600; font-size: 12px; color: var(--text-main); margin-bottom: 2px;">No rolls yet</div>
+          <div id="lblDiceRollerLastBreakdown" style="font-size: 11px; color: var(--text-muted); font-style: italic;">Roll from sheet, chat, or roller</div>
+        </div>
+      `;
       return;
     }
 
-    const totalVal = (roll.total !== undefined) ? roll.total : roll.d20;
-    const titleText = roll.title || roll.rollType || "d20 Check";
-    if (lblLastTitle) {
-      lblLastTitle.textContent = titleText;
-      lblLastTitle.title = titleText;
-    }
+    boxContainer.innerHTML = rolls.map((roll, idx) => {
+      const isLatest = (idx === 0);
+      const totalVal = (roll.total !== undefined) ? roll.total : roll.d20;
+      const cleanTitle = (roll.title || roll.rollType || "d20 Check")
+        .replace(/^🎲\s*/, '')
+        .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+        .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+        .trim();
 
-    let totalColor = "var(--accent-primary)";
-    let badgesHtml = "";
-    if (roll.isNat20) {
-      totalColor = "#10b981";
-      badgesHtml += ` <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 10px; padding: 1px 4px;">🎉 Nat 20!</span>`;
-    } else if (roll.isNat1) {
-      totalColor = "#ef4444";
-      badgesHtml += ` <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 10px; padding: 1px 4px;">⚠️ Nat 1</span>`;
-    }
+      let totalColor = isLatest ? "var(--accent-primary)" : "var(--text-main)";
+      let badgesHtml = "";
+      if (roll.isNat20) {
+        totalColor = "#10b981";
+        badgesHtml += `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 9px; padding: 1px 4px; font-weight: 700;">★ Nat 20</span>`;
+      } else if (roll.isNat1) {
+        totalColor = "#ef4444";
+        badgesHtml += `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 9px; padding: 1px 4px; font-weight: 700;">⚠️ Nat 1</span>`;
+      }
 
-    if (roll.hpBonus > 0) {
-      badgesHtml += ` <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px; padding: 1px 4px;">✨ +${roll.hpBonus} HP</span>`;
-    } else if (roll.isHPRerolled) {
-      badgesHtml += ` <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px; padding: 1px 4px;">✨ HP Reroll</span>`;
-    }
+      if (roll.hpBonus > 0) {
+        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 9px; padding: 1px 4px; font-weight: 600;">✨ +${roll.hpBonus} HP</span>`;
+      } else if (roll.isHPRerolled) {
+        badgesHtml += `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 9px; padding: 1px 4px; font-weight: 600;">✨ HP Reroll</span>`;
+      }
 
-    lblLastTotal.textContent = `${totalVal}`;
-    lblLastTotal.style.color = totalColor;
-    if (lblLastBadges) lblLastBadges.innerHTML = badgesHtml;
+      const timeStr = roll.timestamp 
+        ? new Date(roll.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
+        : '';
+      const rankBadge = isLatest
+        ? `<span style="font-size: 9px; font-weight: 700; color: var(--accent-primary); text-transform: uppercase;">Latest</span>`
+        : `<span style="font-size: 9px; color: var(--text-muted); font-weight: 600;">#${idx + 1}</span>`;
 
-    const breakdownText = roll.breakdown || (roll.d20 !== undefined ? `1d20 (${roll.d20})${roll.mod !== undefined && roll.mod !== 0 ? (roll.mod > 0 ? ' + ' + roll.mod : ' - ' + Math.abs(roll.mod)) : ''} = ${totalVal}` : `${totalVal}`);
-    if (lblLastBreakdown) lblLastBreakdown.textContent = breakdownText;
+      let resultHtml = '';
+      if (roll.result) {
+        const isHit = roll.result.toLowerCase().includes('hit') || roll.result.toLowerCase().includes('success');
+        const isFail = roll.result.toLowerCase().includes('fail') || roll.result.toLowerCase().includes('miss');
+        const resColor = isHit ? '#10b981' : (isFail ? '#ef4444' : 'var(--text-muted)');
+        resultHtml = `<span style="font-size: 10px; font-weight: 600; color: ${resColor};">${escapeHtml(roll.result)}</span>`;
+      }
 
-    if (lblLastTag) {
-      const timeStr = roll.timestamp ? new Date(roll.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      lblLastTag.textContent = timeStr;
-    }
+      const cardStyle = isLatest
+        ? "background: var(--bg-card); border: 1px solid var(--accent-primary); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);"
+        : "background: var(--bg-panel); border: 1px solid var(--border-color); opacity: 0.9;";
+
+      return `
+        <div class="dice-roller-recent-card ${isLatest ? 'is-latest' : ''}" style="${cardStyle} border-radius: 6px; padding: 6px 8px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <div style="display: flex; align-items: center; gap: 4px; overflow: hidden;">
+              ${rankBadge}
+              <span style="font-weight: 600; font-size: 11px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 115px;" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
+            </div>
+            <span style="font-size: 9px; color: var(--text-muted); flex-shrink: 0;">${timeStr}</span>
+          </div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px; margin: 2px 0;">
+            <div style="display: flex; align-items: baseline; gap: 5px;">
+              <span style="font-size: ${isLatest ? '17px' : '14px'}; font-weight: 800; color: ${totalColor}; line-height: 1;">${totalVal}</span>
+              ${badgesHtml}
+            </div>
+            ${resultHtml}
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted); word-break: break-all; line-height: 1.2;">
+            ${escapeHtml(roll.breakdown || `${totalVal}`)}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   window.updateSidebarLastRoll = function(rollData) {
     if (!rollData) return;
-    const isThisPlayer = !rollData.characterName || (char && rollData.characterName === char.name) || rollData.isLocal || (char && rollData.playerName && rollData.playerName === char.playerName);
-    if (!isThisPlayer) return;
+    if (!isPlayerRoll(rollData)) return;
 
-    window.lastPlayerRoll = {
-      title: rollData.title || rollData.rollType || "d20 Check",
-      total: (rollData.total !== undefined) ? rollData.total : (rollData.result ?? rollData.d20 ?? 0),
-      breakdown: rollData.breakdown || (rollData.d20 !== undefined ? `1d20 (${rollData.d20}) ${rollData.mod !== undefined && rollData.mod >= 0 ? '+' + rollData.mod : rollData.mod} = ${rollData.total}` : `${rollData.total}`),
-      isNat20: !!rollData.isNat20,
-      isNat1: !!rollData.isNat1,
-      hpBonus: rollData.hpBonus || 0,
-      isHPRerolled: !!rollData.isHPRerolled,
-      timestamp: rollData.timestamp || new Date().toISOString()
-    };
+    const norm = normalizePlayerRoll(rollData);
+    if (!norm) return;
+
+    if (!Array.isArray(window.lastPlayerRolls)) {
+      window.lastPlayerRolls = getPlayerRecentRolls();
+    }
+
+    // Filter out duplicates (matching id or matching timestamp + total + breakdown)
+    window.lastPlayerRolls = window.lastPlayerRolls.filter(r => 
+      !(norm.id && r.id === norm.id) &&
+      !(r.timestamp === norm.timestamp && r.total === norm.total && r.breakdown === norm.breakdown)
+    );
+
+    window.lastPlayerRolls.unshift(norm);
+    if (window.lastPlayerRolls.length > 3) {
+      window.lastPlayerRolls = window.lastPlayerRolls.slice(0, 3);
+    }
+    window.lastPlayerRoll = window.lastPlayerRolls[0];
+
     try {
+      localStorage.setItem("mm2e_last_player_rolls", JSON.stringify(window.lastPlayerRolls));
       localStorage.setItem("mm2e_last_player_roll", JSON.stringify(window.lastPlayerRoll));
     } catch (e) {}
+
     renderSidebarLastRoll();
   };
   window.renderSidebarLastRoll = renderSidebarLastRoll;
+  window.getPlayerRecentRolls = getPlayerRecentRolls;
 
   function initSessionDiceRoller() {
     const sidebar = document.getElementById("sessionDiceRollerSidebar");
@@ -6658,7 +6812,8 @@ function setupSessionAndGMHub() {
         hpBonus: hpBonus || 0,
         isHPRerolled: !!isHPRerolled,
         hpAnnouncement: hpAnnouncement || '',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        isLocal: true
       };
 
       window.lastRollConfig = {

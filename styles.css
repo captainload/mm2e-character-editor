@@ -2902,10 +2902,12 @@ body.session-tab-active {
   background: rgba(99, 102, 241, 0.12);
 }
 
-.dice-quick-chip:hover {
-  border-color: var(--accent-primary);
-  color: var(--text-main);
-  background: rgba(99, 102, 241, 0.1);
+.dice-roller-recent-card {
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.dice-roller-recent-card:hover {
+  border-color: var(--accent-primary) !important;
 }
 
 .session-chat-bar-container {

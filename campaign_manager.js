@@ -883,12 +883,32 @@
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem("mm2e_include_gm_char_in_party", val ? "true" : "false");
+        if (val) {
+          localStorage.removeItem("mm2e_exclude_local_hero_from_party");
+        } else {
+          localStorage.setItem("mm2e_exclude_local_hero_from_party", "true");
+        }
       }
     } catch (e) {}
     const camp = getActiveCampaign();
     if (!camp) return;
     camp.includeGmCharInParty = val;
-    updateActiveCampaign({ includeGmCharInParty: val });
+    camp.excludeLocalHero = !val;
+    if (!Array.isArray(camp.excludedPartyIds)) camp.excludedPartyIds = [];
+    if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+    if (val) {
+      camp.excludedPartyIds = camp.excludedPartyIds.filter(id => id !== 'local_hero');
+      if (!camp.partyCharacterIds.includes('local_hero')) camp.partyCharacterIds.push('local_hero');
+    } else {
+      if (!camp.excludedPartyIds.includes('local_hero')) camp.excludedPartyIds.push('local_hero');
+      camp.partyCharacterIds = camp.partyCharacterIds.filter(id => id !== 'local_hero');
+    }
+    updateActiveCampaign({
+      includeGmCharInParty: val,
+      excludeLocalHero: !val,
+      excludedPartyIds: camp.excludedPartyIds,
+      partyCharacterIds: camp.partyCharacterIds
+    });
     addFileOperationLog(`GM active editor sheet ${val ? 'included in' : 'excluded from'} party roster.`, 'config');
   }
 
@@ -960,38 +980,59 @@
     return (camp && Array.isArray(camp.partyCharacterIds)) ? [...camp.partyCharacterIds] : [];
   }
 
+  function getExcludedPartyIds() {
+    const camp = getActiveCampaign();
+    return (camp && Array.isArray(camp.excludedPartyIds)) ? [...camp.excludedPartyIds] : [];
+  }
+
   function isCharacterInParty(charId) {
     const camp = getActiveCampaign();
-    if (!camp || !Array.isArray(camp.partyCharacterIds)) return false;
-    return camp.partyCharacterIds.includes(charId);
+    if (!camp) return false;
+    const excluded = Array.isArray(camp.excludedPartyIds) ? camp.excludedPartyIds : [];
+    if (excluded.includes(charId)) return false;
+    const partyIds = Array.isArray(camp.partyCharacterIds) ? camp.partyCharacterIds : [];
+    if (partyIds.length > 0) {
+      return partyIds.includes(charId);
+    }
+    if (charId === 'local_hero') {
+      return !camp.excludeLocalHero && isGmCharIncludedInParty();
+    }
+    return true;
   }
 
   function addCharacterToParty(charId) {
     const camp = getActiveCampaign();
     if (!camp) return false;
     if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+    if (!Array.isArray(camp.excludedPartyIds)) camp.excludedPartyIds = [];
+    camp.excludedPartyIds = camp.excludedPartyIds.filter(id => id !== charId);
     if (!camp.partyCharacterIds.includes(charId)) {
       camp.partyCharacterIds.push(charId);
-      if (charId === 'local_hero') {
-        setGmCharIncludedInParty(true);
-      }
-      updateActiveCampaign({ partyCharacterIds: camp.partyCharacterIds });
-      addFileOperationLog(`Character "${charId}" added to active party roster.`, 'party_add');
-      return true;
     }
-    return false;
+    if (charId === 'local_hero') {
+      setGmCharIncludedInParty(true);
+    } else {
+      updateActiveCampaign({ partyCharacterIds: camp.partyCharacterIds, excludedPartyIds: camp.excludedPartyIds });
+      addFileOperationLog(`Character "${charId}" added to active party roster.`, 'party_add');
+    }
+    return true;
   }
 
   function removeCharacterFromParty(charId) {
     const camp = getActiveCampaign();
     if (!camp) return false;
     if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
+    if (!Array.isArray(camp.excludedPartyIds)) camp.excludedPartyIds = [];
     camp.partyCharacterIds = camp.partyCharacterIds.filter(id => id !== charId);
+    if (!camp.excludedPartyIds.includes(charId)) {
+      camp.excludedPartyIds.push(charId);
+    }
     if (charId === 'local_hero') {
       setGmCharIncludedInParty(false);
+    } else {
+      updateActiveCampaign({ partyCharacterIds: camp.partyCharacterIds, excludedPartyIds: camp.excludedPartyIds });
+      addFileOperationLog(`Character "${charId}" removed from active party roster.`, 'party_remove');
     }
-    updateActiveCampaign({ partyCharacterIds: camp.partyCharacterIds });
-    addFileOperationLog(`Character "${charId}" removed from active party roster.`, 'party_remove');
     return true;
   }
 
@@ -1684,6 +1725,7 @@
     getSavedCharacters,
     deleteSavedCharacter,
     getPartyCharacterIds,
+    getExcludedPartyIds,
     isCharacterInParty,
     addCharacterToParty,
     removeCharacterFromParty,

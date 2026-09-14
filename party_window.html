@@ -171,7 +171,7 @@
 
   <!-- Scripts -->
   <script src="dice_notation.js?v=3"></script>
-  <script src="campaign_manager.js?v=18"></script>
+  <script src="campaign_manager.js?v=19"></script>
   <script src="session_network.js?v=19"></script>
   <script>
     const STORAGE_KEY_BOUNDS = 'mm2e_party_display_bounds';
@@ -500,8 +500,41 @@
     window.duplicateNPC = (id) => callOpenerOrBroadcast('duplicateNPC', id);
     window.gmReturnToPrimarySheet = () => callOpenerOrBroadcast('gmReturnToPrimarySheet');
     window.gmExportCharSheet = (id) => callOpenerOrBroadcast('gmExportCharSheet', id);
-    window.gmOpenCharHistory = (id) => callOpenerOrBroadcast('gmOpenCharHistory', id);
-    window.confirmRemoveCharacterFromParty = (id, charName, isNPC) => callOpenerOrBroadcast('confirmRemoveCharacterFromParty', id, charName, isNPC);
+    window.performRemoveCharacterFromParty = function(id, charName, isNPC) {
+      if (typeof window.gmCloseAllCharMenus === 'function') window.gmCloseAllCharMenus();
+      const isThisLocalHero = (id === 'local_hero') || (activeHero && activeHero.name && activeHero.name === charName);
+      if (isThisLocalHero) {
+        try { localStorage.setItem("mm2e_exclude_local_hero_from_party", "true"); } catch (e) {}
+        try { localStorage.setItem("mm2e_include_gm_char_in_party", "false"); } catch (e) {}
+      }
+      if (typeof CampaignManager !== 'undefined') {
+        if (isNPC) {
+          if (typeof CampaignManager.removeNPC === 'function') CampaignManager.removeNPC(id);
+          CampaignManager.removeCharacterFromParty(id);
+          if (charName) CampaignManager.removeCharacterFromParty(charName);
+        } else {
+          CampaignManager.removeCharacterFromParty(id);
+          if (charName) CampaignManager.removeCharacterFromParty(charName);
+          if (isThisLocalHero) {
+            CampaignManager.setGmCharIncludedInParty(false);
+          }
+          if (typeof CampaignManager.removePlayer === 'function') {
+            CampaignManager.removePlayer(id);
+          }
+        }
+      }
+      callOpenerOrBroadcast('performRemoveCharacterFromParty', id, charName, isNPC);
+      syncPartyFromOpenerOrLocal();
+    };
+
+    window.confirmRemoveCharacterFromParty = function(id, charName, isNPC) {
+      if (typeof window.gmCloseAllCharMenus === 'function') window.gmCloseAllCharMenus();
+      const safeName = charName || 'this character';
+      if (!confirm(`Remove "${safeName}" from the active party roster?`)) {
+        return;
+      }
+      window.performRemoveCharacterFromParty(id, charName, isNPC);
+    };
 
     // Dropdown menu handling
     window.gmToggleCharMenu = function(e, id) {
@@ -583,6 +616,11 @@
         } catch (err) {}
         try {
           localStorage.setItem("mm2e_include_gm_char_in_party", val ? "true" : "false");
+          if (val) {
+            localStorage.removeItem("mm2e_exclude_local_hero_from_party");
+          } else {
+            localStorage.setItem("mm2e_exclude_local_hero_from_party", "true");
+          }
         } catch (err) {}
         if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.setGmCharIncludedInParty === 'function') {
           CampaignManager.setGmCharIncludedInParty(val);
@@ -649,13 +687,29 @@
         } catch (e) {}
       }
 
+      const excludedIds = (typeof CampaignManager !== 'undefined' && typeof CampaignManager.getExcludedPartyIds === 'function')
+        ? CampaignManager.getExcludedPartyIds()
+        : ((camp && Array.isArray(camp.excludedPartyIds)) ? camp.excludedPartyIds : []);
       const partyIds = (typeof CampaignManager !== 'undefined' && typeof CampaignManager.getPartyCharacterIds === 'function') ? CampaignManager.getPartyCharacterIds() : [];
       const hasExplicitParty = partyIds && partyIds.length > 0;
 
-      const hasExternalPartyMembers = ((camp.acceptedPlayers || []).length > 0) || ((camp.npcs || []).length > 0);
-      const isLocalHeroInParty = hasExplicitParty
-        ? (partyIds.includes('local_hero') || (activeHero && partyIds.includes(activeHero.name)) || includeGmChar || (!isLocalGM))
-        : (!isLocalGM || includeGmChar || !hasExternalPartyMembers);
+      const isLocalHeroExcluded = excludedIds.includes('local_hero')
+        || (activeHero && activeHero.name && excludedIds.includes(activeHero.name))
+        || (camp.excludeLocalHero === true)
+        || ((typeof localStorage !== 'undefined') && localStorage.getItem("mm2e_exclude_local_hero_from_party") === "true");
+
+      let isLocalHeroInParty = false;
+      if (!isLocalHeroExcluded) {
+        if (hasExplicitParty) {
+          isLocalHeroInParty = partyIds.includes('local_hero') || (activeHero && partyIds.includes(activeHero.name)) || (isLocalGM && includeGmChar);
+        } else {
+          if (isLocalGM) {
+            isLocalHeroInParty = includeGmChar;
+          } else {
+            isLocalHeroInParty = true;
+          }
+        }
+      }
 
       const shouldIncludeLocalHero = isLocalHeroInParty && !!(activeHero && activeHero.name);
 
@@ -734,9 +788,10 @@
       (camp.acceptedPlayers || []).forEach(p => {
         const isAlreadyRepresentedByLocalHero = shouldIncludeLocalHero && !isLocalGM && (p.characterName === activeHero?.name || p.id === 'local_hero');
         if (!isAlreadyRepresentedByLocalHero) {
-          const isPlayerInParty = hasExplicitParty
+          const isExcluded = excludedIds.includes(p.id) || (p.characterName && excludedIds.includes(p.characterName)) || (p.playerName && excludedIds.includes(p.playerName));
+          const isPlayerInParty = !isExcluded && (hasExplicitParty
             ? (partyIds.includes(p.id) || partyIds.includes(p.characterName) || (p.playerName && partyIds.includes(p.playerName)))
-            : true;
+            : true);
 
           if (isPlayerInParty) {
             const histCount = Array.isArray(p.sheetHistory) ? p.sheetHistory.length : (p.characterSheet ? 1 : 0);
@@ -772,7 +827,8 @@
       // 3. Saved Campaign Characters in party (if not online)
       if (hasExplicitParty) {
         (camp.savedCharacters || []).forEach(sc => {
-          const isInParty = partyIds.includes(sc.id) || partyIds.includes(sc.characterName);
+          const isExcluded = excludedIds.includes(sc.id) || (sc.characterName && excludedIds.includes(sc.characterName));
+          const isInParty = !isExcluded && (partyIds.includes(sc.id) || partyIds.includes(sc.characterName));
           if (isInParty) {
             const alreadyInRoster = roster.some(r => r.characterName === sc.characterName || r.id === sc.id || (sc.ownerPlayerId && r.id === sc.ownerPlayerId));
             if (!alreadyInRoster) {
@@ -808,6 +864,8 @@
 
       // 4. Attached Party NPCs
       (camp.npcs || []).forEach(n => {
+        const isExcluded = excludedIds.includes(n.id) || (n.name && excludedIds.includes(n.name));
+        if (isExcluded) return;
         const isCurrentlyInEditor = isEditingNpc && (n.id === activeEditorNpcId || n.name === activeHero?.name);
         const liveChar = isCurrentlyInEditor ? activeHero : null;
 
@@ -925,7 +983,7 @@
         const removeBtnHtml = canRemoveFromParty
           ? `
             <div class="gm-char-menu-divider"></div>
-            <button type="button" class="gm-char-menu-item" style="color: #ef4444;" onclick="window.confirmRemoveCharacterFromParty('${item.id}', '${escapeHtml(item.characterName).replace(/'/g, "\\'")}', ${item.isNPC}); window.gmCloseAllCharMenus();">
+            <button type="button" class="gm-char-menu-item" style="color: #ef4444;" onclick="window.gmCloseAllCharMenus(); window.confirmRemoveCharacterFromParty('${item.id}', '${escapeHtml(item.characterName).replace(/'/g, "\\'")}', ${item.isNPC});">
               🚫 Remove from Party
             </button>
           `
@@ -1089,9 +1147,7 @@
         if (window.opener && !window.opener.closed && window.opener.document) {
           const openerTbody = window.opener.document.getElementById('tbodySessionPartyRoster');
           if (openerTbody && openerTbody.innerHTML && openerTbody.innerHTML.trim().length > 0 &&
-              !openerTbody.innerHTML.includes('<!-- Dynamically populated') &&
-              !openerTbody.innerHTML.includes('No player characters connected') &&
-              !openerTbody.innerHTML.includes('No characters in party')) {
+              !openerTbody.innerHTML.includes('<!-- Dynamically populated')) {
             tableRoster.innerHTML = openerTbody.innerHTML;
             updateWinHeaderUI();
             return;
@@ -1103,9 +1159,7 @@
       try {
         const cachedHtml = localStorage.getItem('mm2e_party_roster_html');
         if (cachedHtml && cachedHtml.trim().length > 0 &&
-            !cachedHtml.includes('<!-- Dynamically populated') &&
-            !cachedHtml.includes('No player characters connected') &&
-            !cachedHtml.includes('No characters in party')) {
+            !cachedHtml.includes('<!-- Dynamically populated')) {
           tableRoster.innerHTML = cachedHtml;
           updateWinHeaderUI();
           return;

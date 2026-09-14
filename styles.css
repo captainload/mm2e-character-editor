@@ -2859,7 +2859,7 @@ body.session-tab-active {
 .session-dice-sidebar {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  width: 215px;
   flex-shrink: 0;
   background: var(--bg-card);
   border-left: 1px solid var(--border-color);
@@ -2881,64 +2881,10 @@ body.session-tab-active {
   }
 }
 
-.dice-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-
-.dice-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-main);
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  user-select: none;
-}
-
-.dice-btn:hover {
-  border-color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.12);
-  transform: translateY(-1px);
-}
-
-.dice-btn.active {
-  border-color: var(--accent-primary);
-  background: var(--accent-primary);
-  color: #ffffff;
-  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
-}
-
-.dice-qty-pill {
-  padding: 1px 7px;
-  font-size: 11px;
-  border-radius: 3px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.1s ease;
-}
-
-.dice-qty-pill:hover,
-.dice-qty-pill.active {
-  border-color: var(--accent-primary);
-  color: var(--text-main);
-  background: rgba(99, 102, 241, 0.1);
-}
-
 .dice-quick-chip {
-  padding: 3px 8px;
+  padding: 2px 6px;
   font-size: 11px;
+  font-weight: 600;
   border-radius: 4px;
   border: 1px solid var(--border-color);
   background: var(--bg-panel);
@@ -2946,6 +2892,14 @@ body.session-tab-active {
   cursor: pointer;
   user-select: none;
   transition: all 0.1s ease;
+  flex: 1 1 calc(25% - 4px);
+  text-align: center;
+}
+
+.dice-quick-chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-main);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .dice-quick-chip:hover {

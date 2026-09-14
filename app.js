@@ -842,6 +842,9 @@ window.showDiceRollModal = function(config) {
 
   // Track the most recent roll so "Use Hero Point -> Reroll" can immediately act on it
   window.lastRollConfig = config;
+  if (typeof window.updateSidebarLastRoll === 'function') {
+    window.updateSidebarLastRoll(config);
+  }
 
   titleEl.textContent = config.title || "🎲 Check Result";
 
@@ -3186,6 +3189,9 @@ function setupStatusTracker() {
       } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
         CampaignManager.addLogEntry(entry);
       }
+      if (typeof window.updateSidebarLastRoll === 'function') {
+        window.updateSidebarLastRoll(entry);
+      }
       return total;
     };
 
@@ -3314,6 +3320,9 @@ function setupStatusTracker() {
         SessionNetwork.sendRoll(entry);
       } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
         CampaignManager.addLogEntry(entry);
+      }
+      if (typeof window.updateSidebarLastRoll === 'function') {
+        window.updateSidebarLastRoll(entry);
       }
 
       broadcastTrackerSync();
@@ -3672,6 +3681,9 @@ function setupSessionAndGMHub() {
       renderSessionFeed();
       if (typeof CampaignManager !== 'undefined') {
         CampaignManager.addLogEntry(roll);
+      }
+      if (typeof window.updateSidebarLastRoll === 'function') {
+        window.updateSidebarLastRoll(roll);
       }
     });
 
@@ -6354,6 +6366,9 @@ function setupSessionAndGMHub() {
           sessionLocalLog.push(rollEntry);
           renderSessionFeed();
         }
+        if (typeof window.updateSidebarLastRoll === 'function') {
+          window.updateSidebarLastRoll(rollEntry);
+        }
       } else {
         const res = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(expr) : { total: Math.floor(Math.random() * 20) + 1, breakdown: expr };
         const rollEntry = {
@@ -6372,6 +6387,9 @@ function setupSessionAndGMHub() {
           if (typeof CampaignManager !== 'undefined') CampaignManager.addLogEntry(rollEntry);
           sessionLocalLog.push(rollEntry);
           renderSessionFeed();
+        }
+        if (typeof window.updateSidebarLastRoll === 'function') {
+          window.updateSidebarLastRoll(rollEntry);
         }
       }
       chatInput.value = '';
@@ -6428,48 +6446,108 @@ function setupSessionAndGMHub() {
   }
 
   // --- Interactive Session Dice Roller Sidebar ---
+  function renderSidebarLastRoll() {
+    const lblLastTitle = document.getElementById("lblDiceRollerLastTitle");
+    const lblLastTotal = document.getElementById("lblDiceRollerLastTotal");
+    const lblLastBadges = document.getElementById("lblDiceRollerLastBadges");
+    const lblLastBreakdown = document.getElementById("lblDiceRollerLastBreakdown");
+    const lblLastTag = document.getElementById("lblDiceRollerLastTag");
+
+    if (!lblLastTotal) return;
+
+    let roll = window.lastPlayerRoll;
+    if (!roll) {
+      if (window.lastRollConfig) {
+        roll = window.lastRollConfig;
+      } else {
+        try {
+          const saved = localStorage.getItem("mm2e_last_player_roll");
+          if (saved) roll = JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+
+    if (!roll || (roll.total === undefined && roll.d20 === undefined)) {
+      if (lblLastTitle) lblLastTitle.textContent = "No rolls yet";
+      lblLastTotal.textContent = "--";
+      lblLastTotal.style.color = "var(--text-muted)";
+      if (lblLastBadges) lblLastBadges.innerHTML = "";
+      if (lblLastBreakdown) lblLastBreakdown.textContent = "Roll from sheet, chat, or roller";
+      if (lblLastTag) lblLastTag.textContent = "";
+      return;
+    }
+
+    const totalVal = (roll.total !== undefined) ? roll.total : roll.d20;
+    const titleText = roll.title || roll.rollType || "d20 Check";
+    if (lblLastTitle) {
+      lblLastTitle.textContent = titleText;
+      lblLastTitle.title = titleText;
+    }
+
+    let totalColor = "var(--accent-primary)";
+    let badgesHtml = "";
+    if (roll.isNat20) {
+      totalColor = "#10b981";
+      badgesHtml += ` <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 10px; padding: 1px 4px;">🎉 Nat 20!</span>`;
+    } else if (roll.isNat1) {
+      totalColor = "#ef4444";
+      badgesHtml += ` <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; font-size: 10px; padding: 1px 4px;">⚠️ Nat 1</span>`;
+    }
+
+    if (roll.hpBonus > 0) {
+      badgesHtml += ` <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px; padding: 1px 4px;">✨ +${roll.hpBonus} HP</span>`;
+    } else if (roll.isHPRerolled) {
+      badgesHtml += ` <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; font-size: 10px; padding: 1px 4px;">✨ HP Reroll</span>`;
+    }
+
+    lblLastTotal.textContent = `${totalVal}`;
+    lblLastTotal.style.color = totalColor;
+    if (lblLastBadges) lblLastBadges.innerHTML = badgesHtml;
+
+    const breakdownText = roll.breakdown || (roll.d20 !== undefined ? `1d20 (${roll.d20})${roll.mod !== undefined && roll.mod !== 0 ? (roll.mod > 0 ? ' + ' + roll.mod : ' - ' + Math.abs(roll.mod)) : ''} = ${totalVal}` : `${totalVal}`);
+    if (lblLastBreakdown) lblLastBreakdown.textContent = breakdownText;
+
+    if (lblLastTag) {
+      const timeStr = roll.timestamp ? new Date(roll.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      lblLastTag.textContent = timeStr;
+    }
+  }
+
+  window.updateSidebarLastRoll = function(rollData) {
+    if (!rollData) return;
+    const isThisPlayer = !rollData.characterName || (char && rollData.characterName === char.name) || rollData.isLocal || (char && rollData.playerName && rollData.playerName === char.playerName);
+    if (!isThisPlayer) return;
+
+    window.lastPlayerRoll = {
+      title: rollData.title || rollData.rollType || "d20 Check",
+      total: (rollData.total !== undefined) ? rollData.total : (rollData.result ?? rollData.d20 ?? 0),
+      breakdown: rollData.breakdown || (rollData.d20 !== undefined ? `1d20 (${rollData.d20}) ${rollData.mod !== undefined && rollData.mod >= 0 ? '+' + rollData.mod : rollData.mod} = ${rollData.total}` : `${rollData.total}`),
+      isNat20: !!rollData.isNat20,
+      isNat1: !!rollData.isNat1,
+      hpBonus: rollData.hpBonus || 0,
+      isHPRerolled: !!rollData.isHPRerolled,
+      timestamp: rollData.timestamp || new Date().toISOString()
+    };
+    try {
+      localStorage.setItem("mm2e_last_player_roll", JSON.stringify(window.lastPlayerRoll));
+    } catch (e) {}
+    renderSidebarLastRoll();
+  };
+  window.renderSidebarLastRoll = renderSidebarLastRoll;
+
   function initSessionDiceRoller() {
     const sidebar = document.getElementById("sessionDiceRollerSidebar");
     const btnToggle = document.getElementById("btnSessionDiceShortcut");
     const btnClose = document.getElementById("btnCloseDiceSidebar");
-    const numCount = document.getElementById("numDiceRollerCount");
-    const btnCountDec = document.getElementById("btnDiceCountDec");
-    const btnCountInc = document.getElementById("btnDiceCountInc");
-    const qtyPillGroup = document.getElementById("diceQtyPillGroup");
-    const diceGrid = document.getElementById("diceRollerGrid");
     const txtAdj = document.getElementById("txtDiceNotationAdj");
     const btnRoll = document.getElementById("btnExecuteDiceRoll");
-    const boxLastResult = document.getElementById("boxDiceRollerLastResult");
-    const lblLastTotal = document.getElementById("lblDiceRollerLastTotal");
-    const lblLastBreakdown = document.getElementById("lblDiceRollerLastBreakdown");
 
     if (!sidebar || !btnToggle) return;
 
-    let selectedSides = 20;
-
-    function getDiceCount() {
-      if (!numCount) return 1;
-      const val = parseInt(numCount.value, 10);
-      return (isNaN(val) || val < 1) ? 1 : Math.min(val, 100);
-    }
-
-    function setDiceCount(val) {
-      if (!numCount) return;
-      const count = Math.max(1, Math.min(100, parseInt(val, 10) || 1));
-      numCount.value = count;
-      if (qtyPillGroup) {
-        qtyPillGroup.querySelectorAll('.dice-qty-pill').forEach(pill => {
-          pill.classList.toggle('active', parseInt(pill.dataset.qty, 10) === count);
-        });
-      }
-      updatePreview();
-    }
-
     function getRollFormula() {
-      const count = getDiceCount();
       const rawAdj = txtAdj ? txtAdj.value.trim() : '';
 
-      // Check if user entered a full standalone dice expression (e.g. "3d6+2" or "1d100")
+      // Check if user entered a full standalone dice expression (e.g. "2d6+2" or "1d100")
       if (/\d*d\d+/i.test(rawAdj)) {
         return rawAdj;
       }
@@ -6478,23 +6556,18 @@ function setupSessionAndGMHub() {
       let adjPart = '';
       if (rawAdj) {
         if (/^[+-]/.test(rawAdj)) {
-          adjPart = ` ${rawAdj[0]} ${rawAdj.slice(1).trim()}`;
+          adjPart = `${rawAdj[0]}${rawAdj.slice(1).trim()}`;
         } else if (/^\d+$/.test(rawAdj)) {
-          adjPart = ` + ${rawAdj}`;
+          adjPart = `+${rawAdj}`;
         } else {
-          adjPart = ` + ${rawAdj}`;
+          adjPart = `+${rawAdj}`;
         }
       }
 
-      return `${count}d${selectedSides}${adjPart}`;
+      return `1d20${adjPart ? (adjPart.startsWith('+') || adjPart.startsWith('-') ? adjPart : '+' + adjPart) : ''}`;
     }
 
     function updatePreview() {
-      if (diceGrid) {
-        diceGrid.querySelectorAll('.dice-btn').forEach(btn => {
-          btn.classList.toggle('active', parseInt(btn.dataset.sides, 10) === selectedSides);
-        });
-      }
       const formula = getRollFormula();
       if (btnRoll) {
         btnRoll.textContent = `🎲 Roll ${formula}`;
@@ -6516,6 +6589,9 @@ function setupSessionAndGMHub() {
           btnToggle.style.color = '';
           btnToggle.style.borderColor = '';
         }
+      }
+      if (shouldOpen) {
+        renderSidebarLastRoll();
       }
     }
 
@@ -6557,7 +6633,7 @@ function setupSessionAndGMHub() {
         isHPRerolled = r.isHPRerolled;
         hpAnnouncement = r.hpAnnouncement;
       } else {
-        const r = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(cleanExpr, selectedSides) : { total: Math.floor(Math.random() * selectedSides) + 1, breakdown: cleanExpr };
+        const r = (typeof DiceNotation !== 'undefined') ? DiceNotation.roll(cleanExpr, 20) : { total: Math.floor(Math.random() * 20) + 1, breakdown: cleanExpr };
         rolled = {
           total: r.total,
           breakdown: r.breakdown || `${r.total}`,
@@ -6598,62 +6674,14 @@ function setupSessionAndGMHub() {
         renderSessionFeed();
       }
 
-      // Update Last Result in Sidebar
-      if (boxLastResult && lblLastTotal && lblLastBreakdown) {
-        let totalColor = 'var(--accent-primary)';
-        let tag = '';
-        if (isNat20) {
-          totalColor = '#10b981';
-          tag = ' <span style="color: #10b981; font-size: 11px;">🎉 Nat 20!</span>';
-        } else if (isNat1) {
-          totalColor = '#ef4444';
-          tag = ' <span style="color: #ef4444; font-size: 11px;">⚠️ Nat 1</span>';
-        }
-        lblLastTotal.innerHTML = `<span style="color: ${totalColor}; font-size: 15px;">${rolled.total}</span>${tag}`;
-        lblLastBreakdown.textContent = rolled.breakdown;
-        boxLastResult.style.display = 'block';
+      if (typeof window.updateSidebarLastRoll === 'function') {
+        window.updateSidebarLastRoll(rollEntry);
       }
     }
 
     // Event Listeners
     btnToggle.addEventListener("click", () => toggleSidebar());
     if (btnClose) btnClose.addEventListener("click", () => toggleSidebar(false));
-
-    if (btnCountDec) btnCountDec.addEventListener("click", () => setDiceCount(getDiceCount() - 1));
-    if (btnCountInc) btnCountInc.addEventListener("click", () => setDiceCount(getDiceCount() + 1));
-    if (numCount) {
-      numCount.addEventListener("input", () => {
-        setDiceCount(numCount.value);
-      });
-    }
-
-    if (qtyPillGroup) {
-      qtyPillGroup.querySelectorAll('.dice-qty-pill').forEach(pill => {
-        pill.addEventListener("click", () => {
-          setDiceCount(pill.dataset.qty);
-        });
-      });
-    }
-
-    if (diceGrid) {
-      diceGrid.querySelectorAll('.dice-btn').forEach(btn => {
-        btn.addEventListener("click", () => {
-          const sides = parseInt(btn.dataset.sides, 10);
-          if (selectedSides === sides) {
-            // Clicking the already active die executes roll immediately
-            executeRoll();
-          } else {
-            selectedSides = sides;
-            updatePreview();
-          }
-        });
-        btn.addEventListener("dblclick", () => {
-          selectedSides = parseInt(btn.dataset.sides, 10);
-          updatePreview();
-          executeRoll();
-        });
-      });
-    }
 
     // Quick adjustment chips
     document.querySelectorAll(".session-dice-sidebar .dice-quick-chip").forEach(chip => {
@@ -6692,8 +6720,9 @@ function setupSessionAndGMHub() {
       }
     });
 
-    // Initial preview setup
+    // Initial preview setup & render last roll
     updatePreview();
+    renderSidebarLastRoll();
   }
   initSessionDiceRoller();
 

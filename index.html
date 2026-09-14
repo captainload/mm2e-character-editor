@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=67">
+  <link rel="stylesheet" href="styles.css?v=68">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -1039,58 +1039,24 @@
           <!-- Right Sidebar: Interactive Dice Roller -->
           <div id="sessionDiceRollerSidebar" class="session-dice-sidebar" style="display: none;">
             <!-- Sidebar Header -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border-color); background: var(--bg-panel); flex-shrink: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border-color); background: var(--bg-panel); flex-shrink: 0;">
               <span style="font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                🎲 Dice Roller
+                🎲 d20 Roller
               </span>
-              <button type="button" id="btnCloseDiceSidebar" class="btn btn-secondary" style="height: 22px; width: 22px; padding: 0; line-height: 1; font-size: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" title="Close Dice Roller">✕</button>
+              <button type="button" id="btnCloseDiceSidebar" class="btn btn-secondary" style="height: 20px; width: 20px; padding: 0; line-height: 1; font-size: 11px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" title="Close Dice Roller">✕</button>
             </div>
 
-            <div style="padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; flex: 1;">
-              <!-- Dice Quantity / Count -->
-              <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <span style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted);">Number of Dice</span>
-                  <div style="display: flex; gap: 3px;" id="diceQtyPillGroup">
-                    <button type="button" class="dice-qty-pill active" data-qty="1">1</button>
-                    <button type="button" class="dice-qty-pill" data-qty="2">2</button>
-                    <button type="button" class="dice-qty-pill" data-qty="3">3</button>
-                    <button type="button" class="dice-qty-pill" data-qty="4">4</button>
-                    <button type="button" class="dice-qty-pill" data-qty="5">5</button>
-                  </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <button type="button" id="btnDiceCountDec" class="modifier-stepper-btn" style="width: 28px; height: 28px; font-size: 14px;">−</button>
-                  <input type="number" id="numDiceRollerCount" min="1" max="100" value="1" style="flex: 1; height: 28px; text-align: center; font-size: 13px; font-weight: 700; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
-                  <button type="button" id="btnDiceCountInc" class="modifier-stepper-btn" style="width: 28px; height: 28px; font-size: 14px;">+</button>
-                </div>
-              </div>
-
-              <!-- Dice Selection Grid -->
-              <div>
-                <span style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Select Die Size</span>
-                <div class="dice-grid" id="diceRollerGrid">
-                  <button type="button" class="dice-btn" data-sides="4" title="4-sided die">d4</button>
-                  <button type="button" class="dice-btn" data-sides="6" title="6-sided die">d6</button>
-                  <button type="button" class="dice-btn" data-sides="8" title="8-sided die">d8</button>
-                  <button type="button" class="dice-btn" data-sides="10" title="10-sided die">d10</button>
-                  <button type="button" class="dice-btn" data-sides="12" title="12-sided die">d12</button>
-                  <button type="button" class="dice-btn active" data-sides="20" title="20-sided die (Core M&amp;M)">d20</button>
-                  <button type="button" class="dice-btn" data-sides="100" title="Percentile die (d100)">d100</button>
-                  <button type="button" class="dice-btn" data-sides="2" title="Coin flip (d2)">d2</button>
-                </div>
-              </div>
-
+            <div style="padding: 10px; display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto;">
               <!-- Adjustments / Common Dice Notation -->
-              <div style="border-top: 1px solid var(--border-color); padding-top: 8px;">
+              <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <span style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted);">Common Notation Adjustments</span>
-                  <span style="font-size: 11px; color: var(--text-muted); font-style: italic;">e.g. +5, -2, +1d4</span>
+                  <span style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted);">Modifier / Notation</span>
+                  <span style="font-size: 10px; color: var(--text-muted); font-style: italic;">e.g. +5, -2</span>
                 </div>
-                <input type="text" id="txtDiceNotationAdj" placeholder="e.g. +5, -2, +1d4 (or full notation)..." style="width: 100%; height: 30px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px; box-sizing: border-box;">
+                <input type="text" id="txtDiceNotationAdj" placeholder="+5, -2, +1d4..." style="width: 100%; height: 28px; font-size: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 8px; box-sizing: border-box;">
                 
                 <!-- Common Quick Adjustment Chips -->
-                <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px;">
                   <button type="button" class="dice-quick-chip" data-adj="+1">+1</button>
                   <button type="button" class="dice-quick-chip" data-adj="+2">+2</button>
                   <button type="button" class="dice-quick-chip" data-adj="+5">+5</button>
@@ -1098,24 +1064,29 @@
                   <button type="button" class="dice-quick-chip" data-adj="-1">−1</button>
                   <button type="button" class="dice-quick-chip" data-adj="-2">−2</button>
                   <button type="button" class="dice-quick-chip" data-adj="-5">−5</button>
-                  <button type="button" class="dice-quick-chip" data-adj="clear" style="color: #ef4444;">✕ Clear</button>
+                  <button type="button" class="dice-quick-chip" data-adj="clear" style="color: #ef4444;">✕</button>
                 </div>
               </div>
 
               <!-- Action / Execute Roll -->
-              <div style="margin-top: 2px;">
-                <button type="button" class="btn btn-primary" id="btnExecuteDiceRoll" style="width: 100%; height: 36px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              <div>
+                <button type="button" class="btn btn-primary" id="btnExecuteDiceRoll" style="width: 100%; height: 34px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                   🎲 Roll 1d20
                 </button>
               </div>
 
-              <!-- Last Result Card -->
-              <div id="boxDiceRollerLastResult" style="display: none; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; font-size: 12px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                  <span style="font-weight: 600; color: var(--text-muted); font-size: 11px;">Last Result:</span>
-                  <span id="lblDiceRollerLastTotal" style="font-size: 14px; font-weight: 700; color: var(--accent-primary);"></span>
+              <!-- Player's Last Roll Card -->
+              <div id="boxDiceRollerLastResult" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; font-size: 12px; margin-top: 4px;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center;">
+                  <span>Last Roll</span>
+                  <span id="lblDiceRollerLastTag" style="font-size: 10px;"></span>
                 </div>
-                <div id="lblDiceRollerLastBreakdown" style="font-size: 11px; color: var(--text-muted); word-break: break-all;"></div>
+                <div id="lblDiceRollerLastTitle" style="font-weight: 600; font-size: 12px; color: var(--text-main); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">No rolls yet</div>
+                <div style="display: flex; align-items: baseline; gap: 6px; margin: 2px 0;">
+                  <span id="lblDiceRollerLastTotal" style="font-size: 18px; font-weight: 800; color: var(--accent-primary);">--</span>
+                  <span id="lblDiceRollerLastBadges" style="font-size: 11px;"></span>
+                </div>
+                <div id="lblDiceRollerLastBreakdown" style="font-size: 11px; color: var(--text-muted); word-break: break-all; line-height: 1.2;">Roll from sheet, chat, or roller</div>
               </div>
             </div>
           </div>
@@ -1135,7 +1106,7 @@
           <div style="display: flex; gap: 8px; align-items: center;">
             <input type="text" id="txtSessionChatInput" placeholder="Message or @whisper (type /r 1d20+5 to roll, /hp to spend Hero Point)..." style="flex: 1; height: 32px; font-size: 13px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 0 10px;">
             <button type="button" class="btn btn-primary" id="btnSessionSendChat" style="height: 32px; padding: 0 14px; font-weight: 600; font-size: 12px;">Send</button>
-            <button type="button" class="btn btn-secondary" id="btnSessionDiceShortcut" style="height: 32px; padding: 0 10px; font-size: 12px;" title="Open Dice Roller Sidebar">🎲 Roll</button>
+            <button type="button" class="btn btn-secondary" id="btnSessionDiceShortcut" style="height: 32px; padding: 0 10px; font-size: 12px;" title="Toggle Dice Roller Sidebar">🎲 Roller</button>
           </div>
         </div>
 
@@ -2381,7 +2352,7 @@
   <script src="campaign_manager.js?v=19"></script>
   <script src="session_network.js?v=19"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=156"></script>
+  <script src="app.js?v=157"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
@@ -2391,7 +2362,7 @@
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=105').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=106').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

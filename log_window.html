@@ -231,7 +231,7 @@
 
   <!-- Scripts -->
   <script src="dice_notation.js?v=3"></script>
-  <script src="session_network.js?v=22"></script>
+  <script src="session_network.js?v=23"></script>
   <script>
     const allRollCards = [];
     let currentFilter = 'all';
@@ -487,8 +487,6 @@
       return fallback;
     }
 
-    let _isInitialLoad = true;
-    setTimeout(() => { _isInitialLoad = false; }, 1200);
     let _isRestoringBounds = false;
 
     window._lastBounds = getInitialBounds();
@@ -554,14 +552,14 @@
 
     // Track resize
     window.addEventListener('resize', () => {
-      if (_isRestoringBounds || _isInitialLoad) return;
+      if (_isRestoringBounds) return;
       clearTimeout(window._resTimer);
       window._resTimer = setTimeout(saveWindowBounds, 250);
     });
 
     // Periodic poll for position changes (handling user dragging the window)
     setInterval(() => {
-      if (_isInitialLoad || _isRestoringBounds) return;
+      if (_isRestoringBounds) return;
       const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
       const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
       const width = Math.round(window.outerWidth || window.innerWidth);

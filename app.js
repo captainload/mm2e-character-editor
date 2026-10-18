@@ -2100,7 +2100,6 @@ function setupTablesPopout() {
   function saveTablesBoundsFromRef(win) {
     if (!win || win.closed) return;
     try {
-      if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
@@ -2138,9 +2137,9 @@ function setupTablesPopout() {
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const featureLeft = Math.max(0, Math.round(openLeft));
-    const featureTop = Math.max(0, Math.round(openTop));
-    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
+    const featureLeft = Math.round(openLeft);
+    const featureTop = Math.round(openTop);
+    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutTablesWindow = window.open(`tables_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
@@ -2186,13 +2185,22 @@ function setupTablesPopout() {
   window.addEventListener('storage', (e) => {
     if (e.key === 'mm2e_tables_docked') {
       redockTables(false);
+    } else if (e.key === 'mm2e_tables_bounds' && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        _cachedTablesBounds = sanitizeWindowBounds(parsed, { width: 920, height: 680, left: 160, top: 120 });
+      } catch (err) {}
     }
   });
   setInterval(() => {
-    if (poppedOutTablesWindow && poppedOutTablesWindow.closed) {
-      redockTables(false);
+    if (poppedOutTablesWindow) {
+      if (!poppedOutTablesWindow.closed) {
+        saveTablesBoundsFromRef(poppedOutTablesWindow);
+      } else {
+        redockTables(false);
+      }
     }
-  }, 400);
+  }, 250);
 }
 setupTablesPopout();
 
@@ -2843,6 +2851,23 @@ function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120
 }
 window.sanitizeWindowBounds = sanitizeWindowBounds;
 
+try {
+  const _initTrk = localStorage.getItem("mm2e_tracker_bounds");
+  if (_initTrk) _cachedTrackerBounds = sanitizeWindowBounds(JSON.parse(_initTrk), { width: 880, height: 660, left: 140, top: 140 });
+} catch (e) {}
+try {
+  const _initPty = localStorage.getItem("mm2e_party_display_bounds");
+  if (_initPty) _cachedPartyDisplayBounds = sanitizeWindowBounds(JSON.parse(_initPty), { width: 840, height: 480, left: 120, top: 120 });
+} catch (e) {}
+try {
+  const _initTbl = localStorage.getItem("mm2e_tables_bounds");
+  if (_initTbl) _cachedTablesBounds = sanitizeWindowBounds(JSON.parse(_initTbl), { width: 920, height: 680, left: 160, top: 120 });
+} catch (e) {}
+try {
+  const _initGm = localStorage.getItem("mm2e_gm_bounds");
+  if (_initGm) _cachedGMBounds = sanitizeWindowBounds(JSON.parse(_initGm), { width: 1100, height: 750, left: 100, top: 100 });
+} catch (e) {}
+
 function saveTrackerBoundsDirect(b) {
   const sanitized = sanitizeWindowBounds(b, { width: 880, height: 660, left: 140, top: 140 });
   _cachedTrackerBounds = sanitized;
@@ -3017,7 +3042,6 @@ function setupStatusTracker() {
     function saveTrackerBoundsFromRef(win) {
       if (!win || win.closed) return;
       try {
-        if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
         const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
         const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
         const width = win.outerWidth || win.innerWidth;
@@ -3059,9 +3083,9 @@ function setupStatusTracker() {
       if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
         openHeight = Math.max(250, window.screen.availHeight - 40);
       }
-      const featureLeft = Math.max(0, Math.round(openLeft));
-      const featureTop = Math.max(0, Math.round(openTop));
-      const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
+      const featureLeft = Math.round(openLeft);
+      const featureTop = Math.round(openTop);
+      const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
@@ -3139,14 +3163,23 @@ function setupStatusTracker() {
     window.addEventListener('storage', (e) => {
       if (e.key === 'mm2e_tracker_docked') {
         redockTracker();
+      } else if (e.key === 'mm2e_tracker_bounds' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          _cachedTrackerBounds = sanitizeWindowBounds(parsed, { width: 880, height: 660, left: 140, top: 140 });
+        } catch (err) {}
       }
     });
 
     setInterval(() => {
-      if (poppedOutTrackerWindow && poppedOutTrackerWindow.closed) {
-        redockTracker();
+      if (poppedOutTrackerWindow) {
+        if (!poppedOutTrackerWindow.closed) {
+          saveTrackerBoundsFromRef(poppedOutTrackerWindow);
+        } else {
+          redockTracker();
+        }
       }
-    }, 300);
+    }, 250);
 
     if (!modal || !btnOpen) return;
 
@@ -6407,7 +6440,6 @@ function setupSessionAndGMHub() {
   function savePartyDisplayBoundsFromRef(win) {
     if (!win || win.closed) return;
     try {
-      if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
@@ -6437,9 +6469,9 @@ function setupSessionAndGMHub() {
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const featureLeft = Math.max(0, Math.round(openLeft));
-    const featureTop = Math.max(0, Math.round(openTop));
-    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
+    const featureLeft = Math.round(openLeft);
+    const featureTop = Math.round(openTop);
+    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
@@ -6505,6 +6537,11 @@ function setupSessionAndGMHub() {
   window.addEventListener('storage', (e) => {
     if (e.key === 'mm2e_party_docked') {
       redockPartyDisplay();
+    } else if (e.key === 'mm2e_party_display_bounds' && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        _cachedPartyDisplayBounds = sanitizeWindowBounds(parsed, { width: 840, height: 480, left: 120, top: 120 });
+      } catch (err) {}
     } else if (e.key === 'mm2e_party_action' && e.newValue) {
       try {
         const data = JSON.parse(e.newValue);
@@ -6518,10 +6555,14 @@ function setupSessionAndGMHub() {
   });
 
   setInterval(() => {
-    if (poppedOutPartyWindow && poppedOutPartyWindow.closed) {
-      redockPartyDisplay();
+    if (poppedOutPartyWindow) {
+      if (!poppedOutPartyWindow.closed) {
+        savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
+      } else {
+        redockPartyDisplay();
+      }
     }
-  }, 300);
+  }, 250);
 
   if (txtSearch) {
     txtSearch.addEventListener("input", (e) => {
@@ -7479,7 +7520,6 @@ function setupSessionAndGMHub() {
   function saveGMBoundsFromRef(win) {
     if (!win || win.closed) return;
     try {
-      if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
@@ -7521,9 +7561,9 @@ function setupSessionAndGMHub() {
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const featureLeft = Math.max(0, Math.round(openLeft));
-    const featureTop = Math.max(0, Math.round(openTop));
-    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
+    const featureLeft = Math.round(openLeft);
+    const featureTop = Math.round(openTop);
+    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutGMWindow = window.open(`gm_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
     window.poppedOutGMWindow = poppedOutGMWindow;
@@ -7576,13 +7616,22 @@ function setupSessionAndGMHub() {
   window.addEventListener('storage', (e) => {
     if (e.key === 'mm2e_gm_docked') {
       redockGM(false);
+    } else if (e.key === 'mm2e_gm_bounds' && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        _cachedGMBounds = sanitizeWindowBounds(parsed, { width: 1100, height: 750, left: 100, top: 100 });
+      } catch (err) {}
     }
   });
   setInterval(() => {
-    if (poppedOutGMWindow && poppedOutGMWindow.closed) {
-      redockGM(false);
+    if (poppedOutGMWindow) {
+      if (!poppedOutGMWindow.closed) {
+        saveGMBoundsFromRef(poppedOutGMWindow);
+      } else {
+        redockGM(false);
+      }
     }
-  }, 400);
+  }, 250);
 
   if (btnOpenGM) {
     btnOpenGM.addEventListener("click", openGMTab);

@@ -217,12 +217,14 @@
   <script src="peerjs.min.js"></script>
   <script src="character_model.js?v=31"></script>
   <script src="campaign_manager.js?v=19"></script>
-  <script src="session_network.js?v=22"></script>
+  <script src="session_network.js?v=23"></script>
   <script>
     const STORAGE_KEY_BOUNDS = 'mm2e_gm_bounds';
     const POPUP_TYPE = 'gm';
     const OPENER_BOUNDS_FN = 'saveGMBoundsDirect';
     const OPENER_REDOCK_FN = 'redockGM';
+    const OPENER_GET_BOUNDS_FN = 'getSavedGMBounds';
+    const BROADCAST_BOUNDS_TYPE = 'GM_BOUNDS_UPDATE';
 
     function escapeHtml(str) {
       if (str === null || str === undefined) return '';
@@ -237,7 +239,25 @@
     const FALLBACK_BOUNDS = { width: 1100, height: 750, left: 100, top: 100 };
 
     function getInitialBounds() {
-      // 1. Authoritative URL query parameters passed directly from opener on launch
+      // 1. Child window's own isolated localStorage fallback if available
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 &&
+              typeof b.left === 'number' && !isNaN(b.left) && Math.abs(b.left) < 10000 &&
+              typeof b.top === 'number' && !isNaN(b.top) && Math.abs(b.top) < 10000) {
+            return {
+              width: Math.round(b.width),
+              height: Math.round(b.height),
+              left: Math.round(b.left),
+              top: Math.round(b.top)
+            };
+          }
+        }
+      } catch (e) {}
+
+      // 2. Authoritative URL query parameters passed directly from opener on launch
       try {
         const p = new URLSearchParams(window.location.search);
         const urlW = parseInt(p.get('w'), 10);
@@ -254,10 +274,10 @@
         }
       } catch (e) {}
 
-      // 2. Direct opener query if same-origin permitted
+      // 3. Direct opener query if same-origin permitted
       try {
-        if (window.opener && !window.opener.closed && typeof window.opener.getSavedGMBounds === 'function') {
-          const ob = window.opener.getSavedGMBounds();
+        if (window.opener && !window.opener.closed && typeof window.opener[OPENER_GET_BOUNDS_FN] === 'function') {
+          const ob = window.opener[OPENER_GET_BOUNDS_FN]();
           if (ob && typeof ob === 'object' && ob.width >= 250 && ob.height >= 200 && Math.abs(ob.left) < 10000 && Math.abs(ob.top) < 10000) {
             return {
               width: Math.round(ob.width),
@@ -269,26 +289,9 @@
         }
       } catch (e) {}
 
-      // 3. Child window's own isolated localStorage fallback
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
-        if (saved) {
-          const b = JSON.parse(saved);
-          if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 && Math.abs(b.left) < 10000 && Math.abs(b.top) < 10000) {
-            return {
-              width: Math.round(b.width),
-              height: Math.round(b.height),
-              left: Math.round(b.left),
-              top: Math.round(b.top)
-            };
-          }
-        }
-      } catch (e) {}
-
       return { ...FALLBACK_BOUNDS };
     }
 
-    let _isInitialLoad = true;
     let _isRestoringBounds = false;
     window._lastBounds = getInitialBounds();
 
@@ -300,6 +303,19 @@
         }
       } catch (e) {}
       try { localStorage.setItem(`mm2e_${POPUP_TYPE}_docked`, Date.now().toString()); } catch (e) {}
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('mm2e_session_channel');
+          bc.postMessage({ type: 'GM_DOCKED' });
+          bc.postMessage({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'GM_DOCKED' });
+          SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
       try {
         if (window.opener && !window.opener.closed && typeof window.opener[OPENER_REDOCK_FN] === 'function') {
           window.opener[OPENER_REDOCK_FN](false);
@@ -314,8 +330,7 @@
     if (btnRedock) btnRedock.addEventListener('click', redockGMWindow);
 
     function saveWindowBounds() {
-      if (_isInitialLoad || _isRestoringBounds) return;
-      if (document.hidden || document.visibilityState === 'hidden') return;
+      if (_isRestoringBounds) return;
       try {
         const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
         const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
@@ -330,21 +345,29 @@
           // 1. Save in popout's local storage
           try { localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds)); } catch (e) {}
 
-          // 2. Post message to opener window (cross-origin / file:/// safe)
+          // 2. BroadcastChannel
+          try {
+            if (typeof BroadcastChannel !== 'undefined') {
+              const bc = new BroadcastChannel('mm2e_session_channel');
+              bc.postMessage({ type: BROADCAST_BOUNDS_TYPE, bounds: bounds });
+            }
+          } catch (e) {}
+
+          // 3. Post message to opener window (cross-origin / file:/// safe)
           try {
             if (window.opener && !window.opener.closed) {
               window.opener.postMessage({ type: 'MM2E_WINDOW_BOUNDS', key: STORAGE_KEY_BOUNDS, popupType: POPUP_TYPE, bounds }, '*');
             }
           } catch (e) {}
 
-          // 3. Direct opener call fallback if same origin
+          // 4. Direct opener call fallback if same origin
           try {
             if (window.opener && !window.opener.closed && typeof window.opener[OPENER_BOUNDS_FN] === 'function') {
               window.opener[OPENER_BOUNDS_FN](bounds);
             }
           } catch (e) {}
 
-          // 4. SessionNetwork broadcast
+          // 5. SessionNetwork broadcast
           try {
             if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
               SessionNetwork.sendLocalBroadcast({ type: 'GM_BOUNDS_UPDATE', bounds });
@@ -370,15 +393,15 @@
         } catch (e) {}
         setTimeout(() => {
           _isRestoringBounds = false;
-        }, 400);
+        }, 300);
       } catch (e) {
         _isRestoringBounds = false;
       }
     }
 
     // Try programmatic restoration after DOM ready and window load
-    window.addEventListener('DOMContentLoaded', () => { setTimeout(restoreWindowBounds, 50); });
-    window.addEventListener('load', () => { setTimeout(restoreWindowBounds, 100); });
+    window.addEventListener('DOMContentLoaded', () => { setTimeout(restoreWindowBounds, 25); });
+    window.addEventListener('load', () => { setTimeout(restoreWindowBounds, 50); });
 
     // Request authoritative saved bounds from opener (works across file:/// origins)
     try {
@@ -401,29 +424,16 @@
       }
     });
 
-    // End initial settling period after 1500ms and calibrate _lastBounds
-    setTimeout(() => {
-      _isInitialLoad = false;
-      const curX = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
-      const curY = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
-      const curW = Math.round(window.outerWidth || window.innerWidth);
-      const curH = Math.round(window.outerHeight || window.innerHeight);
-      if (typeof curX === 'number' && !isNaN(curX) && typeof curY === 'number' && !isNaN(curY) &&
-          Math.abs(curX) < 10000 && Math.abs(curY) < 10000 && curW >= 250 && curH >= 200) {
-        window._lastBounds = { left: curX, top: curY, width: curW, height: curH };
-      }
-    }, 1500);
-
     // Track resize with debounce
     window.addEventListener('resize', () => {
-      if (_isRestoringBounds || _isInitialLoad || document.hidden) return;
+      if (_isRestoringBounds) return;
       clearTimeout(window._resTimer);
-      window._resTimer = setTimeout(saveWindowBounds, 250);
+      window._resTimer = setTimeout(saveWindowBounds, 200);
     });
 
     // Periodic poll for position changes (handling user dragging the window)
     setInterval(() => {
-      if (_isInitialLoad || _isRestoringBounds || document.hidden || document.visibilityState === 'hidden') return;
+      if (_isRestoringBounds) return;
       const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
       const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
       const width = Math.round(window.outerWidth || window.innerWidth);
@@ -432,24 +442,35 @@
       if (width < 250 || height < 200 || Math.abs(left) >= 10000 || Math.abs(top) >= 10000) return;
 
       if (!window._lastBounds ||
-          Math.abs(window._lastBounds.left - left) > 6 ||
-          Math.abs(window._lastBounds.top - top) > 6 ||
-          Math.abs(window._lastBounds.width - width) > 6 ||
-          Math.abs(window._lastBounds.height - height) > 6) {
+          Math.abs(window._lastBounds.left - left) > 4 ||
+          Math.abs(window._lastBounds.top - top) > 4 ||
+          Math.abs(window._lastBounds.width - width) > 4 ||
+          Math.abs(window._lastBounds.height - height) > 4) {
         saveWindowBounds();
       }
-    }, 400);
+    }, 250);
 
     window.addEventListener('beforeunload', () => {
-      if (!_isInitialLoad && !_isRestoringBounds && !document.hidden) {
-        saveWindowBounds();
-      }
+      saveWindowBounds();
       try {
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: POPUP_TYPE }, '*');
         }
       } catch (e) {}
       try { localStorage.setItem(`mm2e_${POPUP_TYPE}_docked`, Date.now().toString()); } catch (e) {}
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('mm2e_session_channel');
+          bc.postMessage({ type: 'GM_DOCKED' });
+          bc.postMessage({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
+      try {
+        if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+          SessionNetwork.sendLocalBroadcast({ type: 'GM_DOCKED' });
+          SessionNetwork.sendLocalBroadcast({ type: 'POPOUT_DOCKED' });
+        }
+      } catch (e) {}
       try {
         if (window.opener && !window.opener.closed && typeof window.opener[OPENER_REDOCK_FN] === 'function') {
           window.opener[OPENER_REDOCK_FN](false);

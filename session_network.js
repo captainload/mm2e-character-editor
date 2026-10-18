@@ -205,7 +205,11 @@
       case 'PARTY_BOUNDS_UPDATE':
         if (packet.bounds) {
           try {
-            localStorage.setItem('mm2e_party_display_bounds', JSON.stringify(packet.bounds));
+            if (typeof window.savePartyDisplayBoundsDirect === 'function') {
+              window.savePartyDisplayBoundsDirect(packet.bounds);
+            } else {
+              localStorage.setItem('mm2e_party_display_bounds', JSON.stringify(packet.bounds));
+            }
           } catch (e) {}
         }
         break;
@@ -213,7 +217,11 @@
       case 'TRACKER_BOUNDS_UPDATE':
         if (packet.bounds) {
           try {
-            localStorage.setItem('mm2e_tracker_bounds', JSON.stringify(packet.bounds));
+            if (typeof window.saveTrackerBoundsDirect === 'function') {
+              window.saveTrackerBoundsDirect(packet.bounds);
+            } else {
+              localStorage.setItem('mm2e_tracker_bounds', JSON.stringify(packet.bounds));
+            }
           } catch (e) {}
         }
         break;
@@ -221,7 +229,11 @@
       case 'TABLES_BOUNDS_UPDATE':
         if (packet.bounds) {
           try {
-            localStorage.setItem('mm2e_tables_bounds', JSON.stringify(packet.bounds));
+            if (typeof window.saveTablesBoundsDirect === 'function') {
+              window.saveTablesBoundsDirect(packet.bounds);
+            } else {
+              localStorage.setItem('mm2e_tables_bounds', JSON.stringify(packet.bounds));
+            }
           } catch (e) {}
         }
         break;
@@ -229,7 +241,11 @@
       case 'GM_BOUNDS_UPDATE':
         if (packet.bounds) {
           try {
-            localStorage.setItem('mm2e_gm_bounds', JSON.stringify(packet.bounds));
+            if (typeof window.saveGMBoundsDirect === 'function') {
+              window.saveGMBoundsDirect(packet.bounds);
+            } else {
+              localStorage.setItem('mm2e_gm_bounds', JSON.stringify(packet.bounds));
+            }
           } catch (e) {}
         }
         break;

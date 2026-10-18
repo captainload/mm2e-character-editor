@@ -218,6 +218,22 @@
         }
         break;
 
+      case 'TABLES_BOUNDS_UPDATE':
+        if (packet.bounds) {
+          try {
+            localStorage.setItem('mm2e_tables_bounds', JSON.stringify(packet.bounds));
+          } catch (e) {}
+        }
+        break;
+
+      case 'GM_BOUNDS_UPDATE':
+        if (packet.bounds) {
+          try {
+            localStorage.setItem('mm2e_gm_bounds', JSON.stringify(packet.bounds));
+          } catch (e) {}
+        }
+        break;
+
       case 'ROLL':
         // If received from remote peer, mark as not local
         if (source === 'p2p' && packet.roll) {

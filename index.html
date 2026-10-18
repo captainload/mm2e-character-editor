@@ -2419,9 +2419,9 @@
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=19"></script>
-  <script src="session_network.js?v=21"></script>
+  <script src="session_network.js?v=22"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=161"></script>
+  <script src="app.js?v=162"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
@@ -2431,7 +2431,7 @@
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=111').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=112').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

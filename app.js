@@ -2085,21 +2085,28 @@ function setupTablesPopout() {
       const saved = localStorage.getItem("mm2e_tables_bounds");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return sanitizeWindowBounds(parsed, fallback);
+        const res = sanitizeWindowBounds(parsed, fallback);
+        _cachedTablesBounds = res;
+        return res;
       }
     } catch (e) {}
+    if (typeof _cachedTablesBounds !== 'undefined' && _cachedTablesBounds && typeof _cachedTablesBounds === 'object') {
+      return { ..._cachedTablesBounds };
+    }
     return fallback;
   }
   window.getSavedTablesBounds = getSavedTablesBounds;
 
   function saveTablesBoundsFromRef(win) {
-    if (!win) return;
+    if (!win || win.closed) return;
     try {
+      if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
+          Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
         saveTablesBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
@@ -2124,14 +2131,16 @@ function setupTablesPopout() {
       return;
     }
     const bounds = getSavedTablesBounds();
-    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 160;
-    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 120;
+    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 160;
+    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 120;
     const openWidth = Math.max(350, Math.min(bounds.width || 920, 5000));
     let openHeight = Math.max(250, Math.min(bounds.height || 680, 5000));
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
+    const featureLeft = Math.max(0, Math.round(openLeft));
+    const featureTop = Math.max(0, Math.round(openTop));
+    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutTablesWindow = window.open(`tables_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
@@ -2807,17 +2816,27 @@ window.poppedOutTablesWindow = null;
 let poppedOutGMWindow = null;
 window.poppedOutGMWindow = null;
 
+// In-memory bounds cache for high-fidelity cross-origin / file:/// resilience
+let _cachedTrackerBounds = null;
+let _cachedPartyDisplayBounds = null;
+let _cachedTablesBounds = null;
+let _cachedGMBounds = null;
+
 // ================= POPOUT WINDOW BOUNDS & CROSS-ORIGIN BRIDGE =================
 function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120, top: 120 }) {
   if (!b || typeof b !== 'object') return { ...fallback };
   const width = Math.round(Number(b.width) || fallback.width);
   const height = Math.round(Number(b.height) || fallback.height);
-  const left = Math.round((b.left !== undefined && !isNaN(Number(b.left))) ? Number(b.left) : fallback.left);
-  const top = Math.round((b.top !== undefined && !isNaN(Number(b.top))) ? Number(b.top) : fallback.top);
+  const rawLeft = Number(b.left);
+  const rawTop = Number(b.top);
+  const isLeftValid = typeof rawLeft === 'number' && !isNaN(rawLeft) && Math.abs(rawLeft) < 10000;
+  const isTopValid = typeof rawTop === 'number' && !isNaN(rawTop) && Math.abs(rawTop) < 10000;
+  const left = isLeftValid ? Math.round(rawLeft) : fallback.left;
+  const top = isTopValid ? Math.round(rawTop) : fallback.top;
 
   return {
-    width: Math.max(350, width),
-    height: Math.max(250, height),
+    width: Math.max(350, Math.min(width, 5000)),
+    height: Math.max(250, Math.min(height, 5000)),
     left: left,
     top: top
   };
@@ -2826,6 +2845,7 @@ window.sanitizeWindowBounds = sanitizeWindowBounds;
 
 function saveTrackerBoundsDirect(b) {
   const sanitized = sanitizeWindowBounds(b, { width: 880, height: 660, left: 140, top: 140 });
+  _cachedTrackerBounds = sanitized;
   try {
     localStorage.setItem("mm2e_tracker_bounds", JSON.stringify(sanitized));
   } catch (e) {}
@@ -2834,6 +2854,7 @@ window.saveTrackerBoundsDirect = saveTrackerBoundsDirect;
 
 function savePartyDisplayBoundsDirect(b) {
   const sanitized = sanitizeWindowBounds(b, { width: 840, height: 480, left: 120, top: 120 });
+  _cachedPartyDisplayBounds = sanitized;
   try {
     localStorage.setItem("mm2e_party_display_bounds", JSON.stringify(sanitized));
   } catch (e) {}
@@ -2842,6 +2863,7 @@ window.savePartyDisplayBoundsDirect = savePartyDisplayBoundsDirect;
 
 function saveTablesBoundsDirect(b) {
   const sanitized = sanitizeWindowBounds(b, { width: 920, height: 680, left: 160, top: 120 });
+  _cachedTablesBounds = sanitized;
   try {
     localStorage.setItem("mm2e_tables_bounds", JSON.stringify(sanitized));
   } catch (e) {}
@@ -2850,6 +2872,7 @@ window.saveTablesBoundsDirect = saveTablesBoundsDirect;
 
 function saveGMBoundsDirect(b) {
   const sanitized = sanitizeWindowBounds(b, { width: 1100, height: 750, left: 100, top: 100 });
+  _cachedGMBounds = sanitized;
   try {
     localStorage.setItem("mm2e_gm_bounds", JSON.stringify(sanitized));
   } catch (e) {}
@@ -2862,16 +2885,16 @@ window.addEventListener('message', (event) => {
   const { type, key, bounds, popupType, action, args } = event.data;
 
   // Window bounds reporting from popout
-  if (type === 'MM2E_WINDOW_BOUNDS' && key && bounds) {
-    if (key === 'mm2e_tracker_bounds') {
+  if (type === 'MM2E_WINDOW_BOUNDS' && bounds) {
+    if (key === 'mm2e_tracker_bounds' || popupType === 'tracker') {
       saveTrackerBoundsDirect(bounds);
-    } else if (key === 'mm2e_party_display_bounds') {
+    } else if (key === 'mm2e_party_display_bounds' || popupType === 'party') {
       savePartyDisplayBoundsDirect(bounds);
-    } else if (key === 'mm2e_tables_bounds') {
+    } else if (key === 'mm2e_tables_bounds' || popupType === 'tables') {
       saveTablesBoundsDirect(bounds);
-    } else if (key === 'mm2e_gm_bounds') {
+    } else if (key === 'mm2e_gm_bounds' || popupType === 'gm') {
       saveGMBoundsDirect(bounds);
-    } else {
+    } else if (key) {
       try {
         const sanitized = sanitizeWindowBounds(bounds);
         localStorage.setItem(key, JSON.stringify(sanitized));
@@ -2880,10 +2903,22 @@ window.addEventListener('message', (event) => {
   }
 
   // Child requesting saved bounds
-  if (type === 'MM2E_REQ_BOUNDS' && key && event.source) {
+  if (type === 'MM2E_REQ_BOUNDS' && (key || popupType) && event.source) {
     try {
-      const saved = localStorage.getItem(key);
-      event.source.postMessage({ type: 'MM2E_RESP_BOUNDS', key, bounds: saved ? JSON.parse(saved) : null }, '*');
+      let b = null;
+      if (key === 'mm2e_tracker_bounds' || popupType === 'tracker') {
+        b = (typeof getSavedTrackerBounds === 'function') ? getSavedTrackerBounds() : _cachedTrackerBounds;
+      } else if (key === 'mm2e_party_display_bounds' || popupType === 'party') {
+        b = (typeof getSavedPartyDisplayBounds === 'function') ? getSavedPartyDisplayBounds() : _cachedPartyDisplayBounds;
+      } else if (key === 'mm2e_tables_bounds' || popupType === 'tables') {
+        b = (typeof getSavedTablesBounds === 'function') ? getSavedTablesBounds() : _cachedTablesBounds;
+      } else if (key === 'mm2e_gm_bounds' || popupType === 'gm') {
+        b = (typeof getSavedGMBounds === 'function') ? getSavedGMBounds() : _cachedGMBounds;
+      } else if (key) {
+        const saved = localStorage.getItem(key);
+        b = saved ? JSON.parse(saved) : null;
+      }
+      event.source.postMessage({ type: 'MM2E_RESP_BOUNDS', key: key || `mm2e_${popupType}_bounds`, bounds: b }, '*');
     } catch (e) {}
   }
 
@@ -2967,21 +3002,28 @@ function setupStatusTracker() {
         const saved = localStorage.getItem("mm2e_tracker_bounds");
         if (saved) {
           const parsed = JSON.parse(saved);
-          return sanitizeWindowBounds(parsed, fallback);
+          const res = sanitizeWindowBounds(parsed, fallback);
+          _cachedTrackerBounds = res;
+          return res;
         }
       } catch (e) {}
+      if (typeof _cachedTrackerBounds !== 'undefined' && _cachedTrackerBounds && typeof _cachedTrackerBounds === 'object') {
+        return { ..._cachedTrackerBounds };
+      }
       return fallback;
     }
     window.getSavedTrackerBounds = getSavedTrackerBounds;
 
     function saveTrackerBoundsFromRef(win) {
-      if (!win) return;
+      if (!win || win.closed) return;
       try {
+        if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
         const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
         const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
         const width = win.outerWidth || win.innerWidth;
         const height = win.outerHeight || win.innerHeight;
-        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
+            Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
           saveTrackerBoundsDirect({ left, top, width, height });
         }
       } catch (e) {}
@@ -3010,14 +3052,16 @@ function setupStatusTracker() {
         return;
       }
       const bounds = getSavedTrackerBounds();
-      const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 140;
-      const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 140;
+      const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 140;
+      const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 140;
       const openWidth = Math.max(350, Math.min(bounds.width || 880, 5000));
       let openHeight = Math.max(250, Math.min(bounds.height || 660, 5000));
       if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
         openHeight = Math.max(250, window.screen.availHeight - 40);
       }
-      const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
+      const featureLeft = Math.max(0, Math.round(openLeft));
+      const featureTop = Math.max(0, Math.round(openTop));
+      const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
@@ -6348,21 +6392,28 @@ function setupSessionAndGMHub() {
       const saved = localStorage.getItem("mm2e_party_display_bounds");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return sanitizeWindowBounds(parsed, fallback);
+        const res = sanitizeWindowBounds(parsed, fallback);
+        _cachedPartyDisplayBounds = res;
+        return res;
       }
     } catch (e) {}
+    if (typeof _cachedPartyDisplayBounds !== 'undefined' && _cachedPartyDisplayBounds && typeof _cachedPartyDisplayBounds === 'object') {
+      return { ..._cachedPartyDisplayBounds };
+    }
     return fallback;
   }
   window.getSavedPartyDisplayBounds = getSavedPartyDisplayBounds;
 
   function savePartyDisplayBoundsFromRef(win) {
-    if (!win) return;
+    if (!win || win.closed) return;
     try {
+      if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
+          Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
         savePartyDisplayBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
@@ -6379,14 +6430,16 @@ function setupSessionAndGMHub() {
     syncPartyRosterUI();
 
     const bounds = getSavedPartyDisplayBounds();
-    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 120;
-    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 120;
+    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 120;
+    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 120;
     const openWidth = Math.max(350, Math.min(bounds.width || 840, 5000));
     let openHeight = Math.max(250, Math.min(bounds.height || 480, 5000));
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
+    const featureLeft = Math.max(0, Math.round(openLeft));
+    const featureTop = Math.max(0, Math.round(openTop));
+    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
@@ -7411,21 +7464,28 @@ function setupSessionAndGMHub() {
       const saved = localStorage.getItem("mm2e_gm_bounds");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return sanitizeWindowBounds(parsed, fallback);
+        const res = sanitizeWindowBounds(parsed, fallback);
+        _cachedGMBounds = res;
+        return res;
       }
     } catch (e) {}
+    if (typeof _cachedGMBounds !== 'undefined' && _cachedGMBounds && typeof _cachedGMBounds === 'object') {
+      return { ..._cachedGMBounds };
+    }
     return fallback;
   }
   window.getSavedGMBounds = getSavedGMBounds;
 
   function saveGMBoundsFromRef(win) {
-    if (!win) return;
+    if (!win || win.closed) return;
     try {
+      if (win.document && (win.document.hidden || win.document.visibilityState === 'hidden')) return;
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
+          Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
         saveGMBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
@@ -7454,14 +7514,16 @@ function setupSessionAndGMHub() {
       return;
     }
     const bounds = getSavedGMBounds();
-    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 100;
-    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 100;
+    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 100;
+    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 100;
     const openWidth = Math.max(350, Math.min(bounds.width || 1100, 5000));
     let openHeight = Math.max(250, Math.min(bounds.height || 750, 5000));
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
+    const featureLeft = Math.max(0, Math.round(openLeft));
+    const featureTop = Math.max(0, Math.round(openTop));
+    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutGMWindow = window.open(`gm_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
     window.poppedOutGMWindow = poppedOutGMWindow;

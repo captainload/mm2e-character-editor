@@ -2603,69 +2603,54 @@ function postRollToDiscordWebhook(roll) {
   const activeWh = getActiveDiscordWebhook();
   if (!activeWh || !activeWh.url) return;
 
-  // Formatting Discord Embed
-  let embedColor = 0x3B82F6; // Default Blue
-  if (roll.isNat20) embedColor = 0x10B981; // Green
-  else if (roll.isNat1) embedColor = 0xEF4444; // Red
-  else if (roll.isHPRerolled) embedColor = 0x8B5CF6; // Purple
+  const heroName = (roll.characterName || 'Hero').trim();
+  const cleanRollType = (roll.rollType || roll.title || 'Check')
+    .replace(/^🎲\s*/, '')
+    .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+    .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+    .trim() || 'Check';
 
-  let titleDesc = "";
-  if (roll.isNat20) titleDesc += "🌟 **NATURAL 20!**\n";
-  if (roll.isNat1) titleDesc += "⚠️ **NATURAL 1!**\n";
-  if (roll.isHPRerolled) titleDesc += "💎 **HERO POINT REROLL!**\n";
-  titleDesc += `**Total:** \` ${roll.total !== undefined ? roll.total : '—'} \``;
+  const firstRow = `${heroName} — ${cleanRollType}`;
 
-  const fields = [];
-  if (roll.breakdown || (roll.rolls && roll.rolls.length > 0)) {
-    fields.push({
-      name: "🎲 Breakdown",
-      value: roll.breakdown || (roll.rolls ? roll.rolls.join(", ") : ""),
-      inline: true
-    });
+  let secondRow = '';
+  if (roll.breakdown) {
+    const rawBreakdown = String(roll.breakdown).trim();
+    const eqIdx = rawBreakdown.lastIndexOf('=');
+    if (eqIdx !== -1) {
+      const formulaPart = rawBreakdown.substring(0, eqIdx).trim();
+      const afterEq = rawBreakdown.substring(eqIdx + 1).trim();
+      const totalStr = (roll.total !== undefined && roll.total !== null) ? String(roll.total).trim() : '';
+      if (totalStr && afterEq.startsWith(totalStr)) {
+        const rest = afterEq.substring(totalStr.length).trim();
+        secondRow = `${formulaPart} = **${totalStr}**${rest ? ' ' + rest : ''}`;
+      } else if (totalStr) {
+        secondRow = `${formulaPart} = **${totalStr}**`;
+      } else {
+        secondRow = `${formulaPart} = **${afterEq}**`;
+      }
+    } else {
+      const totalStr = (roll.total !== undefined && roll.total !== null) ? String(roll.total).trim() : '';
+      secondRow = totalStr ? `${rawBreakdown} = **${totalStr}**` : rawBreakdown;
+    }
+  } else if (roll.rolls && roll.rolls.length > 0) {
+    const totalStr = (roll.total !== undefined && roll.total !== null) ? String(roll.total).trim() : '';
+    secondRow = totalStr ? `${roll.rolls.join(' + ')} = **${totalStr}**` : roll.rolls.join(' + ');
+  } else if (roll.total !== undefined && roll.total !== null) {
+    secondRow = `**${roll.total}**`;
+  } else {
+    secondRow = '—';
   }
-  if (roll.targetDc !== null && roll.targetDc !== undefined) {
-    fields.push({
-      name: "🎯 Target DC",
-      value: `DC ${roll.targetDc}`,
-      inline: true
-    });
-  }
+
   if (roll.result) {
-    fields.push({
-      name: "📊 Outcome",
-      value: String(roll.result),
-      inline: true
-    });
-  }
-  if (roll.rerollInfo) {
-    fields.push({
-      name: "🔄 Reroll Detail",
-      value: String(roll.rerollInfo),
-      inline: false
-    });
-  }
-  if (roll.hpAnnouncement) {
-    fields.push({
-      name: "✨ Hero Point Announcement",
-      value: String(roll.hpAnnouncement),
-      inline: false
-    });
+    const resStr = String(roll.result).trim();
+    if (resStr) {
+      secondRow += ` (${resStr})`;
+    }
   }
 
   const payload = {
     username: "MM2CG Dice Roller",
-    embeds: [
-      {
-        title: `${roll.characterName || 'Hero'} — ${roll.rollType || 'Check'}`,
-        description: titleDesc,
-        color: embedColor,
-        fields: fields,
-        footer: {
-          text: `Rolled by ${roll.playerName || 'Player'} • Mutants & Masterminds 2e`
-        },
-        timestamp: roll.timestamp || new Date().toISOString()
-      }
-    ]
+    content: `${firstRow}\n${secondRow}`
   };
 
   fetch(activeWh.url, {

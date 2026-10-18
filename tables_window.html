@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MM2CG — Reference Tables & Benchmarks</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css?v=72">
+  <script>
+    (function() {
+      function getActiveTheme() {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlTheme = urlParams.get("theme");
+          if (urlTheme) return urlTheme;
+        } catch (e) {}
+        try {
+          if (window.opener && !window.opener.closed && window.opener.document && window.opener.document.documentElement) {
+            const openerTheme = window.opener.document.documentElement.getAttribute("data-theme");
+            if (openerTheme) return openerTheme;
+          }
+        } catch (e) {}
+        try {
+          const savedTheme = localStorage.getItem("mm2e_theme");
+          if (savedTheme) return savedTheme;
+        } catch (e) {}
+        return "light";
+      }
+
+      function applySavedThemeAndFonts() {
+        const root = document.documentElement;
+        const theme = getActiveTheme();
+        root.setAttribute("data-theme", theme);
+        if (document.body) document.body.setAttribute("data-theme", theme);
+
+        let savedLabelFont = 16, savedControlFont = 14, savedTagFont = 13, savedSecondaryFont = 14, savedMinorControlFont = 15, savedFinePrintFont = 13;
+        try {
+          savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || "16", 10));
+          savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || "14", 10));
+          savedTagFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_tags") || "13", 10));
+          savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || "14", 10));
+          savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || "15", 10));
+          savedFinePrintFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+        } catch (e) {}
+
+        root.style.setProperty("--font-size-labels", savedLabelFont + "px");
+        root.style.setProperty("--font-size-controls", savedControlFont + "px");
+        root.style.setProperty("--font-size-tags", savedTagFont + "px");
+        root.style.setProperty("--font-size-links", savedTagFont + "px");
+        root.style.setProperty("--font-size-secondary", savedSecondaryFont + "px");
+        root.style.setProperty("--font-size-minor-controls", savedMinorControlFont + "px");
+        root.style.setProperty("--font-size-fine-print", savedFinePrintFont + "px");
+      }
+      applySavedThemeAndFonts();
+      window.__applySavedThemeAndFonts = applySavedThemeAndFonts;
+      window.addEventListener("DOMContentLoaded", applySavedThemeAndFonts);
+    })();
+  </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 12px 16px;
+      background: var(--bg-app);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      box-sizing: border-box;
+      min-width: 320px;
+    }
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      flex-wrap: wrap;
+    }
+    .reference-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-secondary);
+    }
+    .reference-table th, .reference-table td {
+      padding: 5px 8px;
+      border-top: 1px solid var(--border-color);
+      text-align: left;
+    }
+    .reference-table th {
+      background: var(--bg-card);
+      font-weight: 700;
+      color: var(--text-muted);
+      border-top: none;
+    }
+    .collapsible-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .collapsible-panel .panel-header {
+      padding: 8px 12px;
+      background: var(--bg-card);
+      font-weight: 700;
+      font-size: var(--font-size-labels);
+      color: var(--accent-primary);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    .collapsible-panel .panel-header:hover {
+      background: var(--border-color);
+    }
+    .collapsible-panel.collapsed .panel-body {
+      display: none;
+    }
+    .collapsible-panel .panel-body {
+      padding: 10px 12px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sticky Top Header -->
+  <div class="sticky-header">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <h2 style="margin: 0; font-size: calc(var(--font-size-labels) * 1.15); color: var(--accent-primary); display: flex; align-items: center; gap: 8px;">
+        📊 Reference Tables &amp; Benchmarks
+      </h2>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 400px; margin: 0 8px;">
+      <input type="text" id="txtTableFilter" placeholder="🔍 Filter tables (e.g. carry, speed, dc, dazed)..." style="width: 100%; height: 28px; font-size: var(--font-size-minor-controls); padding: 2px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-main);">
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button type="button" class="btn btn-secondary" id="btnExpandAllTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls);">Expand All</button>
+      <button type="button" class="btn btn-secondary" id="btnCollapseAllTables" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls);">Collapse All</button>
+      <button type="button" class="btn btn-secondary" id="btnRedockTablesWindow" style="font-weight: 600; font-size: var(--font-size-controls); height: 28px; padding: 0 12px; color: var(--accent-primary);">
+        ⬅ Re-dock
+      </button>
+    </div>
+  </div>
+
+  <div id="tablesContainer">
+    <!-- Measurements Table -->
+    <div class="collapsible-panel" id="panelMeasurements">
+      <div class="panel-header">
+        <span>Measurements Table &amp; Benchmarks (pg 11-12)</span>
+        <span class="indicator">▲</span>
+      </div>
+      <div class="panel-body">
+        <table id="measurementsViewTable" class="reference-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Time</th>
+              <th>Value / Distance</th>
+              <th>Extended Range</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Carrying Capacity -->
+    <div class="collapsible-panel" id="panelCarryingCapacity">
+      <div class="panel-header">
+        <span>Carrying Capacity (pg 33)</span>
+        <span class="indicator">▲</span>
+      </div>
+      <div class="panel-body">
+        <table id="carryingCapacityViewTable" class="reference-table">
+          <thead>
+            <tr>
+              <th>Strength</th>
+              <th>Light Load</th>
+              <th>Medium Load</th>
+              <th>Heavy Load</th>
+              <th>Max Load</th>
+              <th>Push / Drag</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Size Categories -->
+    <div class="collapsible-panel collapsed" id="panelSizeCategories">
+      <div class="panel-header">
+        <span>Size Categories &amp; Modifiers (pg 34)</span>
+        <span class="indicator">▼</span>
+      </div>
+      <div class="panel-body">
+        <table class="reference-table">
+          <thead>
+            <tr>
+              <th>Size</th>
+              <th>Attack/Defense</th>
+              <th>Grapple</th>
+              <th>Stealth</th>
+              <th>Intimidation</th>
+              <th>Carrying Capacity</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Colossal</td><td>-8</td><td>+16</td><td>-16</td><td>+8</td><td>x100</td></tr>
+            <tr><td>Gargantuan</td><td>-4</td><td>+12</td><td>-12</td><td>+6</td><td>x25</td></tr>
+            <tr><td>Huge</td><td>-2</td><td>+8</td><td>-8</td><td>+4</td><td>x5</td></tr>
+            <tr><td>Large</td><td>-1</td><td>+4</td><td>-4</td><td>+2</td><td>x2</td></tr>
+            <tr><td>Medium</td><td>+0</td><td>+0</td><td>+0</td><td>+0</td><td>x1</td></tr>
+            <tr><td>Small</td><td>+1</td><td>-4</td><td>+4</td><td>-2</td><td>x3/4</td></tr>
+            <tr><td>Tiny</td><td>+2</td><td>-8</td><td>+8</td><td>-4</td><td>x1/2</td></tr>
+            <tr><td>Diminutive</td><td>+4</td><td>-12</td><td>+12</td><td>-6</td><td>x1/4</td></tr>
+            <tr><td>Fine</td><td>+8</td><td>-16</td><td>+16</td><td>-8</td><td>x1/8</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Material Toughness -->
+    <div class="collapsible-panel collapsed" id="panelMaterialToughness">
+      <div class="panel-header">
+        <span>Material Toughness (pg 197)</span>
+        <span class="indicator">▼</span>
+      </div>
+      <div class="panel-body">
+        <table class="reference-table">
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Toughness Rank</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Paper / Soil</td><td>0</td></tr>
+            <tr><td>Glass / Ice</td><td>1</td></tr>
+            <tr><td>Wood</td><td>3</td></tr>
+            <tr><td>Stone</td><td>5</td></tr>
+            <tr><td>Iron</td><td>7</td></tr>
+            <tr><td>Steel</td><td>9</td></tr>
+            <tr><td>Titanium</td><td>15</td></tr>
+            <tr><td>Super-Alloys</td><td>20+</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Power Level Limits -->
+    <div class="collapsible-panel collapsed" id="panelPLLimits">
+      <div class="panel-header">
+        <span>Power Level Limits (pg 44)</span>
+        <span class="indicator">▼</span>
+      </div>
+      <div class="panel-body">
+        <table id="plLimitsViewTable" class="reference-table">
+          <thead>
+            <tr>
+              <th>Power Level</th>
+              <th>Skill Modifier</th>
+              <th>Attack + Effect</th>
+              <th>Defense + Toughness</th>
+              <th>Fortitude + Will</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Difficulty Classes -->
+    <div class="collapsible-panel collapsed" id="panelDCs">
+      <div class="panel-header">
+        <span>Difficulty Classes (DCs) &amp; Routine Checks (pg 14)</span>
+        <span class="indicator">▼</span>
+      </div>
+      <div class="panel-body">
+        <table class="reference-table">
+          <thead>
+            <tr>
+              <th>Difficulty</th>
+              <th>DC</th>
+              <th>Example (Skill Check)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Routine</strong> (Take 10)</td><td>Base 10</td><td>Result = 10 + Skill Bonus. Stress-free conditions.</td></tr>
+            <tr><td><strong>Easy</strong></td><td>10</td><td>Climbing a knotted rope.</td></tr>
+            <tr><td><strong>Average</strong></td><td>15</td><td>Hearing an approaching guard.</td></tr>
+            <tr><td><strong>Hard</strong></td><td>20</td><td>Disarming a complex explosive.</td></tr>
+            <tr><td><strong>Formidable</strong></td><td>25</td><td>Hacking a secure military server.</td></tr>
+            <tr><td><strong>Heroic</strong></td><td>30</td><td>Out-maneuvering a seasoned fighter pilot.</td></tr>
+            <tr><td><strong>Superhuman</strong></td><td>40</td><td>Tracking a speedster across the globe.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Conditions Summary -->
+    <div class="collapsible-panel collapsed" id="panelConditions">
+      <div class="panel-header">
+        <span>Conditions Summary (pg 24)</span>
+        <span class="indicator">▼</span>
+      </div>
+      <div class="panel-body">
+        <table class="reference-table">
+          <thead>
+            <tr>
+              <th>Condition</th>
+              <th>Mechanical Effect</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Dazed</strong></td><td>Can only take a standard action per turn (no move action).</td></tr>
+            <tr><td><strong>Stunned</strong></td><td>Cannot take any actions (including free actions).</td></tr>
+            <tr><td><strong>Incapacitated</strong></td><td>Defenseless, Stunned, and Unaware. Usually knocked out.</td></tr>
+            <tr><td><strong>Hindered</strong></td><td>Move at half normal speed (-1 speed rank).</td></tr>
+            <tr><td><strong>Immobile</strong></td><td>Cannot move from current location (speed rank is 0).</td></tr>
+            <tr><td><strong>Defenseless</strong></td><td>Active Defense is 0. Attackers can take routine checks.</td></tr>
+            <tr><td><strong>Impaired</strong></td><td>−2 penalty on all checks.</td></tr>
+            <tr><td><strong>Disabled</strong></td><td>−5 penalty on all checks.</td></tr>
+            <tr><td><strong>Vulnerable</strong></td><td>Lose Dodge bonus to Defense.</td></tr>
+            <tr><td><strong>Compelled</strong></td><td>Can take one standard action chosen by another character.</td></tr>
+            <tr><td><strong>Controlled</strong></td><td>Another character dictates all your actions.</td></tr>
+            <tr><td><strong>Unaware</strong></td><td>Completely unaware of surroundings; auto-fail awareness checks.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions Table -->
+    <div class="collapsible-panel collapsed" id="panelActions">
+      <div class="panel-header">
+        <span>Actions (pg 201)</span>
+        <span class="indicator">▼</span>
+      </div>
+      <div class="panel-body">
+        <table id="actionsViewTable" class="reference-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Type</th>
+              <th>Check</th>
+              <th>Effect</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="data_measurements.js?v=8"></script>
+  <script src="character_model.js?v=31"></script>
+  <script>
+    const STORAGE_KEY_BOUNDS = 'mm2e_tables_bounds';
+    const POPUP_TYPE = 'tables';
+    const OPENER_BOUNDS_FN = 'saveTablesBoundsDirect';
+    const OPENER_REDOCK_FN = 'redockTables';
+
+    function getInitialBounds() {
+      const fallback = { width: 920, height: 680, left: 160, top: 120 };
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200) {
+            return {
+              width: Math.round(b.width),
+              height: Math.round(b.height),
+              left: (typeof b.left === 'number' && !isNaN(b.left)) ? Math.round(b.left) : fallback.left,
+              top: (typeof b.top === 'number' && !isNaN(b.top)) ? Math.round(b.top) : fallback.top
+            };
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const urlW = parseInt(p.get('w'), 10);
+        const urlH = parseInt(p.get('h'), 10);
+        const urlX = parseInt(p.get('x'), 10);
+        const urlY = parseInt(p.get('y'), 10);
+        if (urlW >= 250 && urlH >= 200) {
+          return {
+            width: urlW,
+            height: urlH,
+            left: !isNaN(urlX) ? urlX : fallback.left,
+            top: !isNaN(urlY) ? urlY : fallback.top
+          };
+        }
+      } catch (e) {}
+
+      return fallback;
+    }
+
+    let _isInitialLoad = true;
+    setTimeout(() => { _isInitialLoad = false; }, 1200);
+    let _isRestoringBounds = false;
+    window._lastBounds = getInitialBounds();
+
+    function redockTablesWindow() {
+      saveWindowBounds();
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: POPUP_TYPE }, '*');
+        }
+      } catch (e) {}
+      try {
+        localStorage.setItem(`mm2e_${POPUP_TYPE}_docked`, Date.now().toString());
+      } catch (e) {}
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener[OPENER_REDOCK_FN] === 'function') {
+          window.opener[OPENER_REDOCK_FN](false);
+          try { window.opener.focus(); } catch (e) {}
+        }
+      } catch (e) {}
+      try { window.close(); } catch (e) {}
+    }
+    window.redockTablesWindow = redockTablesWindow;
+
+    const btnRedock = document.getElementById('btnRedockTablesWindow');
+    if (btnRedock) btnRedock.addEventListener('click', redockTablesWindow);
+
+    function saveWindowBounds() {
+      try {
+        const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+        const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+        const width = Math.round(window.outerWidth || window.innerWidth);
+        const height = Math.round(window.outerHeight || window.innerHeight);
+
+        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+          const bounds = { left, top, width, height };
+          try { localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds)); } catch (e) {}
+          try {
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage({ type: 'MM2E_WINDOW_BOUNDS', key: STORAGE_KEY_BOUNDS, popupType: POPUP_TYPE, bounds }, '*');
+            }
+          } catch (e) {}
+          try {
+            if (window.opener && !window.opener.closed && typeof window.opener[OPENER_BOUNDS_FN] === 'function') {
+              window.opener[OPENER_BOUNDS_FN](bounds);
+            }
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    window.saveWindowBounds = saveWindowBounds;
+
+    function restoreWindowBounds() {
+      try {
+        const b = getInitialBounds();
+        if (!b) return;
+        _isRestoringBounds = true;
+        try {
+          if (typeof b.left === 'number' && typeof b.top === 'number') {
+            window.moveTo(b.left, b.top);
+          }
+          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 250 && b.height >= 200) {
+            window.resizeTo(b.width, b.height);
+          }
+        } catch (e) {}
+        setTimeout(() => {
+          _isRestoringBounds = false;
+          const curX = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+          const curY = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+          const curW = Math.round(window.outerWidth || window.innerWidth);
+          const curH = Math.round(window.outerHeight || window.innerHeight);
+          window._lastBounds = { left: curX, top: curY, width: curW, height: curH };
+        }, 500);
+      } catch (e) {
+        _isRestoringBounds = false;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => { setTimeout(restoreWindowBounds, 50); });
+    window.addEventListener('load', restoreWindowBounds);
+
+    window.addEventListener('resize', () => {
+      if (_isRestoringBounds || _isInitialLoad) return;
+      clearTimeout(window._resTimer);
+      window._resTimer = setTimeout(saveWindowBounds, 250);
+    });
+
+    setInterval(() => {
+      if (_isInitialLoad || _isRestoringBounds) return;
+      const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+      const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+      const width = Math.round(window.outerWidth || window.innerWidth);
+      const height = Math.round(window.outerHeight || window.innerHeight);
+      if (width < 250 || height < 200) return;
+      if (!window._lastBounds ||
+          Math.abs(window._lastBounds.left - left) > 4 ||
+          Math.abs(window._lastBounds.top - top) > 4 ||
+          Math.abs(window._lastBounds.width - width) > 4 ||
+          Math.abs(window._lastBounds.height - height) > 4) {
+        window._lastBounds = { left, top, width, height };
+        saveWindowBounds();
+      }
+    }, 500);
+
+    window.addEventListener('beforeunload', () => {
+      saveWindowBounds();
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: POPUP_TYPE }, '*');
+        }
+      } catch (e) {}
+      try { localStorage.setItem(`mm2e_${POPUP_TYPE}_docked`, Date.now().toString()); } catch (e) {}
+      try {
+        if (window.opener && !window.opener.closed && typeof window.opener[OPENER_REDOCK_FN] === 'function') {
+          window.opener[OPENER_REDOCK_FN](false);
+        }
+      } catch (e) {}
+    });
+
+    // Populate Dynamic Tables
+    function buildDynamicTables() {
+      // Measurements Table
+      const mBody = document.querySelector("#measurementsViewTable tbody");
+      if (mBody && typeof MEASUREMENT_TABLE !== 'undefined') {
+        let mHtml = "";
+        for (let i = 1; i <= 30; i++) {
+          const data = MEASUREMENT_TABLE[i.toString()];
+          if (data) {
+            mHtml += `
+              <tr>
+                <td><strong>Rank ${i}</strong></td>
+                <td>${data.time || ''}</td>
+                <td>${data.dist_imp || ''}</td>
+                <td>${data.ext_range || ''}</td>
+              </tr>
+            `;
+          }
+        }
+        mBody.innerHTML = mHtml;
+      }
+
+      // Carrying Capacity
+      const ccBody = document.querySelector("#carryingCapacityViewTable tbody");
+      if (ccBody && typeof CharacterModel !== 'undefined') {
+        let ccHtml = "";
+        for (let str = 1; str <= 30; str++) {
+          const heavyLbs = CharacterModel.getProgressionValue(str) * 5;
+          const heavyStr = CharacterModel.formatWeight(heavyLbs);
+          const lightStr = CharacterModel.formatWeight(heavyLbs / 3);
+          const medStr = CharacterModel.formatWeight((heavyLbs * 2) / 3);
+          const maxStr = CharacterModel.formatWeight(heavyLbs * 2);
+          const pushStr = CharacterModel.formatWeight(heavyLbs * 5);
+          ccHtml += `
+            <tr>
+              <td><strong>STR ${str}</strong></td>
+              <td>${lightStr}</td>
+              <td>${medStr}</td>
+              <td>${heavyStr}</td>
+              <td>${maxStr}</td>
+              <td>${pushStr}</td>
+            </tr>
+          `;
+        }
+        ccBody.innerHTML = ccHtml;
+      }
+
+      // PL Limits
+      const plBody = document.querySelector("#plLimitsViewTable tbody");
+      if (plBody) {
+        let plHtml = "";
+        for (let pl = 1; pl <= 20; pl++) {
+          plHtml += `
+            <tr>
+              <td><strong>PL ${pl}</strong></td>
+              <td>${pl + 5}</td>
+              <td>Total ${pl * 2}</td>
+              <td>Total ${pl * 2}</td>
+              <td>Total ${pl * 2}</td>
+            </tr>
+          `;
+        }
+        plBody.innerHTML = plHtml;
+      }
+
+      // Actions Table
+      const aBody = document.querySelector("#actionsViewTable tbody");
+      if (aBody && window.opener && window.opener.ACTIONS_TABLE) {
+        aBody.innerHTML = window.opener.ACTIONS_TABLE.map(act => `
+          <tr>
+            <td><strong>${act.name}</strong></td>
+            <td>${act.type}</td>
+            <td>${act.check}</td>
+            <td>${act.effect}</td>
+          </tr>
+        `).join('');
+      } else if (aBody) {
+        aBody.innerHTML = `
+          <tr><td><strong>Aid Another</strong></td><td>Standard</td><td>Attack or Skill</td><td>Grant +2 bonus to ally</td></tr>
+          <tr><td><strong>Attack</strong></td><td>Standard</td><td>Attack Roll vs Defense</td><td>Inflict damage or power effect</td></tr>
+          <tr><td><strong>Charge</strong></td><td>Full</td><td>Attack Roll (+2 attack, -2 defense)</td><td>Move full speed in straight line and attack</td></tr>
+          <tr><td><strong>Defend</strong></td><td>Standard</td><td>Active Defense Check</td><td>Replace Defense with 1d20 + Defense if higher</td></tr>
+          <tr><td><strong>Demoralize</strong></td><td>Standard</td><td>Intimidate vs Will</td><td>Target shaken (-2 on checks)</td></tr>
+          <tr><td><strong>Disarm</strong></td><td>Standard</td><td>Attack vs Defense + Opposed Check</td><td>Knock weapon/item from target's grip</td></tr>
+          <tr><td><strong>Escape</strong></td><td>Standard</td><td>Grapple Check or Acrobatics</td><td>Break free from pin or hold</td></tr>
+          <tr><td><strong>Feint</strong></td><td>Standard</td><td>Bluff vs Sense Motive</td><td>Deny target Dodge bonus on next attack</td></tr>
+          <tr><td><strong>Grapple</strong></td><td>Standard</td><td>Melee Attack + Opposed Grapple Check</td><td>Grab, hold, or pin opponent</td></tr>
+          <tr><td><strong>Move</strong></td><td>Move</td><td>None</td><td>Move speed rank distance</td></tr>
+          <tr><td><strong>Ready</strong></td><td>Standard</td><td>Triggered</td><td>Prepare an action to trigger on a condition</td></tr>
+          <tr><td><strong>Smash</strong></td><td>Standard</td><td>Attack Roll vs Defense</td><td>Damage an inanimate object or device</td></tr>
+          <tr><td><strong>Stand</strong></td><td>Move</td><td>None (or Acrobatics DC 20 as Free)</td><td>Stand up from prone</td></tr>
+          <tr><td><strong>Trip</strong></td><td>Standard</td><td>Melee Attack + Opposed Trip Check</td><td>Knock opponent prone</td></tr>
+        `;
+      }
+    }
+
+    // Collapsible Panels Toggle
+    document.querySelectorAll(".collapsible-panel .panel-header").forEach(header => {
+      header.addEventListener("click", () => {
+        const panel = header.parentElement;
+        panel.classList.toggle("collapsed");
+        const ind = header.querySelector(".indicator");
+        if (ind) ind.textContent = panel.classList.contains("collapsed") ? "▼" : "▲";
+      });
+    });
+
+    document.getElementById("btnExpandAllTables")?.addEventListener("click", () => {
+      document.querySelectorAll(".collapsible-panel").forEach(p => {
+        p.classList.remove("collapsed");
+        const ind = p.querySelector(".indicator");
+        if (ind) ind.textContent = "▲";
+      });
+    });
+
+    document.getElementById("btnCollapseAllTables")?.addEventListener("click", () => {
+      document.querySelectorAll(".collapsible-panel").forEach(p => {
+        p.classList.add("collapsed");
+        const ind = p.querySelector(".indicator");
+        if (ind) ind.textContent = "▼";
+      });
+    });
+
+    // Table Filter Search
+    document.getElementById("txtTableFilter")?.addEventListener("input", (e) => {
+      const q = (e.target.value || '').toLowerCase().trim();
+      document.querySelectorAll(".collapsible-panel").forEach(panel => {
+        if (!q) {
+          panel.style.display = "";
+          panel.querySelectorAll("tbody tr").forEach(tr => tr.style.display = "");
+          return;
+        }
+        const title = panel.querySelector(".panel-header span")?.textContent.toLowerCase() || "";
+        const rows = panel.querySelectorAll("tbody tr");
+        let hasMatch = title.includes(q);
+        rows.forEach(tr => {
+          const match = tr.textContent.toLowerCase().includes(q);
+          tr.style.display = match ? "" : "none";
+          if (match) hasMatch = true;
+        });
+        panel.style.display = hasMatch ? "" : "none";
+        if (hasMatch) {
+          panel.classList.remove("collapsed");
+          const ind = panel.querySelector(".indicator");
+          if (ind) ind.textContent = "▲";
+        }
+      });
+    });
+
+    buildDynamicTables();
+  </script>
+</body>
+</html>

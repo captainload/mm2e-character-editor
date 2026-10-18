@@ -1045,6 +1045,9 @@ window.showDiceRollModal = function(config) {
     SessionNetwork.sendRoll(rollEntry);
   } else if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
     CampaignManager.addLogEntry(rollEntry);
+    if (typeof postRollToDiscordWebhook === 'function') {
+      postRollToDiscordWebhook(rollEntry);
+    }
   }
   if (typeof window.updateSidebarLastRoll === 'function') {
     window.updateSidebarLastRoll(rollEntry);
@@ -1950,6 +1953,10 @@ function setupTabs() {
       document.body.classList.remove("session-tab-active");
       if (tablesContent) tablesContent.classList.add("active");
 
+      if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
+        try { poppedOutTablesWindow.focus(); } catch (e) {}
+      }
+
       // Reset tracker & GM state
       const trackerContent = document.getElementById("tab-tracker");
       if (trackerContent) trackerContent.classList.remove("active");
@@ -2069,6 +2076,116 @@ function setupTabs() {
   }
 }
 window.setupTabs = setupTabs;
+
+// ================= REFERENCE TABLES POPOUT CONTROLLER =================
+function setupTablesPopout() {
+  function getSavedTablesBounds() {
+    const fallback = { width: 920, height: 680, left: 160, top: 120 };
+    try {
+      const saved = localStorage.getItem("mm2e_tables_bounds");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return sanitizeWindowBounds(parsed, fallback);
+      }
+    } catch (e) {}
+    return fallback;
+  }
+  window.getSavedTablesBounds = getSavedTablesBounds;
+
+  function saveTablesBoundsFromRef(win) {
+    if (!win) return;
+    try {
+      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
+      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const width = win.outerWidth || win.innerWidth;
+      const height = win.outerHeight || win.innerHeight;
+      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+        saveTablesBoundsDirect({ left, top, width, height });
+      }
+    } catch (e) {}
+  }
+  window.saveTablesBoundsFromRef = saveTablesBoundsFromRef;
+
+  function updateTablesDockMode(isPoppedOut) {
+    const boxNotice = document.getElementById("boxPoppedOutTablesNotice");
+    const dockBody = document.getElementById("tablesDockableBody");
+    const btnPop = document.getElementById("btnPopoutTables");
+
+    if (boxNotice) boxNotice.style.display = isPoppedOut ? "flex" : "none";
+    if (dockBody) dockBody.style.display = isPoppedOut ? "none" : "";
+    if (btnPop) btnPop.style.display = isPoppedOut ? "none" : "";
+  }
+  window.updateTablesDockMode = updateTablesDockMode;
+
+  function openTablesPopout() {
+    if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
+      try { poppedOutTablesWindow.focus(); } catch (e) {}
+      updateTablesDockMode(true);
+      return;
+    }
+    const bounds = getSavedTablesBounds();
+    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 160;
+    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 120;
+    const openWidth = Math.max(350, Math.min(bounds.width || 920, 5000));
+    let openHeight = Math.max(250, Math.min(bounds.height || 680, 5000));
+    if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
+      openHeight = Math.max(250, window.screen.availHeight - 40);
+    }
+    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
+    const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
+    poppedOutTablesWindow = window.open(`tables_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
+    window.poppedOutTablesWindow = poppedOutTablesWindow;
+    updateTablesDockMode(true);
+
+    setTimeout(() => {
+      try {
+        if (poppedOutTablesWindow && !poppedOutTablesWindow.closed && poppedOutTablesWindow.document) {
+          poppedOutTablesWindow.document.documentElement.setAttribute("data-theme", currentTheme);
+          if (poppedOutTablesWindow.document.body) poppedOutTablesWindow.document.body.setAttribute("data-theme", currentTheme);
+          if (typeof poppedOutTablesWindow.__applySavedThemeAndFonts === 'function') {
+            poppedOutTablesWindow.__applySavedThemeAndFonts();
+          }
+        }
+      } catch (e) {}
+    }, 150);
+  }
+  window.openTablesPopout = openTablesPopout;
+
+  function redockTables(closeRef = true) {
+    if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
+      saveTablesBoundsFromRef(poppedOutTablesWindow);
+      if (closeRef) {
+        try { poppedOutTablesWindow.close(); } catch (e) {}
+      }
+    }
+    poppedOutTablesWindow = null;
+    window.poppedOutTablesWindow = null;
+    updateTablesDockMode(false);
+  }
+  window.redockTables = redockTables;
+
+  const btnPopoutTables = document.getElementById("btnPopoutTables");
+  const btnRedockTablesBtn = document.getElementById("btnRedockTables");
+  if (btnPopoutTables) btnPopoutTables.addEventListener("click", openTablesPopout);
+  if (btnRedockTablesBtn) btnRedockTablesBtn.addEventListener("click", () => redockTables(true));
+
+  window.addEventListener('focus', () => {
+    if (poppedOutTablesWindow && poppedOutTablesWindow.closed) {
+      redockTables(false);
+    }
+  });
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'mm2e_tables_docked') {
+      redockTables(false);
+    }
+  });
+  setInterval(() => {
+    if (poppedOutTablesWindow && poppedOutTablesWindow.closed) {
+      redockTables(false);
+    }
+  }, 400);
+}
+setupTablesPopout();
 
 function setupCollapsibles() {
   document.querySelectorAll(".panel-header").forEach(header => {
@@ -2218,10 +2335,37 @@ function setupOptionsModal() {
     });
   }
 
+  // Discord Webhooks initialization
+  renderDiscordWebhooksUI();
+  const btnAddWebhook = document.getElementById("btnAddDiscordWebhook");
+  const txtWebhookName = document.getElementById("txtDiscordWebhookName");
+  const txtWebhookUrl = document.getElementById("txtDiscordWebhookUrl");
+
+  if (btnAddWebhook && txtWebhookUrl) {
+    const handleAddWebhook = () => {
+      const name = txtWebhookName ? txtWebhookName.value : "";
+      const url = txtWebhookUrl.value;
+      if (addDiscordWebhook(name, url)) {
+        if (txtWebhookName) txtWebhookName.value = "";
+        txtWebhookUrl.value = "";
+      }
+    };
+    btnAddWebhook.addEventListener("click", handleAddWebhook);
+    if (txtWebhookName) {
+      txtWebhookName.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleAddWebhook();
+      });
+    }
+    txtWebhookUrl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleAddWebhook();
+    });
+  }
+
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     const fileMenu = document.getElementById("fileDropdownMenu");
     if (fileMenu) fileMenu.style.display = "none";
+    renderDiscordWebhooksUI();
     modal.classList.toggle("show");
   });
 
@@ -2233,6 +2377,289 @@ function setupOptionsModal() {
     modal.classList.remove("show");
   });
 }
+
+// ================= DISCORD WEBHOOKS CONTROLLER =================
+function getDiscordWebhooks() {
+  try {
+    const raw = localStorage.getItem("mm2e_discord_webhooks");
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) return list;
+    }
+  } catch (e) {}
+  return [];
+}
+window.getDiscordWebhooks = getDiscordWebhooks;
+
+function saveDiscordWebhooks(list) {
+  try {
+    localStorage.setItem("mm2e_discord_webhooks", JSON.stringify(list));
+  } catch (e) {}
+}
+window.saveDiscordWebhooks = saveDiscordWebhooks;
+
+function getActiveDiscordWebhook() {
+  const list = getDiscordWebhooks();
+  return list.find(w => w.active && w.url) || null;
+}
+window.getActiveDiscordWebhook = getActiveDiscordWebhook;
+
+function renderDiscordWebhooksUI() {
+  const lblStatus = document.getElementById("lblDiscordActiveStatus");
+  const listContainer = document.getElementById("discordWebhooksList");
+  if (!listContainer) return;
+
+  const list = getDiscordWebhooks();
+  const activeWh = list.find(w => w.active);
+
+  if (lblStatus) {
+    if (activeWh) {
+      lblStatus.textContent = `Active: ${activeWh.name || 'Webhook'}`;
+      lblStatus.style.background = "rgba(16, 185, 129, 0.15)";
+      lblStatus.style.color = "#10b981";
+      lblStatus.style.border = "1px solid #10b981";
+    } else {
+      lblStatus.textContent = "Disabled";
+      lblStatus.style.background = "rgba(107, 114, 128, 0.15)";
+      lblStatus.style.color = "var(--text-muted)";
+      lblStatus.style.border = "1px solid var(--border-color)";
+    }
+  }
+
+  if (list.length === 0) {
+    listContainer.innerHTML = '<div style="font-size: var(--font-size-fine-print); color: var(--text-muted); padding: 4px;">No Discord webhooks configured. Add one below.</div>';
+    return;
+  }
+
+  let html = '';
+  list.forEach(wh => {
+    const isChecked = !!wh.active;
+    const safeName = (wh.name || 'Webhook').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const safeUrl = (wh.url || '').replace(/"/g, '&quot;');
+    const displayUrl = wh.url ? (wh.url.length > 36 ? wh.url.substring(0, 36) + '...' : wh.url) : '';
+    html += `
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px; background: var(--bg-card); border: 1px solid ${isChecked ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1; min-width: 0; margin: 0;">
+          <input type="checkbox" class="chk-discord-wh" data-wh-id="${wh.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; margin: 0;">
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-weight: 600; font-size: var(--font-size-secondary); color: ${isChecked ? 'var(--accent-primary)' : 'var(--text-main)'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeName}</div>
+            <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayUrl}</div>
+          </div>
+        </label>
+        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+          <button type="button" class="btn btn-secondary btn-test-discord-wh" data-wh-id="${wh.id}" style="height: 22px; padding: 0 6px; font-size: var(--font-size-fine-print);" title="Send test ping to Discord">⚡ Test</button>
+          <button type="button" class="btn btn-danger btn-delete-discord-wh" data-wh-id="${wh.id}" style="height: 22px; padding: 0 6px; font-size: var(--font-size-fine-print);" title="Delete webhook">🗑</button>
+        </div>
+      </div>
+    `;
+  });
+  listContainer.innerHTML = html;
+
+  // Bind checkboxes
+  listContainer.querySelectorAll(".chk-discord-wh").forEach(chk => {
+    chk.addEventListener("change", (e) => {
+      const id = e.target.getAttribute("data-wh-id");
+      toggleDiscordWebhookActive(id, e.target.checked);
+    });
+  });
+
+  // Bind Test buttons
+  listContainer.querySelectorAll(".btn-test-discord-wh").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-wh-id");
+      testDiscordWebhook(id);
+    });
+  });
+
+  // Bind Delete buttons
+  listContainer.querySelectorAll(".btn-delete-discord-wh").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-wh-id");
+      deleteDiscordWebhook(id);
+    });
+  });
+}
+window.renderDiscordWebhooksUI = renderDiscordWebhooksUI;
+
+function toggleDiscordWebhookActive(id, isActive) {
+  const list = getDiscordWebhooks();
+  list.forEach(w => {
+    if (w.id === id) {
+      w.active = !!isActive;
+    } else if (isActive) {
+      // Only one webhook can be active at a time!
+      w.active = false;
+    }
+  });
+  saveDiscordWebhooks(list);
+  renderDiscordWebhooksUI();
+}
+window.toggleDiscordWebhookActive = toggleDiscordWebhookActive;
+
+function addDiscordWebhook(name, url) {
+  const cleanUrl = (url || '').trim();
+  if (!cleanUrl || (!cleanUrl.startsWith('https://') && !cleanUrl.startsWith('http://'))) {
+    alert("Please enter a valid Discord webhook URL (starting with https://).");
+    return false;
+  }
+  const cleanName = (name || '').trim() || "Discord Webhook";
+  const list = getDiscordWebhooks();
+  const id = 'wh_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+  // If there is currently no active webhook, make this new one active!
+  const hasActive = list.some(w => w.active);
+  const newWh = {
+    id: id,
+    name: cleanName,
+    url: cleanUrl,
+    active: !hasActive
+  };
+  list.push(newWh);
+  saveDiscordWebhooks(list);
+  renderDiscordWebhooksUI();
+  return true;
+}
+window.addDiscordWebhook = addDiscordWebhook;
+
+function deleteDiscordWebhook(id) {
+  const list = getDiscordWebhooks();
+  const target = list.find(w => w.id === id);
+  const name = target ? target.name : "this webhook";
+  if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+  const filtered = list.filter(w => w.id !== id);
+  saveDiscordWebhooks(filtered);
+  renderDiscordWebhooksUI();
+}
+window.deleteDiscordWebhook = deleteDiscordWebhook;
+
+function testDiscordWebhook(id) {
+  const list = getDiscordWebhooks();
+  const wh = list.find(w => w.id === id);
+  if (!wh || !wh.url) {
+    alert("Webhook not found.");
+    return;
+  }
+  const payload = {
+    username: "MM2CG Dice Roller",
+    embeds: [
+      {
+        title: "⚡ MM2CG Webhook Test",
+        description: "Successfully connected to Mutants & Masterminds 2e Character Generator!",
+        color: 0x10B981,
+        fields: [
+          { name: "Webhook Name", value: wh.name || "Default", inline: true },
+          { name: "Status", value: "✅ Online & Ready", inline: true }
+        ],
+        footer: { text: "Mutants & Masterminds 2e Character Generator" },
+        timestamp: new Date().toISOString()
+      }
+    ]
+  };
+
+  fetch(wh.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(res => {
+    if (res.ok || res.status === 204) {
+      alert(`✅ Test message successfully sent to "${wh.name}" on Discord!`);
+    } else {
+      alert(`⚠️ Discord returned status ${res.status} (${res.statusText}). Please verify the webhook URL.`);
+    }
+  }).catch(err => {
+    alert(`❌ Failed to connect to Discord webhook:\n\n${err.message}`);
+  });
+}
+window.testDiscordWebhook = testDiscordWebhook;
+
+const _discordPostedRollIds = new Set();
+function postRollToDiscordWebhook(roll) {
+  if (!roll || roll.isSilent) return;
+  if (roll.id && _discordPostedRollIds.has(roll.id)) return;
+  if (roll.id) {
+    _discordPostedRollIds.add(roll.id);
+    if (_discordPostedRollIds.size > 200) {
+      const first = _discordPostedRollIds.values().next().value;
+      _discordPostedRollIds.delete(first);
+    }
+  }
+
+  const activeWh = getActiveDiscordWebhook();
+  if (!activeWh || !activeWh.url) return;
+
+  // Formatting Discord Embed
+  let embedColor = 0x3B82F6; // Default Blue
+  if (roll.isNat20) embedColor = 0x10B981; // Green
+  else if (roll.isNat1) embedColor = 0xEF4444; // Red
+  else if (roll.isHPRerolled) embedColor = 0x8B5CF6; // Purple
+
+  let titleDesc = "";
+  if (roll.isNat20) titleDesc += "🌟 **NATURAL 20!**\n";
+  if (roll.isNat1) titleDesc += "⚠️ **NATURAL 1!**\n";
+  if (roll.isHPRerolled) titleDesc += "💎 **HERO POINT REROLL!**\n";
+  titleDesc += `**Total:** \` ${roll.total !== undefined ? roll.total : '—'} \``;
+
+  const fields = [];
+  if (roll.breakdown || (roll.rolls && roll.rolls.length > 0)) {
+    fields.push({
+      name: "🎲 Breakdown",
+      value: roll.breakdown || (roll.rolls ? roll.rolls.join(", ") : ""),
+      inline: true
+    });
+  }
+  if (roll.targetDc !== null && roll.targetDc !== undefined) {
+    fields.push({
+      name: "🎯 Target DC",
+      value: `DC ${roll.targetDc}`,
+      inline: true
+    });
+  }
+  if (roll.result) {
+    fields.push({
+      name: "📊 Outcome",
+      value: String(roll.result),
+      inline: true
+    });
+  }
+  if (roll.rerollInfo) {
+    fields.push({
+      name: "🔄 Reroll Detail",
+      value: String(roll.rerollInfo),
+      inline: false
+    });
+  }
+  if (roll.hpAnnouncement) {
+    fields.push({
+      name: "✨ Hero Point Announcement",
+      value: String(roll.hpAnnouncement),
+      inline: false
+    });
+  }
+
+  const payload = {
+    username: "MM2CG Dice Roller",
+    embeds: [
+      {
+        title: `${roll.characterName || 'Hero'} — ${roll.rollType || 'Check'}`,
+        description: titleDesc,
+        color: embedColor,
+        fields: fields,
+        footer: {
+          text: `Rolled by ${roll.playerName || 'Player'} • Mutants & Masterminds 2e`
+        },
+        timestamp: roll.timestamp || new Date().toISOString()
+      }
+    ]
+  };
+
+  fetch(activeWh.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(err => {
+    console.warn("Error posting roll to Discord webhook:", err);
+  });
+}
+window.postRollToDiscordWebhook = postRollToDiscordWebhook;
 
 function setupInfoModalHandlers() {
   const overlay = document.getElementById("ruleInfoModal");
@@ -2375,6 +2802,10 @@ let poppedOutPartyWindow = null;
 window.poppedOutPartyWindow = null;
 let poppedOutTrackerWindow = null;
 window.poppedOutTrackerWindow = null;
+let poppedOutTablesWindow = null;
+window.poppedOutTablesWindow = null;
+let poppedOutGMWindow = null;
+window.poppedOutGMWindow = null;
 
 // ================= POPOUT WINDOW BOUNDS & CROSS-ORIGIN BRIDGE =================
 function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120, top: 120 }) {
@@ -2409,6 +2840,22 @@ function savePartyDisplayBoundsDirect(b) {
 }
 window.savePartyDisplayBoundsDirect = savePartyDisplayBoundsDirect;
 
+function saveTablesBoundsDirect(b) {
+  const sanitized = sanitizeWindowBounds(b, { width: 920, height: 680, left: 160, top: 120 });
+  try {
+    localStorage.setItem("mm2e_tables_bounds", JSON.stringify(sanitized));
+  } catch (e) {}
+}
+window.saveTablesBoundsDirect = saveTablesBoundsDirect;
+
+function saveGMBoundsDirect(b) {
+  const sanitized = sanitizeWindowBounds(b, { width: 1100, height: 750, left: 100, top: 100 });
+  try {
+    localStorage.setItem("mm2e_gm_bounds", JSON.stringify(sanitized));
+  } catch (e) {}
+}
+window.saveGMBoundsDirect = saveGMBoundsDirect;
+
 // Cross-origin and file:/// safe message bridge between index.html and popouts
 window.addEventListener('message', (event) => {
   if (!event.data || typeof event.data !== 'object') return;
@@ -2420,6 +2867,10 @@ window.addEventListener('message', (event) => {
       saveTrackerBoundsDirect(bounds);
     } else if (key === 'mm2e_party_display_bounds') {
       savePartyDisplayBoundsDirect(bounds);
+    } else if (key === 'mm2e_tables_bounds') {
+      saveTablesBoundsDirect(bounds);
+    } else if (key === 'mm2e_gm_bounds') {
+      saveGMBoundsDirect(bounds);
     } else {
       try {
         const sanitized = sanitizeWindowBounds(bounds);
@@ -2437,11 +2888,15 @@ window.addEventListener('message', (event) => {
   }
 
   // Child notifying that it was closed / redocked
-  if (type === 'MM2E_POPOUT_DOCKED' || type === 'POPOUT_DOCKED' || type === 'TRACKER_DOCKED' || type === 'PARTY_DISPLAY_DOCKED') {
+  if (type === 'MM2E_POPOUT_DOCKED' || type === 'POPOUT_DOCKED' || type === 'TRACKER_DOCKED' || type === 'PARTY_DISPLAY_DOCKED' || type === 'TABLES_DOCKED' || type === 'GM_DOCKED') {
     if (popupType === 'tracker' || type === 'TRACKER_DOCKED') {
       if (typeof window.redockTracker === 'function') window.redockTracker(false);
     } else if (popupType === 'party' || type === 'PARTY_DISPLAY_DOCKED') {
       if (typeof window.redockPartyDisplay === 'function') window.redockPartyDisplay(false);
+    } else if (popupType === 'tables' || type === 'TABLES_DOCKED') {
+      if (typeof window.redockTables === 'function') window.redockTables(false);
+    } else if (popupType === 'gm' || type === 'GM_DOCKED') {
+      if (typeof window.redockGM === 'function') window.redockGM(false);
     }
   }
 
@@ -2450,6 +2905,12 @@ window.addEventListener('message', (event) => {
     try { window[action](...(args || [])); } catch (e) {}
   }
   if (type === 'PARTY_ACTION' && action && typeof window[action] === 'function') {
+    try { window[action](...(args || [])); } catch (e) {}
+  }
+  if (type === 'GM_ACTION' && action && typeof window[action] === 'function') {
+    try { window[action](...(args || [])); } catch (e) {}
+  }
+  if (type === 'TABLES_ACTION' && action && typeof window[action] === 'function') {
     try { window[action](...(args || [])); } catch (e) {}
   }
 
@@ -2518,8 +2979,8 @@ function setupStatusTracker() {
       try {
         const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
         const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
-        const width = win.innerWidth || win.outerWidth;
-        const height = win.innerHeight || win.outerHeight;
+        const width = win.outerWidth || win.innerWidth;
+        const height = win.outerHeight || win.innerHeight;
         if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
           saveTrackerBoundsDirect({ left, top, width, height });
         }
@@ -2543,6 +3004,11 @@ function setupStatusTracker() {
     window.updateTrackerDockMode = updateTrackerDockMode;
 
     function openTrackerPopout() {
+      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+        try { poppedOutTrackerWindow.focus(); } catch (e) {}
+        updateTrackerDockMode(true);
+        return;
+      }
       const bounds = getSavedTrackerBounds();
       const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 140;
       const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 140;
@@ -2551,7 +3017,7 @@ function setupStatusTracker() {
       if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
         openHeight = Math.max(250, window.screen.availHeight - 40);
       }
-      const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},resizable=yes,scrollbars=yes`;
+      const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
@@ -3057,12 +3523,7 @@ function setupStatusTracker() {
       const btnTables = document.getElementById("btnOpenTables");
 
       if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-        // When Tracker is popped out and the Tracker button is clicked, redock the Tracker!
-        redockTracker();
-        if (trackerContent && trackerContent.classList.contains("active")) {
-          syncStatusTrackerUI();
-          return;
-        }
+        try { poppedOutTrackerWindow.focus(); } catch (e) {}
       } else {
         // If tracker tab is already active, toggle back to previous view
         if (trackerContent && trackerContent.classList.contains("active")) {
@@ -5899,8 +6360,8 @@ function setupSessionAndGMHub() {
     try {
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
       const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
-      const width = win.innerWidth || win.outerWidth;
-      const height = win.innerHeight || win.outerHeight;
+      const width = win.outerWidth || win.innerWidth;
+      const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
         savePartyDisplayBoundsDirect({ left, top, width, height });
       }
@@ -5909,6 +6370,11 @@ function setupSessionAndGMHub() {
   window.savePartyDisplayBoundsFromRef = savePartyDisplayBoundsFromRef;
 
   function openPartyDisplayPopout() {
+    if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
+      try { poppedOutPartyWindow.focus(); } catch (e) {}
+      updatePartyDisplayDockMode(true);
+      return;
+    }
     // 1. Immediately sync and persist party roster to DOM and localStorage before opening window
     syncPartyRosterUI();
 
@@ -5920,7 +6386,7 @@ function setupSessionAndGMHub() {
     if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
       openHeight = Math.max(250, window.screen.availHeight - 40);
     }
-    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},resizable=yes,scrollbars=yes`;
+    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
@@ -6930,9 +7396,131 @@ function setupSessionAndGMHub() {
     const prevName = prevBtn ? prevBtn.textContent.trim() : (previousActiveTab === "tab-session" ? "Session" : (previousActiveTab === "tab-tracker" ? "Tracker" : "Previous View"));
     showSpecialTabBackButton(prevName);
 
+    if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
+      try { poppedOutGMWindow.focus(); } catch (e) {}
+    }
+
     syncGMUI();
   }
   window.openGMTab = openGMTab;
+
+  // ================= GM CAMPAIGN HUB POPOUT CONTROLLER =================
+  function getSavedGMBounds() {
+    const fallback = { width: 1100, height: 750, left: 100, top: 100 };
+    try {
+      const saved = localStorage.getItem("mm2e_gm_bounds");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return sanitizeWindowBounds(parsed, fallback);
+      }
+    } catch (e) {}
+    return fallback;
+  }
+  window.getSavedGMBounds = getSavedGMBounds;
+
+  function saveGMBoundsFromRef(win) {
+    if (!win) return;
+    try {
+      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
+      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const width = win.outerWidth || win.innerWidth;
+      const height = win.outerHeight || win.innerHeight;
+      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
+        saveGMBoundsDirect({ left, top, width, height });
+      }
+    } catch (e) {}
+  }
+  window.saveGMBoundsFromRef = saveGMBoundsFromRef;
+
+  function updateGMDockMode(isPoppedOut) {
+    const boxNotice = document.getElementById("boxPoppedOutGMNotice");
+    const dockBody = document.getElementById("gmDockableBody");
+    const btnPop = document.getElementById("btnPopoutGM");
+
+    if (boxNotice) boxNotice.style.display = isPoppedOut ? "flex" : "none";
+    if (dockBody) dockBody.style.display = isPoppedOut ? "none" : "flex";
+    if (btnPop) btnPop.style.display = isPoppedOut ? "none" : "";
+
+    if (!isPoppedOut) {
+      syncGMUI();
+    }
+  }
+  window.updateGMDockMode = updateGMDockMode;
+
+  function openGMPopout() {
+    if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
+      try { poppedOutGMWindow.focus(); } catch (e) {}
+      updateGMDockMode(true);
+      return;
+    }
+    const bounds = getSavedGMBounds();
+    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 40000) ? bounds.left : 100;
+    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 40000) ? bounds.top : 100;
+    const openWidth = Math.max(350, Math.min(bounds.width || 1100, 5000));
+    let openHeight = Math.max(250, Math.min(bounds.height || 750, 5000));
+    if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
+      openHeight = Math.max(250, window.screen.availHeight - 40);
+    }
+    const features = `width=${openWidth},height=${openHeight},left=${openLeft},top=${openTop},screenX=${openLeft},screenY=${openTop},resizable=yes,scrollbars=yes`;
+    const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
+    poppedOutGMWindow = window.open(`gm_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
+    window.poppedOutGMWindow = poppedOutGMWindow;
+    updateGMDockMode(true);
+
+    if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
+      SessionNetwork.initBroadcastChannel();
+    }
+
+    setTimeout(() => {
+      try {
+        if (poppedOutGMWindow && !poppedOutGMWindow.closed && poppedOutGMWindow.document) {
+          poppedOutGMWindow.document.documentElement.setAttribute("data-theme", currentTheme);
+          if (poppedOutGMWindow.document.body) poppedOutGMWindow.document.body.setAttribute("data-theme", currentTheme);
+          if (typeof poppedOutGMWindow.__applySavedThemeAndFonts === 'function') {
+            poppedOutGMWindow.__applySavedThemeAndFonts();
+          }
+          if (typeof poppedOutGMWindow.syncAllGMData === 'function') {
+            poppedOutGMWindow.syncAllGMData();
+          }
+        }
+      } catch (e) {}
+    }, 150);
+  }
+  window.openGMPopout = openGMPopout;
+
+  function redockGM(closeRef = true) {
+    if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
+      saveGMBoundsFromRef(poppedOutGMWindow);
+      if (closeRef) {
+        try { poppedOutGMWindow.close(); } catch (e) {}
+      }
+    }
+    poppedOutGMWindow = null;
+    window.poppedOutGMWindow = null;
+    updateGMDockMode(false);
+  }
+  window.redockGM = redockGM;
+
+  const btnPopoutGM = document.getElementById("btnPopoutGM");
+  const btnRedockGMBtn = document.getElementById("btnRedockGM");
+  if (btnPopoutGM) btnPopoutGM.addEventListener("click", openGMPopout);
+  if (btnRedockGMBtn) btnRedockGMBtn.addEventListener("click", () => redockGM(true));
+
+  window.addEventListener('focus', () => {
+    if (poppedOutGMWindow && poppedOutGMWindow.closed) {
+      redockGM(false);
+    }
+  });
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'mm2e_gm_docked') {
+      redockGM(false);
+    }
+  });
+  setInterval(() => {
+    if (poppedOutGMWindow && poppedOutGMWindow.closed) {
+      redockGM(false);
+    }
+  }, 400);
 
   if (btnOpenGM) {
     btnOpenGM.addEventListener("click", openGMTab);
@@ -9066,10 +9654,10 @@ function setupThemeAndFontControls() {
   const savedTheme = localStorage.getItem("mm2e_theme") || "light";
   const savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
   const savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
-  const savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
+  const savedTagFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
   const savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
   const savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
-  const savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+  const savedFinePrintFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
   
   root.setAttribute("data-theme", savedTheme);
 
@@ -9148,6 +9736,28 @@ function setupThemeAndFontControls() {
         if (poppedOutTrackerWindow.document.body) poppedOutTrackerWindow.document.body.setAttribute("data-theme", nextTheme);
         if (typeof poppedOutTrackerWindow.__applySavedThemeAndFonts === 'function') {
           poppedOutTrackerWindow.__applySavedThemeAndFonts();
+        }
+      }
+    } catch (e) {}
+
+    // Direct synchronization to popped out tables window if open
+    try {
+      if (poppedOutTablesWindow && !poppedOutTablesWindow.closed && poppedOutTablesWindow.document) {
+        poppedOutTablesWindow.document.documentElement.setAttribute("data-theme", nextTheme);
+        if (poppedOutTablesWindow.document.body) poppedOutTablesWindow.document.body.setAttribute("data-theme", nextTheme);
+        if (typeof poppedOutTablesWindow.__applySavedThemeAndFonts === 'function') {
+          poppedOutTablesWindow.__applySavedThemeAndFonts();
+        }
+      }
+    } catch (e) {}
+
+    // Direct synchronization to popped out GM window if open
+    try {
+      if (poppedOutGMWindow && !poppedOutGMWindow.closed && poppedOutGMWindow.document) {
+        poppedOutGMWindow.document.documentElement.setAttribute("data-theme", nextTheme);
+        if (poppedOutGMWindow.document.body) poppedOutGMWindow.document.body.setAttribute("data-theme", nextTheme);
+        if (typeof poppedOutGMWindow.__applySavedThemeAndFonts === 'function') {
+          poppedOutGMWindow.__applySavedThemeAndFonts();
         }
       }
     } catch (e) {}

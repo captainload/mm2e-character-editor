@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
   <title>M&M 2E Character Generator</title>
-  <link rel="stylesheet" href="styles.css?v=71">
+  <link rel="stylesheet" href="styles.css?v=72">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Strict Grid Layout for Power Options */
@@ -232,7 +232,7 @@
               </div>
               <span class="secondary-text" id="valFinePrintFont">13px</span>
             </div>
-            <input type="range" id="sliderFinePrintFont" min="10" max="18" value="13">
+            <input type="range" id="sliderFinePrintFont" min="11" max="18" value="13">
           </div>
 
           <!-- Section: Controls & Badges -->
@@ -270,7 +270,7 @@
               </div>
               <span class="secondary-text" id="valTagFont">13px</span>
             </div>
-            <input type="range" id="sliderTagFont" min="10" max="20" value="13">
+            <input type="range" id="sliderTagFont" min="11" max="20" value="13">
           </div>
         </div>
 
@@ -314,6 +314,34 @@
                 <input type="checkbox" id="chkDisableResWarning" style="cursor: pointer;">
                 Disable screen resolution warning
               </label>
+            </div>
+          </div>
+
+          <!-- Discord Webhooks (Roll Broadcasting) -->
+          <div style="border-top: 1px dashed var(--border-color); padding-top: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <h3 style="font-size: var(--font-size-labels); margin: 0; display: flex; align-items: center; gap: 6px;">
+                💬 Discord Webhooks
+              </h3>
+              <span class="badge" id="lblDiscordActiveStatus" style="font-size: 11px; padding: 2px 6px; background: rgba(107, 114, 128, 0.15); color: var(--text-muted);">Disabled</span>
+            </div>
+            <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
+              Post checks &amp; rolls to a Discord channel. Checkmark an active webhook below (only one active at a time).
+            </div>
+
+            <!-- Webhook List -->
+            <div id="discordWebhooksList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; max-height: 120px; overflow-y: auto;">
+              <!-- Dynamically populated -->
+            </div>
+
+            <!-- Add Webhook Controls -->
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted);">+ New Webhook:</div>
+              <input type="text" id="txtDiscordWebhookName" placeholder="Name (e.g. #game-rolls)" style="height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
+              <div style="display: flex; gap: 4px;">
+                <input type="url" id="txtDiscordWebhookUrl" placeholder="https://discord.com/api/webhooks/..." style="flex: 1; height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
+                <button type="button" class="btn btn-primary" id="btnAddDiscordWebhook" style="height: 24px; padding: 0 8px; font-size: var(--font-size-minor-controls); white-space: nowrap;">+ Add</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1117,7 +1145,30 @@
 
   <!-- TAB 7: TABLES -->
   <section id="tab-tables" class="tab-content">
-    
+    <div class="tracker-header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 10px 16px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; flex-wrap: wrap; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <h2 style="margin: 0; font-size: calc(var(--font-size-labels) * 1.15); color: var(--accent-primary); display: flex; align-items: center; gap: 8px;">📊 Reference Tables &amp; Benchmarks</h2>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button type="button" class="btn btn-secondary" id="btnPopoutTables" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Pop out Reference Tables into standalone window">🪟 Pop Out</button>
+      </div>
+    </div>
+
+    <!-- Docked Placeholder Notice when Popped Out -->
+    <div id="boxPoppedOutTablesNotice" style="display: none; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 6px; padding: 12px 16px; margin-bottom: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 20px;">🪟</span>
+        <div>
+          <div style="font-weight: 600; font-size: var(--font-size-labels); color: var(--accent-primary);">Reference Tables popped out in separate window</div>
+          <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">View measurements, carrying capacity, conditions, DCs, and limits in a floating window.</div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" id="btnRedockTables" style="font-weight: 600; font-size: var(--font-size-controls); height: 28px; padding: 0 12px;">
+        ⬅ Re-dock Tables
+      </button>
+    </div>
+
+    <div id="tablesDockableBody">
     <div class="collapsible-panel collapsed">
       <div class="panel-header">
         <span>Measurements Table & Benchmarks (pg 11-12)</span>
@@ -1325,6 +1376,7 @@
         </div>
       </div>
     </div>
+    </div> <!-- end tablesDockableBody -->
   </section>
 
   <!-- TAB 8: GADGETS & RITUALS -->
@@ -1574,9 +1626,25 @@
           <span class="badge" id="lblGMHostStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 12px; padding: 2px 8px;">Campaigns Active</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-                  </div>
+          <button type="button" class="btn btn-secondary" id="btnPopoutGM" style="height: 28px; padding: 0 12px; font-size: var(--font-size-controls); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;" title="Pop out GM Hub into standalone window">🪟 Pop Out</button>
+        </div>
       </div>
 
+      <!-- Docked Placeholder Notice when Popped Out -->
+      <div id="boxPoppedOutGMNotice" style="display: none; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 6px; padding: 12px 16px; margin-bottom: 4px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;">🪟</span>
+          <div>
+            <div style="font-weight: 600; font-size: var(--font-size-labels); color: var(--accent-primary);">GM Campaign Hub popped out in separate window</div>
+            <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">Campaign characters, roster, NPCs, adversaries, and save points remain synchronized.</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="btnRedockGM" style="font-weight: 600; font-size: var(--font-size-controls); height: 28px; padding: 0 12px;">
+          ⬅ Re-dock GM Hub
+        </button>
+      </div>
+
+      <div id="gmDockableBody" style="display: flex; flex-direction: column; gap: 8px; width: 100%; flex: 1; min-height: 0;">
       <!-- SECTION 1: CAMPAIGN CHARACTERS & PARTY ROSTER -->
       <div class="tracker-card" id="gmCampaignCharactersCard" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 8px;">
@@ -1702,6 +1770,7 @@
 
       </div>
 
+      </div> <!-- end gmDockableBody -->
     </div>
   </section>
 
@@ -2350,9 +2419,9 @@
   <script src="peerjs.min.js"></script>
   <script src="dice_notation.js?v=3"></script>
   <script src="campaign_manager.js?v=19"></script>
-  <script src="session_network.js?v=20"></script>
+  <script src="session_network.js?v=21"></script>
   <!-- Main UI App Logic -->
-  <script src="app.js?v=160"></script>
+  <script src="app.js?v=161"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>
@@ -2362,7 +2431,7 @@
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=110').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=111').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

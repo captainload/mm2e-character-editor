@@ -14,10 +14,10 @@
 
         const savedLabelFont = Math.max(14, parseInt(localStorage.getItem("mm2e_font_labels") || localStorage.getItem("mm4e_font_labels") || "16", 10));
         const savedControlFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_controls") || localStorage.getItem("mm4e_font_controls") || "14", 10));
-        const savedTagFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
+        const savedTagFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_tags") || localStorage.getItem("mm2e_font_links") || localStorage.getItem("mm4e_font_links") || "13", 10));
         const savedSecondaryFont = Math.max(12, parseInt(localStorage.getItem("mm2e_font_secondary") || localStorage.getItem("mm4e_font_secondary") || "14", 10));
         const savedMinorControlFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_minor_controls") || localStorage.getItem("mm4e_font_minor_controls") || "15", 10));
-        const savedFinePrintFont = Math.max(10, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
+        const savedFinePrintFont = Math.max(11, parseInt(localStorage.getItem("mm2e_font_fine_print") || "13", 10));
 
         root.style.setProperty("--font-size-labels", savedLabelFont + "px");
         root.style.setProperty("--font-size-controls", savedControlFont + "px");
@@ -454,6 +454,21 @@
     function getInitialBounds() {
       const fallback = { width: 750, height: 600, left: 160, top: 160 };
       try {
+        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
+        if (saved) {
+          const b = JSON.parse(saved);
+          if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200) {
+            return {
+              width: Math.round(b.width),
+              height: Math.round(b.height),
+              left: (typeof b.left === 'number' && !isNaN(b.left)) ? Math.round(b.left) : fallback.left,
+              top: (typeof b.top === 'number' && !isNaN(b.top)) ? Math.round(b.top) : fallback.top
+            };
+          }
+        }
+      } catch (e) {}
+
+      try {
         const p = new URLSearchParams(window.location.search);
         const urlW = parseInt(p.get('w'), 10);
         const urlH = parseInt(p.get('h'), 10);
@@ -469,26 +484,11 @@
         }
       } catch (e) {}
 
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
-        if (saved) {
-          const b = JSON.parse(saved);
-          if (b && b.width >= 250 && b.height >= 200) {
-            return {
-              width: Math.round(b.width),
-              height: Math.round(b.height),
-              left: Math.round(b.left ?? fallback.left),
-              top: Math.round(b.top ?? fallback.top)
-            };
-          }
-        }
-      } catch (e) {}
-
       return fallback;
     }
 
     let _isInitialLoad = true;
-    setTimeout(() => { _isInitialLoad = false; }, 800);
+    setTimeout(() => { _isInitialLoad = false; }, 1200);
     let _isRestoringBounds = false;
 
     window._lastBounds = getInitialBounds();
@@ -497,8 +497,8 @@
       try {
         const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
         const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
-        const width = Math.round(window.innerWidth || window.outerWidth);
-        const height = Math.round(window.innerHeight || window.outerHeight);
+        const width = Math.round(window.outerWidth || window.innerWidth);
+        const height = Math.round(window.outerHeight || window.innerHeight);
 
         if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) && width >= 250 && height >= 200) {
           const bounds = { left, top, width, height };
@@ -531,26 +531,13 @@
         const b = getInitialBounds();
         if (!b) return;
 
-        const curW = window.innerWidth || window.outerWidth;
-        const curH = window.innerHeight || window.outerHeight;
-        const curX = (window.screenX !== undefined) ? window.screenX : window.screenLeft;
-        const curY = (window.screenY !== undefined) ? window.screenY : window.screenTop;
-
-        if (!curW || !curH || curW < 100 || curH < 100) return;
-
         _isRestoringBounds = true;
         try {
           if (typeof b.left === 'number' && typeof b.top === 'number') {
-            if (Math.abs(curX - b.left) > 25 || Math.abs(curY - b.top) > 25) {
-              window.moveTo(b.left, b.top);
-            }
+            window.moveTo(b.left, b.top);
           }
           if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 250 && b.height >= 200) {
-            if (Math.abs(curW - b.width) > 40 || Math.abs(curH - b.height) > 40) {
-              const chromeW = (window.outerWidth && window.innerWidth) ? (window.outerWidth - window.innerWidth) : 16;
-              const chromeH = (window.outerHeight && window.innerHeight) ? (window.outerHeight - window.innerHeight) : 40;
-              window.resizeTo(b.width + chromeW, b.height + chromeH);
-            }
+            window.resizeTo(b.width, b.height);
           }
         } catch (e) {}
         setTimeout(() => { _isRestoringBounds = false; }, 400);
@@ -577,8 +564,8 @@
       if (_isInitialLoad || _isRestoringBounds) return;
       const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
       const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
-      const width = Math.round(window.innerWidth || window.outerWidth);
-      const height = Math.round(window.innerHeight || window.outerHeight);
+      const width = Math.round(window.outerWidth || window.innerWidth);
+      const height = Math.round(window.outerHeight || window.innerHeight);
 
       if (width < 250 || height < 200) return;
 

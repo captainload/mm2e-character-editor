@@ -646,6 +646,16 @@
     broadcastPacket(packet, !isSilent);
     // Also trigger onRoll locally for immediate display
     emit('onRoll', packet.roll);
+
+    // If not silent, post to active Discord webhook (if enabled)
+    if (!isSilent && typeof window !== 'undefined' && typeof window.postRollToDiscordWebhook === 'function') {
+      try {
+        window.postRollToDiscordWebhook(packet.roll);
+      } catch (e) {
+        console.warn('Failed to post roll to Discord webhook:', e);
+      }
+    }
+
     return packet.roll;
   }
 

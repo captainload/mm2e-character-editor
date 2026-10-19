@@ -3509,9 +3509,26 @@ body.session-tab-active {
 }
 
 .about-modal-body .about-h3 {
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   font-weight: 600;
   margin: 14px 0 6px 0;
+  color: var(--text-main);
+}
+
+.about-modal-body .about-h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 10px 0 4px 0;
+  color: var(--accent-primary);
+}
+
+.about-modal-body .about-blockquote {
+  margin: 8px 0 12px 0;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: 0 4px 4px 0;
+  font-size: 0.95em;
   color: var(--text-main);
 }
 

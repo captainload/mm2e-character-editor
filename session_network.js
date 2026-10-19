@@ -257,6 +257,9 @@
         }
         // If this roll was sent over broadcast channel to our pop-out window or from peer
         emit('onRoll', packet.roll);
+        if (role === 'HOST' && packet.roll && !packet.roll.isSilent && typeof window !== 'undefined' && typeof window.postRollToDiscordWebhook === 'function') {
+          try { window.postRollToDiscordWebhook(packet.roll); } catch (e) {}
+        }
         break;
 
       case 'CONDITION_UPDATE':
@@ -360,6 +363,9 @@
                 try { conn.send(packet); } catch (e) {}
               }
             });
+            if (!packet.isPrivate && typeof window !== 'undefined' && typeof window.postChatToDiscordWebhook === 'function') {
+              try { window.postChatToDiscordWebhook(packet); } catch (e) {}
+            }
           }
           emit('onChat', packet);
         }
@@ -763,6 +769,9 @@
       }
     } else {
       broadcastPacket(packet, true);
+      if (typeof window !== 'undefined' && typeof window.postChatToDiscordWebhook === 'function') {
+        try { window.postChatToDiscordWebhook(packet); } catch (e) {}
+      }
     }
 
     emit('onChat', packet);

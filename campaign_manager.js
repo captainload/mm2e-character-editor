@@ -72,6 +72,8 @@
       if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
       if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
       if (!Array.isArray(camp.savedCharacters)) camp.savedCharacters = [];
+      if (camp.discordRollsWebhookId === undefined) camp.discordRollsWebhookId = null;
+      if (camp.discordChatWebhookId === undefined) camp.discordChatWebhookId = null;
       if (!camp.sessionState) {
         camp.sessionState = {
           status: 'ended',
@@ -1662,11 +1664,34 @@
     return { sessionState: camp.sessionState, sessionNum, sessionStartedAt: cutoff };
   }
 
+  function getCampaignDiscordWebhooks(campId) {
+    const camp = campId ? getCampaigns().find(c => c.id === campId) : getActiveCampaign();
+    return {
+      rollsWebhookId: camp ? camp.discordRollsWebhookId || null : null,
+      chatWebhookId: camp ? camp.discordChatWebhookId || null : null
+    };
+  }
+
+  function setCampaignDiscordWebhooks(campId, rollsWebhookId, chatWebhookId) {
+    const data = getStorageData();
+    const targetId = campId || data.activeCampaignId;
+    const camp = data.campaigns.find(c => c.id === targetId);
+    if (camp) {
+      camp.discordRollsWebhookId = rollsWebhookId || null;
+      camp.discordChatWebhookId = chatWebhookId || null;
+      saveStorageData(data);
+      return true;
+    }
+    return false;
+  }
+
   return {
     generateSlug,
     getCampaigns,
     getActiveCampaign,
     setActiveCampaign,
+    getCampaignDiscordWebhooks,
+    setCampaignDiscordWebhooks,
     createCampaign,
     updateActiveCampaign,
     deleteCampaign,

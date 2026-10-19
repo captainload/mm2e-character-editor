@@ -1792,6 +1792,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupCompanionModalHandlers();
   setupStatusTracker();
   setupSessionAndGMHub();
+  if (typeof setupGMCampaignDiscordModal === 'function') setupGMCampaignDiscordModal();
   setupSortingHeaders();
   setupDefenseSteppers();
   setupPowerHandlers();
@@ -2431,7 +2432,7 @@ function createPopoutManager(config) {
         </div>
         <div id="popout-custom-controls" style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; min-width: 0;"></div>
         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-          <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.73 (b124)</span>
+          <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.73 (b125)</span>
           <button type="button" class="btn btn-secondary" id="btnPopoutRedock" style="font-weight: 600; font-size: var(--font-size-controls, 14px); height: 28px; padding: 0 12px; color: var(--accent-primary); cursor: pointer;" title="Dock back into main window (or press Esc)">
             ⬅ Re-dock
           </button>
@@ -2859,12 +2860,16 @@ function setupOptionsModal() {
   const btnAddWebhook = document.getElementById("btnAddDiscordWebhook");
   const txtWebhookName = document.getElementById("txtDiscordWebhookName");
   const txtWebhookUrl = document.getElementById("txtDiscordWebhookUrl");
+  const chkNewForRolls = document.getElementById("chkNewWebhookForRolls");
+  const chkNewForChat = document.getElementById("chkNewWebhookForChat");
 
   if (btnAddWebhook && txtWebhookUrl) {
     const handleAddWebhook = () => {
       const name = txtWebhookName ? txtWebhookName.value : "";
       const url = txtWebhookUrl.value;
-      if (addDiscordWebhook(name, url)) {
+      const forRolls = chkNewForRolls ? chkNewForRolls.checked : true;
+      const forChat = chkNewForChat ? chkNewForChat.checked : true;
+      if (addDiscordWebhook(name, url, forRolls, forChat)) {
         if (txtWebhookName) txtWebhookName.value = "";
         txtWebhookUrl.value = "";
       }
@@ -2903,7 +2908,15 @@ function getDiscordWebhooks() {
     const raw = localStorage.getItem("mm2e_discord_webhooks");
     if (raw) {
       const list = JSON.parse(raw);
-      if (Array.isArray(list)) return list;
+      if (Array.isArray(list)) {
+        return list.map(w => ({
+          id: w.id,
+          name: w.name || "Discord Webhook",
+          url: w.url || "",
+          forRolls: (w.forRolls !== undefined) ? !!w.forRolls : !!w.active,
+          forChat: (w.forChat !== undefined) ? !!w.forChat : (w.forChat !== false && !!w.active)
+        }));
+      }
     }
   } catch (e) {}
   return [];
@@ -2917,31 +2930,74 @@ function saveDiscordWebhooks(list) {
 }
 window.saveDiscordWebhooks = saveDiscordWebhooks;
 
-function getActiveDiscordWebhook() {
+function getActiveDiscordRollsWebhook(campaignId) {
   const list = getDiscordWebhooks();
-  return list.find(w => w.active && w.url) || null;
+  if (typeof CampaignManager !== 'undefined') {
+    const camp = campaignId ? CampaignManager.getCampaigns().find(c => c.id === campaignId) : CampaignManager.getActiveCampaign();
+    if (camp && camp.discordRollsWebhookId) {
+      if (camp.discordRollsWebhookId === 'none') return null;
+      const found = list.find(w => w.id === camp.discordRollsWebhookId);
+      if (found && found.url) return found;
+    }
+  }
+  return list.find(w => w.forRolls && w.url) || null;
+}
+window.getActiveDiscordRollsWebhook = getActiveDiscordRollsWebhook;
+
+function getActiveDiscordChatWebhook(campaignId) {
+  const list = getDiscordWebhooks();
+  if (typeof CampaignManager !== 'undefined') {
+    const camp = campaignId ? CampaignManager.getCampaigns().find(c => c.id === campaignId) : CampaignManager.getActiveCampaign();
+    if (camp && camp.discordChatWebhookId) {
+      if (camp.discordChatWebhookId === 'none') return null;
+      const found = list.find(w => w.id === camp.discordChatWebhookId);
+      if (found && found.url) return found;
+    }
+  }
+  return list.find(w => w.forChat && w.url) || null;
+}
+window.getActiveDiscordChatWebhook = getActiveDiscordChatWebhook;
+
+function getActiveDiscordWebhook() {
+  return getActiveDiscordRollsWebhook();
 }
 window.getActiveDiscordWebhook = getActiveDiscordWebhook;
 
 function renderDiscordWebhooksUI() {
-  const lblStatus = document.getElementById("lblDiscordActiveStatus");
+  const lblRollsStatus = document.getElementById("lblDiscordRollsStatus");
+  const lblChatStatus = document.getElementById("lblDiscordChatStatus");
   const listContainer = document.getElementById("discordWebhooksList");
   if (!listContainer) return;
 
   const list = getDiscordWebhooks();
-  const activeWh = list.find(w => w.active);
+  const activeRollsWh = getActiveDiscordRollsWebhook();
+  const activeChatWh = getActiveDiscordChatWebhook();
 
-  if (lblStatus) {
-    if (activeWh) {
-      lblStatus.textContent = `Active: ${activeWh.name || 'Webhook'}`;
-      lblStatus.style.background = "rgba(16, 185, 129, 0.15)";
-      lblStatus.style.color = "#10b981";
-      lblStatus.style.border = "1px solid #10b981";
+  if (lblRollsStatus) {
+    if (activeRollsWh) {
+      lblRollsStatus.textContent = `🎲 Rolls: ${activeRollsWh.name || 'Active'}`;
+      lblRollsStatus.style.background = "rgba(16, 185, 129, 0.15)";
+      lblRollsStatus.style.color = "#10b981";
+      lblRollsStatus.style.borderColor = "#10b981";
     } else {
-      lblStatus.textContent = "Disabled";
-      lblStatus.style.background = "rgba(107, 114, 128, 0.15)";
-      lblStatus.style.color = "var(--text-muted)";
-      lblStatus.style.border = "1px solid var(--border-color)";
+      lblRollsStatus.textContent = "🎲 Rolls: Off";
+      lblRollsStatus.style.background = "rgba(107, 114, 128, 0.15)";
+      lblRollsStatus.style.color = "var(--text-muted)";
+      lblRollsStatus.style.borderColor = "var(--border-color)";
+    }
+  }
+
+  if (lblChatStatus) {
+    if (activeChatWh) {
+      lblChatStatus.textContent = `💬 Chat: ${activeChatWh.name || 'Active'}`;
+      lblChatStatus.style.background = "rgba(14, 165, 233, 0.15)";
+      lblChatStatus.style.color = "#0284c7";
+      lblChatStatus.style.borderColor = "#0284c7";
+    } else {
+      lblChatStatus.textContent = "💬 Chat: Off";
+      lblChatStatus.style.background = "rgba(107, 114, 128, 0.15)";
+      lblChatStatus.style.color = "var(--text-muted)";
+      lblChatStatus.style.borderColor = "var(--border-color)";
     }
   }
 
@@ -2952,33 +3008,54 @@ function renderDiscordWebhooksUI() {
 
   let html = '';
   list.forEach(wh => {
-    const isChecked = !!wh.active;
+    const isRolls = !!wh.forRolls;
+    const isChat = !!wh.forChat;
+    const isAny = isRolls || isChat;
     const safeName = (wh.name || 'Webhook').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const safeUrl = (wh.url || '').replace(/"/g, '&quot;');
-    const displayUrl = wh.url ? (wh.url.length > 36 ? wh.url.substring(0, 36) + '...' : wh.url) : '';
+    const displayUrl = wh.url ? (wh.url.length > 34 ? wh.url.substring(0, 34) + '...' : wh.url) : '';
     html += `
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px; background: var(--bg-card); border: 1px solid ${isChecked ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px;">
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1; min-width: 0; margin: 0;">
-          <input type="checkbox" class="chk-discord-wh" data-wh-id="${wh.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; margin: 0;">
-          <div style="min-width: 0; flex: 1;">
-            <div style="font-weight: 600; font-size: var(--font-size-secondary); color: ${isChecked ? 'var(--accent-primary)' : 'var(--text-main)'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeName}</div>
-            <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayUrl}</div>
-          </div>
-        </label>
-        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-          <button type="button" class="btn btn-secondary btn-test-discord-wh" data-wh-id="${wh.id}" style="height: 22px; padding: 0 6px; font-size: var(--font-size-fine-print);" title="Send test ping to Discord">⚡ Test</button>
-          <button type="button" class="btn btn-danger btn-delete-discord-wh" data-wh-id="${wh.id}" style="height: 22px; padding: 0 6px; font-size: var(--font-size-fine-print);" title="Delete webhook">🗑</button>
+      <div class="discord-wh-card ${isAny ? 'active-any' : ''}">
+        <div style="min-width: 0; flex: 1;">
+          <div style="font-weight: 600; font-size: var(--font-size-secondary); color: ${isAny ? 'var(--accent-primary)' : 'var(--text-main)'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeName}</div>
+          <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayUrl}</div>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
+          <label class="discord-role-pill ${isRolls ? 'active-rolls' : ''}" title="Enable for Dice Rolls">
+            <input type="checkbox" class="chk-wh-rolls" data-wh-id="${wh.id}" ${isRolls ? 'checked' : ''} style="cursor: pointer; margin: 0;"> 🎲 Rolls
+          </label>
+          <label class="discord-role-pill ${isChat ? 'active-chat' : ''}" title="Enable for Session Chat">
+            <input type="checkbox" class="chk-wh-chat" data-wh-id="${wh.id}" ${isChat ? 'checked' : ''} style="cursor: pointer; margin: 0;"> 💬 Chat
+          </label>
+          <button type="button" class="btn btn-secondary btn-wh-both" data-wh-id="${wh.id}" style="height: 22px; padding: 0 5px; font-size: var(--font-size-fine-print);" title="Assign for both Rolls and Chat">🔗 Both</button>
+          <button type="button" class="btn btn-secondary btn-test-discord-wh" data-wh-id="${wh.id}" style="height: 22px; padding: 0 5px; font-size: var(--font-size-fine-print);" title="Send test ping to Discord">⚡ Test</button>
+          <button type="button" class="btn btn-danger btn-delete-discord-wh" data-wh-id="${wh.id}" style="height: 22px; padding: 0 5px; font-size: var(--font-size-fine-print);" title="Delete webhook">🗑</button>
         </div>
       </div>
     `;
   });
   listContainer.innerHTML = html;
 
-  // Bind checkboxes
-  listContainer.querySelectorAll(".chk-discord-wh").forEach(chk => {
+  // Bind rolls checkboxes
+  listContainer.querySelectorAll(".chk-wh-rolls").forEach(chk => {
     chk.addEventListener("change", (e) => {
       const id = e.target.getAttribute("data-wh-id");
-      toggleDiscordWebhookActive(id, e.target.checked);
+      toggleDiscordWebhookRolls(id, e.target.checked);
+    });
+  });
+
+  // Bind chat checkboxes
+  listContainer.querySelectorAll(".chk-wh-chat").forEach(chk => {
+    chk.addEventListener("change", (e) => {
+      const id = e.target.getAttribute("data-wh-id");
+      toggleDiscordWebhookChat(id, e.target.checked);
+    });
+  });
+
+  // Bind Both buttons
+  listContainer.querySelectorAll(".btn-wh-both").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-wh-id");
+      setDiscordWebhookBoth(id);
     });
   });
 
@@ -3000,22 +3077,51 @@ function renderDiscordWebhooksUI() {
 }
 window.renderDiscordWebhooksUI = renderDiscordWebhooksUI;
 
-function toggleDiscordWebhookActive(id, isActive) {
+function toggleDiscordWebhookRolls(id, isActive) {
   const list = getDiscordWebhooks();
   list.forEach(w => {
     if (w.id === id) {
-      w.active = !!isActive;
+      w.forRolls = !!isActive;
     } else if (isActive) {
-      // Only one webhook can be active at a time!
-      w.active = false;
+      w.forRolls = false;
     }
   });
   saveDiscordWebhooks(list);
   renderDiscordWebhooksUI();
 }
-window.toggleDiscordWebhookActive = toggleDiscordWebhookActive;
+window.toggleDiscordWebhookRolls = toggleDiscordWebhookRolls;
 
-function addDiscordWebhook(name, url) {
+function toggleDiscordWebhookChat(id, isActive) {
+  const list = getDiscordWebhooks();
+  list.forEach(w => {
+    if (w.id === id) {
+      w.forChat = !!isActive;
+    } else if (isActive) {
+      w.forChat = false;
+    }
+  });
+  saveDiscordWebhooks(list);
+  renderDiscordWebhooksUI();
+}
+window.toggleDiscordWebhookChat = toggleDiscordWebhookChat;
+
+function setDiscordWebhookBoth(id) {
+  const list = getDiscordWebhooks();
+  list.forEach(w => {
+    if (w.id === id) {
+      w.forRolls = true;
+      w.forChat = true;
+    } else {
+      w.forRolls = false;
+      w.forChat = false;
+    }
+  });
+  saveDiscordWebhooks(list);
+  renderDiscordWebhooksUI();
+}
+window.setDiscordWebhookBoth = setDiscordWebhookBoth;
+
+function addDiscordWebhook(name, url, forRolls = true, forChat = true) {
   const cleanUrl = (url || '').trim();
   if (!cleanUrl || (!cleanUrl.startsWith('https://') && !cleanUrl.startsWith('http://'))) {
     alert("Please enter a valid Discord webhook URL (starting with https://).");
@@ -3024,13 +3130,20 @@ function addDiscordWebhook(name, url) {
   const cleanName = (name || '').trim() || "Discord Webhook";
   const list = getDiscordWebhooks();
   const id = 'wh_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-  // If there is currently no active webhook, make this new one active!
-  const hasActive = list.some(w => w.active);
+
+  if (forRolls) {
+    list.forEach(w => { w.forRolls = false; });
+  }
+  if (forChat) {
+    list.forEach(w => { w.forChat = false; });
+  }
+
   const newWh = {
     id: id,
     name: cleanName,
     url: cleanUrl,
-    active: !hasActive
+    forRolls: !!forRolls,
+    forChat: !!forChat
   };
   list.push(newWh);
   saveDiscordWebhooks(list);
@@ -3057,16 +3170,21 @@ function testDiscordWebhook(id) {
     alert("Webhook not found.");
     return;
   }
+  const assignedRoles = [];
+  if (wh.forRolls) assignedRoles.push("🎲 Dice Rolls");
+  if (wh.forChat) assignedRoles.push("💬 Session Chat");
+  const roleText = assignedRoles.length > 0 ? assignedRoles.join(" & ") : "Standby (No active channels assigned)";
+
   const payload = {
-    username: "MM2CG Dice Roller",
+    username: "MM2CG Webhook Manager",
     embeds: [
       {
         title: "⚡ MM2CG Webhook Test",
-        description: "Successfully connected to Mutants & Masterminds 2e Character Generator!",
+        description: `Successfully connected to Mutants & Masterminds 2E Hero Builder!\n\n**Assigned Channels:** ${roleText}`,
         color: 0x10B981,
         fields: [
           { name: "Webhook Name", value: wh.name || "Default", inline: true },
-          { name: "Status", value: "✅ Online & Ready", inline: true }
+          { name: "Status", value: "✅ Online & Verified", inline: true }
         ],
         footer: { text: "Mutants & Masterminds 2e Character Generator" },
         timestamp: new Date().toISOString()
@@ -3102,7 +3220,7 @@ function postRollToDiscordWebhook(roll) {
     }
   }
 
-  const activeWh = getActiveDiscordWebhook();
+  const activeWh = getActiveDiscordRollsWebhook();
   if (!activeWh || !activeWh.url) return;
 
   const heroName = (roll.characterName || 'Hero').trim();
@@ -3151,7 +3269,7 @@ function postRollToDiscordWebhook(roll) {
   }
 
   const payload = {
-    username: "MM2CG Dice Roller",
+    username: heroName ? `${heroName} (Dice)` : "MM2CG Dice",
     content: `${firstRow}\n${secondRow}`
   };
 
@@ -3164,6 +3282,104 @@ function postRollToDiscordWebhook(roll) {
   });
 }
 window.postRollToDiscordWebhook = postRollToDiscordWebhook;
+
+const _discordPostedChatIds = new Set();
+function postChatToDiscordWebhook(chatPacket) {
+  if (!chatPacket) return;
+  // Never echo private whispers to Discord!
+  if (chatPacket.isPrivate || chatPacket.recipient) return;
+  
+  if (chatPacket.id && _discordPostedChatIds.has(chatPacket.id)) return;
+  if (chatPacket.id) {
+    _discordPostedChatIds.add(chatPacket.id);
+    if (_discordPostedChatIds.size > 200) {
+      const first = _discordPostedChatIds.values().next().value;
+      _discordPostedChatIds.delete(first);
+    }
+  }
+
+  const activeWh = getActiveDiscordChatWebhook();
+  if (!activeWh || !activeWh.url) return;
+
+  const heroName = (chatPacket.authorCharacter || '').trim();
+  const playerName = (chatPacket.authorPlayer || chatPacket.author || 'Player').trim();
+  const authorLabel = (heroName && playerName && heroName !== playerName)
+    ? `${heroName} (${playerName})`
+    : (heroName || playerName || 'Hero');
+
+  const text = (chatPacket.text || '').trim();
+  if (!text) return;
+
+  const payload = {
+    username: authorLabel,
+    content: text
+  };
+
+  fetch(activeWh.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(err => {
+    console.warn("Error posting chat to Discord webhook:", err);
+  });
+}
+window.postChatToDiscordWebhook = postChatToDiscordWebhook;
+
+function setupGMCampaignDiscordModal() {
+  const btnOpen = document.getElementById("btnGMCampDiscord");
+  const modal = document.getElementById("gmDiscordModal");
+  if (!btnOpen || !modal) return;
+
+  const selRolls = document.getElementById("selGMCampDiscordRolls");
+  const selChat = document.getElementById("selGMCampDiscordChat");
+  const lblCampName = document.getElementById("lblGMCampDiscordCampName");
+  const btnSameBoth = document.getElementById("btnGMCampDiscordSameBoth");
+  const btnSave = document.getElementById("btnSaveGMCampDiscord");
+
+  btnOpen.addEventListener("click", () => {
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) {
+      showToast("No active campaign selected.", "warning");
+      return;
+    }
+    if (lblCampName) lblCampName.textContent = camp.name || "Campaign";
+
+    const webhooks = getDiscordWebhooks();
+    const buildOptions = (selectedId) => {
+      let optHtml = `<option value="">(Inherit Active Global)</option><option value="none">Disabled for this Campaign</option>`;
+      webhooks.forEach(w => {
+        const isSel = (w.id === selectedId) ? 'selected' : '';
+        optHtml += `<option value="${w.id}" ${isSel}>${w.name}</option>`;
+      });
+      return optHtml;
+    };
+
+    if (selRolls) selRolls.innerHTML = buildOptions(camp.discordRollsWebhookId);
+    if (selChat) selChat.innerHTML = buildOptions(camp.discordChatWebhookId);
+    modal.classList.add("active");
+  });
+
+  if (btnSameBoth && selRolls && selChat) {
+    btnSameBoth.addEventListener("click", () => {
+      selChat.value = selRolls.value;
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener("click", () => {
+      if (typeof CampaignManager === 'undefined') return;
+      const camp = CampaignManager.getActiveCampaign();
+      if (!camp) return;
+      const rollsId = selRolls ? selRolls.value : null;
+      const chatId = selChat ? selChat.value : null;
+      CampaignManager.setCampaignDiscordWebhooks(camp.id, rollsId, chatId);
+      modal.classList.remove("active");
+      showToast("Campaign Discord webhooks updated!", "success");
+    });
+  }
+}
+window.setupGMCampaignDiscordModal = setupGMCampaignDiscordModal;
 
 function setupInfoModalHandlers() {
   const overlay = document.getElementById("ruleInfoModal");
@@ -7397,6 +7613,9 @@ function setupSessionAndGMHub() {
         };
         sessionLocalLog.push(localPkt);
         renderSessionFeed();
+        if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+          CampaignManager.addLogEntry(localPkt);
+        }
       }
     } else {
       if (typeof SessionNetwork !== 'undefined') {
@@ -7406,11 +7625,18 @@ function setupSessionAndGMHub() {
           type: 'CHAT',
           id: 'chat_' + Date.now(),
           author: char?.name || 'You',
+          authorCharacter: char?.name || 'You',
           text: messageText,
           timestamp: new Date().toISOString()
         };
         sessionLocalLog.push(localPkt);
         renderSessionFeed();
+        if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+          CampaignManager.addLogEntry(localPkt);
+        }
+        if (typeof postChatToDiscordWebhook === 'function') {
+          postChatToDiscordWebhook(localPkt);
+        }
       }
     }
 
@@ -20245,32 +20471,32 @@ window.FileManager = FileManager;
 
 const DEFAULT_README_TEXT = `# Mutants & Masterminds 2nd Edition Hero Builder & VTT Manager
 
-A modern, comprehensive, and responsive web-based character editor and tabletop session manager for the **Mutants & Masterminds 2nd Edition** tabletop roleplaying game.
+The complete, responsive, and non-disruptive character builder, rules reference, and virtual tabletop companion for the **Mutants & Masterminds 2nd Edition** tabletop roleplaying game.
 
-🌐 **Live Application:** [https://captainload.github.io/mm2e-character-editor/](https://captainload.github.io/mm2e-character-editor/)
+🌐 **Live Web Application:** [https://captainload.github.io/mm2e-character-editor/](https://captainload.github.io/mm2e-character-editor/)
 
 ---
 
 ## 🌟 Architecture & Workflow: Non-Disruptive Multi-Tasking
 
-> **Key Design Principle: Never Lose Your Place!**
-> Opening any modal pop-up (such as the **Combat Tracker**, **Reference Tables**, **GM Hub**, or **PP Breakdown**) **NEVER changes or switches your current active tab**. If you are deep in building a complex Dynamic Array on the **Powers** tab or fine-tuning skill ranks on the **Skills** tab, you can freely summon any floating tool, roll dice, check benchmarks, or manage campaign notes, and close the dialog to instantly resume right where you were without interruption or page resets.
+> **Core Design Principle: Never Lose Your Place!**
+> Opening any modal pop-up (such as the **Status & Combat Tracker**, **Reference Tables**, **GM Campaign Hub**, or **Power Points Breakdown**) **NEVER changes, resets, or disrupts your current active tab**. If you are deep in building a complex Dynamic Array on the **Powers** tab, calibrating skills on the **Skills** tab, or checking feats on the **Feats** tab, you can freely summon any floating tool, roll dice, reference benchmark tables, or manage campaign logs, and close the dialog to instantly resume right where you were without interruption.
 
 ### ↗ Detachable Pop-Out Windows (Multi-Monitor Workflow)
-- **Detachable Floating Windows**: The **Status & Combat Tracker** (\`⏱ Tracker\`), **Reference Tables** (\`📊 Tables\`), **GM Campaign Hub** (\`👑 GM\`), and **Party Display** (\`🛡️ Party\`) feature a top-right \`↗ Pop Out\` button.
-- **Dedicated Desktop Windows**: Clicking \`↗ Pop Out\` detaches the dialog into a standalone native browser window. This is ideal for dual-monitor or multi-monitor GM and player setups, allowing you to keep reference tables, dice rollers, or damage counters visible on a second screen while editing your hero on the main screen.
-- **Bi-Directional Live Synchronization**: State changes made in a detached pop-out (such as rolling dice, advancing damage tracks, or checking conditions) synchronize instantly with the parent editor window.
+- **Detachable Floating Windows**: The **Status & Combat Tracker** (\`⏱ Tracker\`), **Reference Tables** (\`📊 Tables\`), **GM Campaign Hub** (\`👑 GM\`), and **Party Display** (\`🛡️ Party\`) feature a dedicated top-right \`↗ Pop Out\` button.
+- **Dedicated Desktop Windows**: Clicking \`↗ Pop Out\` detaches the tool into a standalone native browser window. This is ideal for dual-monitor or multi-monitor GM and player setups, allowing you to keep reference tables, dice rollers, party vitals, or combat counters visible on a second screen while editing your hero on the main screen.
+- **Bi-Directional Live Synchronization**: State changes made in a detached pop-out (such as rolling dice, advancing damage tracks, or toggling conditions) synchronize instantaneously with the parent editor window and all connected peers.
 - **Persistent Geometry & Coordinate Memory**: When you resize or move a pop-out window, its dimensions and screen coordinates are preserved across sessions and re-dock cycles.
 - **Seamless Re-docking**: Clicking \`⬅ Re-dock\` in the pop-out window smoothly returns the tool back into the main editor modal without any page reload, state loss, or disruption to your active tab.
 
 ---
 
-## 🧭 Header & Quick Access Bar
+## 🧭 Header & Persistent Quick Access Bar
 
 The top navigation header remains pinned at the top of the screen (or can scroll with the page if Sticky Header is toggled off in Options):
 
 - **Active Form / Companion Switcher**:
-  - Lets you instantly toggle between your primary character (\`🦸 Main Hero\`), alternate forms (\`🔄 Metamorph / Alternate Forms\`), vehicular units (\`🤖 Mecha\`), trusted allies (\`🤝 Sidekicks\`), and minion hordes (\`👥 Minions\`).
+  - Instantly switch the active workspace between your primary hero (\`🦸 Main Hero\`), alternate forms (\`🔄 Metamorph / Alternate Forms\`), vehicular units (\`🤖 Mecha\`), trusted allies (\`🤝 Sidekicks\`), and minion hordes (\`👥 Minions\`).
   - Switching forms loads that entity's dedicated sheet while keeping all parent links intact.
 - **Hero Name & Identity**: Quick-edit field for the active hero's codename or true identity.
 - **Power Level (PL) Badge & Cap Indicator**:
@@ -20313,7 +20539,7 @@ Clicking \`⚙ Options\` in the top header opens the preferences and house rules
 - **Custom Save/Load Folder**: Utilizing the Chromium File System Access API, you can bind a default local folder on your computer for instantaneous one-click saving and loading without standard browser download prompts.
 - **Autosave Timer**: Configurable background autosave intervals (e.g., every 60 seconds) with an unobtrusive dirty-state badge (\`● Unsaved Changes\`).
 - **Sound Effects & Audio Cues**: Audible feedback for rolling d20s, critical hits, and condition status alerts.
-- **Discord Webhook Integration**: Enter your Discord channel's webhook URL to automatically broadcast public dice rolls, attack checks, damage saves, and combat status updates directly to your gaming group's Discord server.
+- **Dual Discord Webhooks Integration**: Dedicated broadcast pipelines for dice rolls and session chat (detailed below).
 
 ---
 
@@ -20330,9 +20556,9 @@ Clicking \`📁 Main ▾\` in the top header reveals file, print, and administra
 
 ---
 
-## 📑 Tab-by-Tab Feature Guide
+## 📑 Comprehensive Tab-by-Tab Feature Guide
 
-The character builder organizes hero creation into 9 focused tabs:
+The character builder organizes hero creation and tabletop gameplay into 9 focused tabs:
 
 ### 1. Main Stats Tab (Abilities, Saves & Combat)
 - **Ability Scores**:
@@ -20438,13 +20664,122 @@ The heart of the editor is a robust, modular power creation engine:
 - **Alternate Forms / Metamorph**:
   - Create radically different character sheets (e.g., Dr. Jekyll & Mr. Hyde, shapeshifters, alien transformations) that switch instantaneously.
 
-### 9. 🎲 Session & Virtual Tabletop (VTT) Tab
-- **Peer-to-Peer Networking (PeerJS)**:
-  - Connect directly with your GM and party members without requiring external servers or third-party accounts.
-- **Party Roster Table**:
-  - View real-time vitals, defense values, active conditions, and wounds of every connected party member.
-- **Remote Dice & Action Log**:
-  - Shared rolling feed broadcasting attack checks, saving throws, damage outcomes, and chat messages in real time.
+---
+
+## 🎲 The Session Tab: Virtual Tabletop (VTT) & Party Command Center
+
+The **Session** tab transforms the editor into a complete, real-time Virtual Tabletop companion that links the Game Master and all players together seamlessly.
+
+### 🌐 How the Session Tab Connects Players & GM Together
+- **Serverless Peer-to-Peer WebRTC (PeerJS)**:
+  - MM2CG does NOT require external hosting accounts, third-party server signups, or subscription fees.
+  - All communication occurs directly between browsers over encrypted WebRTC data channels.
+  - The GM acts as the Host by starting a campaign session. A unique **Campaign Code** and invite URL (\`📋 Copy Link\`) are generated.
+  - Players enter the campaign link or code to connect directly to the GM's session in milliseconds.
+- **Access Control & Whitelisting**:
+  - The GM retains full administrative control via the **Users & Whitelist** panel.
+  - When new players attempt to join, the GM receives a clear banner notification with options to approve or decline access.
+  - Approved players can be granted trusted tokens so they can reconnect across sessions automatically.
+- **1-Click Sheet Submission (\`📤 Submit Sheet to GM\`)**:
+  - Connected players can send their complete, live character sheet directly to the GM's campaign file with one click.
+  - The GM can inspect, backup, or roll back player sheets at any point during the campaign.
+
+### 🛡️ How to Monitor the Whole Party in Real Time
+The top section of the Session tab features the **Party Roster Table**, designed as a live tactical command center for both players and GMs:
+
+- **Vitals & Damage Counters**:
+  - Continuously synchronizes **Bruised** and **Injured** counters across every connected hero.
+  - Automatically computes the cumulative Toughness save penalty (-1 per Bruise/Injury) so players and GM always know exact defensive values.
+- **Combat Totals & Hero Points**:
+  - Displays Total Defense, Flat-Footed Defense, Toughness, Flat-Footed Toughness, and Knockback modifiers.
+  - Tracks each hero's available **Hero Points** pool in real time, broadcasting instant updates when points are expended or rerolls are triggered.
+- **Active Conditions Manager**:
+  - Real-time condition badges for *Bruised*, *Injured*, *Dazed*, *Staggered*, *Disabled*, *Unconscious*, *Dying*, *Entangled*, *Exhausted*, *Fatigued*, *Helpless*, *Prone*, and *Stunned*.
+  - When a hero suffers a condition, it appears on the party table instantly for everyone.
+- **Initiative Order**:
+  - Lists characters sorted by combat initiative to streamline turns.
+- **GM Status Overrides**:
+  - The GM can click into any player row to directly adjust wounds, toggle conditions, or award Hero Points.
+- **Detachable Party Display (\`↗ Pop Out\`)**:
+  - Click \`↗ Pop Out\` on the Party Tracker to detach the entire roster into a dedicated floating HUD.
+  - Perfect for multi-monitor GM screens or projecting onto a living-room TV display while keeping your main screen free for character editing.
+
+### ⚔️ Roll20 & Discord Features Included
+
+The Session tab combines the best tabletop capabilities found on platforms like **Roll20** and **Discord**:
+
+#### Roll20-Style Tabletop Mechanics:
+- **Party HUD & Health Monitoring**: Live roster of all player characters and party NPCs with synchronized wound and condition states.
+- **Interactive d20 Dice Engine**:
+  - Roll directly from character sheets (Abilities, Skills, Feats, Attacks, Saving Throws) or use the interactive sidebar roller.
+  - Full support for standard dice notation (\`1d20+12\`, \`+5\`, \`-2\`, \`+1d4\`).
+  - Quick adjustment chips (\`+1\`, \`+2\`, \`+5\`, \`+10\`, \`-1\`, \`-2\`, \`-5\`).
+  - Automatic failure grade calculations (Pass, Bruised, Staggered, Unconscious).
+  - Built-in Hero Point reroll handling (rolls 1-10 receive a +10 bonus).
+- **GM Broadcast & Silent Mode (\`📡 Broadcast Output\`)**:
+  - GMs can toggle silent rolling mode on or off. In silent mode, rolls remain strictly private to the GM's screen and do not broadcast to players.
+- **Tabletop Slash Commands**:
+  - \`/r 1d20+X\` or \`/roll 1d20+X [Label]\`: Execute arbitrary dice rolls.
+  - \`/hp\` or \`✨\`: Spend a Hero Point and announce rerolls.
+  - \`/w [Player] [Message]\` or \`/whisper [Character] [Message]\`: Secret private messages.
+  - \`/ooc [Message]\` or \`(( Message ))\`: Out-of-character table chat.
+  - \`/desc [Text]\` or \`/gm [Text]\`: Narrative descriptions and scene framing.
+
+#### Discord-Style Communication Features:
+- **Continuous Single-Line Chat Feed**: Fast, auto-scrolling activity stream presenting dice rolls, combat saves, and player dialogue in clean chronological order.
+- **Responsive Feed Filter Chips**:
+  - Instantly isolate feed entries by clicking \`All\`, \`Atk\` (Attacks), \`Save\` (Saving Throws), \`Check\` (Skill/Ability checks), \`HP\` (Hero Point rolls), \`Chat\` (Public messages), or \`Whisper\` (Private communications).
+- **Full-Text Feed Search**:
+  - Search entire session histories with phrase matching (\`"exact phrase"\`), term exclusion (\`-miss\`), and type filters (\`type:check\`).
+- **@Mention Autocomplete Popover**:
+  - Typing \`@\` inside the chat bar opens an instant popover listing all connected players and the GM, allowing rapid secret whispers without memorizing handles.
+- **Sound Effects & Cues**:
+  - Audible alerts for dice rolls, critical hits, and condition alerts.
+- **Dual Webhooks Mirroring**:
+  - Stream session activity out to Discord channels in real time.
+
+---
+
+## 💬 Dual Discord Webhook Integration: How It Works
+
+MM2CG features deep, automated integration with Discord, allowing your tabletop group to bridge in-game action directly into your gaming group's Discord server.
+
+### 📡 Outbound Webhook Architecture & Why It Is One-Way
+- **How Discord Incoming Webhooks Work**:
+  - A Discord webhook is a unique, secure HTTP POST endpoint generated by Discord (\`https://discord.com/api/webhooks/{id}/{token}\`) that allows external applications to push messages into a channel.
+  - **Why Webhooks Do Not Read Messages**: Standard Discord incoming webhooks are strictly **one-way (outbound only)**. Discord does not allow web browsers to read messages from a channel via a webhook URL without creating a full Discord Bot Application with privileged Gateway intents.
+  - **The MM2CG Solution**: MM2CG uses its built-in **Peer-to-Peer VTT** for real-time two-way synchronization between players and GM, while using Discord webhooks as an external broadcast mirror to publish rolls and chat directly into your community channels!
+
+### 🎲 Two Webhooks per Game: Dice Rolls & Session Chat
+Each game or campaign can configure **TWO separate webhooks**:
+
+1. **Dice Rolls Webhook (\`🎲 Rolls\`)**:
+   - Dedicated channel for all attack checks, damage saves, skill checks, initiative, and hero point rerolls.
+   - Posts formatted two-line summaries: Character name, roll type, formula breakdown with bold totals, and outcome tags (e.g., \`Batman — Toughness Save: 1d20+12 = **27** (Pass)\`).
+2. **Session Chat Webhook (\`💬 Chat\`)**:
+   - Dedicated channel for in-character dialogue, table talk, and GM scene descriptions.
+   - Formats messages with the character and player name as the Discord message author.
+3. **Same Webhook for Both (\`🔗 Both\`)**:
+   - If your server prefers having a single channel for all table activity (e.g., \`#game-table\`), simply check both \`🎲 Rolls\` and \`💬 Chat\`—or click \`🔗 Both\`—on a single webhook entry. All rolls and chat will route to that single channel seamlessly!
+
+### 🏰 Campaign Overrides vs. Global Settings
+- **Global Options**: Configure default webhooks under \`⚙ Options > 💬 Discord Webhooks\`. These defaults are used across all solo and standard sessions.
+- **Per-Campaign Webhooks**: In the GM Campaign Hub (\`👑 GM\`), click **\`💬 Discord Webhooks\`** to assign specific webhooks for the active campaign. GMs running multiple campaigns (e.g., *Freedom League* vs. *Doom City*) can route each game to its own dedicated Discord channels!
+
+### 🔒 Confidentiality & Whisper Protection
+- **Zero Leakage**: Secret GM-to-player whispers (\`/w\`, \`/whisper\`, \`@recipient\`) and GM silent rolls are **STRICTLY EXCLUDED** from Discord webhooks. Only public rolls and public chat are ever transmitted to Discord, safeguarding GM secrets and tactical maneuvers.
+
+### 📋 Step-by-Step Discord Setup Guide
+1. **In Discord**:
+   - Go to your Discord server -> Open **Channel Settings** for the desired channel (e.g., \`#dice-rolls\`).
+   - Click **Integrations** -> **Webhooks** -> Click **New Webhook**.
+   - Name the webhook (e.g., \`MM2CG Rolls\`) and click **Copy Webhook URL**.
+   - (Optional) Repeat for your chat channel (e.g., \`#session-chat\`).
+2. **In MM2CG**:
+   - Open \`⚙ Options\` and scroll to **💬 Discord Webhooks**.
+   - Enter a Name (e.g., \`#dice-rolls\`) and paste the Webhook URL.
+   - Check \`🎲 Assign for Rolls\` and/or \`💬 Assign for Chat\` and click \`+ Add\`.
+   - Click \`⚡ Test\` to send a test embed and confirm that Discord receives the connection!
 
 ---
 
@@ -20481,6 +20816,8 @@ The heart of the editor is a robust, modular power creation engine:
   - Switch between viewing/editing NPCs and your player character without overwriting either file.
 - **Encounter Combat Roster**:
   - Track initiative order, player/NPC wounds, and active conditions across entire combat scenes.
+- **Save Points & Instant Rollback**:
+  - Create full campaign state snapshots and roll back to previous save points at any time.
 - **Pop-Out Support**: Click \`↗ Pop Out\` to run your entire game from a dedicated GM dashboard.
 
 ### 🛡️ Party Display Pop-Out

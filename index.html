@@ -78,7 +78,7 @@
         <span class="title-primary">Mutants &amp; Masterminds</span>
         <span class="title-secondary">
           2nd Ed. Hero Builder
-          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 124). Click to check for updates &amp; clear cache.">v1.73 (b124)</span>
+          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 125). Click to check for updates &amp; clear cache.">v1.73 (b125)</span>
         </span>
       </h1>
       
@@ -324,30 +324,41 @@
             </div>
           </div>
 
-          <!-- Discord Webhooks (Roll Broadcasting) -->
+          <!-- Discord Webhooks (Dual Roll & Chat Broadcasting) -->
           <div style="border-top: 1px dashed var(--border-color); padding-top: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;">
               <h3 style="font-size: var(--font-size-labels); margin: 0; display: flex; align-items: center; gap: 6px;">
                 💬 Discord Webhooks
               </h3>
-              <span class="badge" id="lblDiscordActiveStatus" style="font-size: 11px; padding: 2px 6px; background: rgba(107, 114, 128, 0.15); color: var(--text-muted);">Disabled</span>
+              <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                <span class="badge" id="lblDiscordRollsStatus" style="font-size: 10px; padding: 2px 6px; background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color);">🎲 Rolls: Off</span>
+                <span class="badge" id="lblDiscordChatStatus" style="font-size: 10px; padding: 2px 6px; background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color);">💬 Chat: Off</span>
+              </div>
             </div>
             <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
-              Post checks &amp; rolls to a Discord channel. Checkmark an active webhook below (only one active at a time).
+              Echo dice rolls and tabletop chat directly to your Discord channels. You can assign separate webhooks for Rolls and Chat, or select the same webhook for both.
             </div>
 
             <!-- Webhook List -->
-            <div id="discordWebhooksList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; max-height: 120px; overflow-y: auto;">
+            <div id="discordWebhooksList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; max-height: 150px; overflow-y: auto;">
               <!-- Dynamically populated -->
             </div>
 
             <!-- Add Webhook Controls -->
             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px;">
               <div style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted);">+ New Webhook:</div>
-              <input type="text" id="txtDiscordWebhookName" placeholder="Name (e.g. #game-rolls)" style="height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
+              <input type="text" id="txtDiscordWebhookName" placeholder="Name (e.g. #dice-rolls or #game-chat)" style="height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
               <div style="display: flex; gap: 4px;">
                 <input type="url" id="txtDiscordWebhookUrl" placeholder="https://discord.com/api/webhooks/..." style="flex: 1; height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
                 <button type="button" class="btn btn-primary" id="btnAddDiscordWebhook" style="height: 24px; padding: 0 8px; font-size: var(--font-size-minor-controls); white-space: nowrap;">+ Add</button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 2px;">
+                <label style="display: flex; align-items: center; gap: 4px; font-size: var(--font-size-fine-print); cursor: pointer; color: var(--text-muted); user-select: none;">
+                  <input type="checkbox" id="chkNewWebhookForRolls" checked style="cursor: pointer; margin: 0;"> 🎲 Assign for Rolls
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: var(--font-size-fine-print); cursor: pointer; color: var(--text-muted); user-select: none;">
+                  <input type="checkbox" id="chkNewWebhookForChat" checked style="cursor: pointer; margin: 0;"> 💬 Assign for Chat
+                </label>
               </div>
             </div>
           </div>
@@ -358,7 +369,7 @@
               <h3 style="font-size: var(--font-size-labels); margin: 0; display: flex; align-items: center; gap: 6px;">
                 🔄 Version &amp; Updates
               </h3>
-              <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b124)</span>
+              <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b125)</span>
             </div>
             <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
               If GitHub was recently updated and your browser is serving an older cached version, click below to unregister stale Service Workers, clear cache, and reload the latest build.
@@ -1714,6 +1725,7 @@
           <button type="button" class="btn btn-secondary" id="btnGMExportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Export campaign as JSON backup">📥 Backup JSON</button>
           <button type="button" class="btn btn-secondary" id="btnGMImportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Restore campaign from JSON">📤 Restore JSON</button>
           <input type="file" id="fileGMImportCampaign" accept=".json" style="display: none;">
+          <button type="button" class="btn btn-secondary" id="btnGMCampDiscord" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Configure Discord Webhooks for this Campaign">💬 Discord Webhooks</button>
           <button type="button" class="btn btn-secondary" id="btnGMFileLog" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="View Campaign File Operations Log">📋 Operations Log</button>
           <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); color: #ef4444;" title="Delete current campaign">🗑</button>
         </div>
@@ -2403,6 +2415,41 @@
     </div>
   </div>
 
+  <!-- GM Campaign Discord Webhooks Modal -->
+  <div class="modal-overlay" id="gmDiscordModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 90%; max-width: 540px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>💬</span> Campaign Discord Webhooks
+        </h3>
+        <button class="info-popup-close" onclick="document.getElementById('gmDiscordModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" style="padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;">
+        <p style="margin: 0; font-size: var(--font-size-secondary); color: var(--text-muted); line-height: 1.5;">
+          Select the Discord webhooks for the active campaign (<strong id="lblGMCampDiscordCampName" style="color: var(--accent-primary);">Campaign</strong>). You can route dice rolls and session chat to separate Discord channels or use the same channel for both.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-weight: 600; font-size: var(--font-size-labels);">🎲 Dice Rolls Webhook:</label>
+          <select id="selGMCampDiscordRolls" style="height: 32px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; font-size: var(--font-size-controls);"></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-weight: 600; font-size: var(--font-size-labels);">💬 Session Chat Webhook:</label>
+          <select id="selGMCampDiscordChat" style="height: 32px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; font-size: var(--font-size-controls);"></select>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button type="button" class="btn btn-secondary" id="btnGMCampDiscordSameBoth" style="font-size: var(--font-size-minor-controls);">🔗 Use Same Webhook for Both</button>
+        </div>
+        <div style="background: var(--bg-card); border-left: 3px solid var(--accent-primary); padding: 8px 12px; font-size: var(--font-size-fine-print); color: var(--text-muted);">
+          💡 <strong>Tip:</strong> Add or manage webhook URLs under <strong>⚙ Options &gt; Discord Webhooks</strong>. Discord webhooks push outbound messages directly to your server in real time.
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('gmDiscordModal').classList.remove('active')">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveGMCampDiscord">Save Campaign Webhooks</button>
+      </div>
+    </div>
+  </div>
+
   <!-- About / Readme Modal Overlay -->
   <div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)this.classList.remove('active')">
     <div class="info-popup-box" style="width: 92%; max-width: 860px; max-height: 88vh; display: flex; flex-direction: column;">
@@ -2454,7 +2501,7 @@
         window.location.reload();
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=124').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=125').then(reg => {
           reg.update();
         }).catch(err => {
           console.log('ServiceWorker registration note:', err);

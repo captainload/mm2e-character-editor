@@ -2161,6 +2161,25 @@ function createPopoutManager(config) {
   let placeholder = null;
   let checkInterval = null;
   let isOpening = false;
+  let isFullyInitialized = false;
+  let returned = false;
+  let activeContentEl = null;
+  let parentContainer = null;
+  let lastToggleTime = 0;
+
+  function resolveContentEl() {
+    if (activeContentEl && activeContentEl.ownerDocument) {
+      return activeContentEl;
+    }
+    const el = typeof getContentEl === 'function' ? getContentEl() : null;
+    if (el) {
+      activeContentEl = el;
+      if (el.parentNode) {
+        parentContainer = el.parentNode;
+      }
+    }
+    return activeContentEl;
+  }
 
   function getGeometry() {
     let geo = null;
@@ -2235,10 +2254,14 @@ function createPopoutManager(config) {
   }
 
   function open() {
-    const contentEl = typeof getContentEl === 'function' ? getContentEl() : null;
+    const now = Date.now();
+    if (now - lastToggleTime < 300) return false;
+    lastToggleTime = now;
+
+    const contentEl = resolveContentEl();
     if (!contentEl) return false;
 
-    if (placeholder && placeholder.parentNode && !win) {
+    if (placeholder && placeholder.parentNode && (!win || win.closed)) {
       dock(false);
     }
 
@@ -2247,6 +2270,9 @@ function createPopoutManager(config) {
       updateDockMode(true);
       return true;
     }
+
+    returned = false;
+    isFullyInitialized = false;
 
     const geo = getGeometry();
     const { width, height, left, top } = geo;
@@ -2423,6 +2449,7 @@ function createPopoutManager(config) {
       placeholder = document.createComment(`popout-placeholder-${id}`);
     }
     if (contentEl.parentNode) {
+      parentContainer = contentEl.parentNode;
       contentEl.parentNode.insertBefore(placeholder, contentEl);
     }
     const mount = popDoc.getElementById('popout-window-content');
@@ -2462,9 +2489,9 @@ function createPopoutManager(config) {
       popDoc.querySelectorAll('.gm-char-dropdown-menu').forEach(m => m.style.display = 'none');
     }, true);
 
-    let returned = false;
     function handleWindowClose() {
       if (returned) return;
+      if (!isFullyInitialized && win && !win.closed) return;
       returned = true;
       saveGeometry();
       dock(false);
@@ -2486,6 +2513,7 @@ function createPopoutManager(config) {
 
     setTimeout(() => {
       isOpening = false;
+      isFullyInitialized = true;
       try { win.focus(); } catch (e) {}
     }, 500);
 
@@ -2497,6 +2525,7 @@ function createPopoutManager(config) {
   }
 
   function dock(closeWin = true) {
+    returned = true;
     if (checkInterval) {
       clearInterval(checkInterval);
       checkInterval = null;
@@ -2504,20 +2533,29 @@ function createPopoutManager(config) {
 
     saveGeometry();
 
-    const contentEl = typeof getContentEl === 'function' ? getContentEl() : null;
-    if (contentEl && placeholder && placeholder.parentNode) {
+    const contentEl = resolveContentEl();
+    if (contentEl) {
       try {
-        if (document.adoptNode) document.adoptNode(contentEl);
+        if (document.adoptNode && contentEl.ownerDocument !== document) {
+          document.adoptNode(contentEl);
+        }
       } catch (e) {}
-      placeholder.parentNode.insertBefore(contentEl, placeholder);
-      placeholder.remove();
-      placeholder = null;
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.insertBefore(contentEl, placeholder);
+        placeholder.remove();
+        placeholder = null;
+      } else if (parentContainer && !parentContainer.contains(contentEl)) {
+        parentContainer.appendChild(contentEl);
+      }
+      contentEl.style.display = "";
     }
 
     if (closeWin && win && !win.closed) {
       try { win.close(); } catch (e) {}
     }
     win = null;
+    isOpening = false;
+    isFullyInitialized = false;
 
     if (poppedKey) {
       try { localStorage.setItem(poppedKey, 'false'); } catch (e) {}
@@ -2545,7 +2583,7 @@ function createPopoutManager(config) {
     updateDockMode,
     getWindow: () => win,
     getChildDoc: () => (win && !win.closed ? win.document : null),
-    getContentEl: () => (typeof getContentEl === 'function' ? getContentEl() : null)
+    getContentEl: () => resolveContentEl()
   };
 }
 window.createPopoutManager = createPopoutManager;
@@ -2661,7 +2699,7 @@ function setupTablesPopout() {
   if (btnRedockTablesBtn) btnRedockTablesBtn.addEventListener("click", () => redockTables(true));
 
   window.addEventListener('focus', () => {
-    if (tablesManager && tablesManager.isPoppedOut() && tablesManager.getWindow().closed) {
+    if (tablesManager && tablesManager.getWindow() && tablesManager.getWindow().closed) {
       redockTables(false);
     }
   });
@@ -3586,7 +3624,7 @@ function setupStatusTracker() {
     }
 
     window.addEventListener('focus', () => {
-      if (trackerManager && trackerManager.isPoppedOut() && trackerManager.getWindow().closed) {
+      if (trackerManager && trackerManager.getWindow() && trackerManager.getWindow().closed) {
         redockTracker(false);
       }
     });
@@ -6903,7 +6941,7 @@ function setupSessionAndGMHub() {
   }
 
   window.addEventListener('focus', () => {
-    if (partyManager && partyManager.isPoppedOut() && partyManager.getWindow().closed) {
+    if (partyManager && partyManager.getWindow() && partyManager.getWindow().closed) {
       redockPartyDisplay(false);
     }
   });
@@ -7911,7 +7949,7 @@ function setupSessionAndGMHub() {
   if (btnRedockGMBtn) btnRedockGMBtn.addEventListener("click", () => redockGM(true));
 
   window.addEventListener('focus', () => {
-    if (gmManager && gmManager.isPoppedOut() && gmManager.getWindow().closed) {
+    if (gmManager && gmManager.getWindow() && gmManager.getWindow().closed) {
       redockGM(false);
     }
   });

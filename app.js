@@ -2145,7 +2145,7 @@ function setupTablesPopout() {
     const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
+    poppedOutTablesWindow = window.open(`tables_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
 
@@ -3003,6 +3003,67 @@ window.addEventListener('message', (event) => {
   }
 });
 
+// Session BroadcastChannel listener for bounds updates & popout docking
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    const bcSession = new BroadcastChannel('mm2e_session_channel');
+    bcSession.addEventListener('message', (ev) => {
+      if (!ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.type === 'TABLES_BOUNDS_UPDATE' && ev.data.bounds) {
+        saveTablesBoundsDirect(ev.data.bounds);
+      } else if (ev.data.type === 'TRACKER_BOUNDS_UPDATE' && ev.data.bounds) {
+        saveTrackerBoundsDirect(ev.data.bounds);
+      } else if (ev.data.type === 'PARTY_BOUNDS_UPDATE' && ev.data.bounds) {
+        savePartyDisplayBoundsDirect(ev.data.bounds);
+      } else if (ev.data.type === 'GM_BOUNDS_UPDATE' && ev.data.bounds) {
+        saveGMBoundsDirect(ev.data.bounds);
+      } else if (ev.data.type === 'POPOUT_DOCKED' || ev.data.type === 'TABLES_DOCKED' || ev.data.type === 'TRACKER_DOCKED' || ev.data.type === 'PARTY_DISPLAY_DOCKED' || ev.data.type === 'GM_DOCKED') {
+        if (ev.data.type === 'TABLES_DOCKED' && typeof window.redockTables === 'function') window.redockTables(false);
+        if (ev.data.type === 'TRACKER_DOCKED' && typeof window.redockTracker === 'function') window.redockTracker(false);
+        if (ev.data.type === 'PARTY_DISPLAY_DOCKED' && typeof window.redockPartyDisplay === 'function') window.redockPartyDisplay(false);
+        if (ev.data.type === 'GM_DOCKED' && typeof window.redockGM === 'function') window.redockGM(false);
+      }
+    });
+  }
+} catch (e) {}
+
+// Force App Update & Cache-Busting Reload
+async function forceAppUpdateAndClearCache() {
+  const confirmed = confirm("Check for updates and reload the latest version from GitHub?\n\nThis will clear any cached offline files and reload the latest build.");
+  if (!confirmed) return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const reg of registrations) {
+        await reg.unregister();
+      }
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const k of keys) {
+        await caches.delete(k);
+      }
+    }
+  } catch (e) {
+    console.warn('Error clearing caches:', e);
+  }
+  const cleanUrl = window.location.origin + window.location.pathname;
+  window.location.href = cleanUrl + '?nocache=' + Date.now();
+}
+window.forceAppUpdateAndClearCache = forceAppUpdateAndClearCache;
+
+function initUpdateHandlers() {
+  const btn = document.getElementById("btnForceCheckUpdates");
+  if (btn) btn.addEventListener("click", forceAppUpdateAndClearCache);
+  const badge = document.getElementById("lblAppVersion");
+  if (badge) badge.addEventListener("click", forceAppUpdateAndClearCache);
+}
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initUpdateHandlers);
+} else {
+  initUpdateHandlers();
+}
+
 // ================= STATUS & COMBAT TRACKER CONTROLLER =================
 function setupStatusTracker() {
     const modal = document.getElementById("statusTrackerModal");
@@ -3110,7 +3171,7 @@ function setupStatusTracker() {
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
@@ -6527,7 +6588,7 @@ function setupSessionAndGMHub() {
     const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
+    poppedOutPartyWindow = window.open(`party_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
 
@@ -7653,7 +7714,7 @@ function setupSessionAndGMHub() {
     const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
+    poppedOutGMWindow = window.open(`gm_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
 

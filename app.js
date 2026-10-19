@@ -2108,7 +2108,7 @@ window.sanitizeWindowBounds = sanitizeWindowBounds;
 function preparePopoutGeometry(bounds, defaultBounds) {
   const sanitized = sanitizeWindowBounds(bounds, defaultBounds);
   const { width, height, left, top } = sanitized;
-  const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+  const features = `width=${width},height=${height},left=${left},top=${top},screenX=${left},screenY=${top},resizable=yes,scrollbars=yes`;
 
   return {
     width,

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Campaigns &amp; GM Management Center</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=74">
+  <link rel="stylesheet" href="styles.css?v=75">
   <script>
     (function() {
       function getActiveTheme() {
@@ -301,12 +301,15 @@
       return { ...FALLBACK_BOUNDS };
     }
 
-    let _isRestoringBounds = false;
+    let _isRestoringBounds = true;
+    let _hasUserManipulatedBounds = false;
     window._lastBounds = getInitialBounds();
     updateBoundsBadge(window._lastBounds);
 
     function redockGMWindow() {
-      saveWindowBounds();
+      if (_hasUserManipulatedBounds) {
+        saveWindowBounds();
+      }
       try {
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: POPUP_TYPE }, '*');
@@ -351,6 +354,7 @@
             Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 250 && height >= 200) {
           const bounds = { left, top, width, height };
           window._lastBounds = bounds;
+          _hasUserManipulatedBounds = true;
           updateBoundsBadge(bounds);
 
           // 1. Save in popout's local storage
@@ -405,8 +409,20 @@
         window._lastBounds = b;
         updateBoundsBadge(b);
         setTimeout(() => {
+          // Synchronize _lastBounds to the ACTUAL settled coordinates without saving to storage!
+          const actualLeft = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+          const actualTop = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+          const actualWidth = Math.round(window.outerWidth || window.innerWidth);
+          const actualHeight = Math.round(window.outerHeight || window.innerHeight);
+
+          if (typeof actualLeft === 'number' && !isNaN(actualLeft) && Math.abs(actualLeft) < 30000 &&
+              typeof actualTop === 'number' && !isNaN(actualTop) && Math.abs(actualTop) < 30000 &&
+              actualWidth >= 250 && actualHeight >= 200) {
+            window._lastBounds = { left: actualLeft, top: actualTop, width: actualWidth, height: actualHeight };
+            updateBoundsBadge(window._lastBounds);
+          }
           _isRestoringBounds = false;
-        }, 600);
+        }, 500);
       } catch (e) {
         _isRestoringBounds = false;
       }
@@ -442,6 +458,7 @@
     // Track resize with debounce
     window.addEventListener('resize', () => {
       if (_isRestoringBounds) return;
+      _hasUserManipulatedBounds = true;
       clearTimeout(window._resTimer);
       window._resTimer = setTimeout(saveWindowBounds, 200);
     });
@@ -457,16 +474,19 @@
       if (width < 250 || height < 200 || Math.abs(left) >= 30000 || Math.abs(top) >= 30000) return;
 
       if (!window._lastBounds ||
-          Math.abs(window._lastBounds.left - left) > 4 ||
-          Math.abs(window._lastBounds.top - top) > 4 ||
-          Math.abs(window._lastBounds.width - width) > 4 ||
-          Math.abs(window._lastBounds.height - height) > 4) {
+          Math.abs(window._lastBounds.left - left) > 8 ||
+          Math.abs(window._lastBounds.top - top) > 8 ||
+          Math.abs(window._lastBounds.width - width) > 8 ||
+          Math.abs(window._lastBounds.height - height) > 8) {
+        _hasUserManipulatedBounds = true;
         saveWindowBounds();
       }
     }, 250);
 
     window.addEventListener('beforeunload', () => {
-      saveWindowBounds();
+      if (_hasUserManipulatedBounds) {
+        saveWindowBounds();
+      }
       try {
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: POPUP_TYPE }, '*');

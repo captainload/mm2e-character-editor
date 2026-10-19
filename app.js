@@ -2104,35 +2104,19 @@ function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120
 }
 window.sanitizeWindowBounds = sanitizeWindowBounds;
 
-// Browser-chrome compensated geometry calculation for window.open and child positioning
+// Clean geometry calculation for window.open
 function preparePopoutGeometry(bounds, defaultBounds) {
   const sanitized = sanitizeWindowBounds(bounds, defaultBounds);
-  let { width, height, left, top } = sanitized;
-
-  // Firefox window.open feature string compensation:
-  // Firefox treats 'width=W,height=H' in window.open feature string as INNER (viewport) dimensions,
-  // whereas outer dimensions include OS window borders (~16px) and titlebar (~70-80px).
-  // Passing uncompensated outer dimensions creates an inflated window on every open in Firefox.
-  const isFirefox = (typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent));
-  let featureW = width;
-  let featureH = height;
-
-  if (isFirefox) {
-    featureW = Math.max(300, width - 16);
-    featureH = Math.max(200, height - 75);
-  }
-
-  const featureLeft = Math.round(left);
-  const featureTop = Math.round(top);
-  const features = `width=${featureW},height=${featureH},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+  const { width, height, left, top } = sanitized;
+  const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
 
   return {
     width,
     height,
-    left: featureLeft,
-    top: featureTop,
+    left,
+    top,
     features,
-    urlParams: `w=${width}&h=${height}&x=${featureLeft}&y=${featureTop}`
+    urlParams: `w=${width}&h=${height}&x=${left}&y=${top}`
   };
 }
 window.preparePopoutGeometry = preparePopoutGeometry;
@@ -2195,16 +2179,9 @@ function setupTablesPopout() {
     const geom = preparePopoutGeometry(getSavedTablesBounds(), { width: 920, height: 680, left: 160, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
+    poppedOutTablesWindow = window.open(`tables_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
-
-    try {
-      if (poppedOutTablesWindow) {
-        poppedOutTablesWindow.moveTo(geom.left, geom.top);
-        poppedOutTablesWindow.resizeTo(geom.width, geom.height);
-      }
-    } catch (e) {}
 
     setTimeout(() => {
       try {
@@ -2258,14 +2235,10 @@ function setupTablesPopout() {
     }
   });
   setInterval(() => {
-    if (poppedOutTablesWindow) {
-      if (poppedOutTablesWindow.closed) {
-        redockTables(false);
-      } else {
-        saveTablesBoundsFromRef(poppedOutTablesWindow);
-      }
+    if (poppedOutTablesWindow && poppedOutTablesWindow.closed) {
+      redockTables(false);
     }
-  }, 250);
+  }, 500);
 }
 setupTablesPopout();
 
@@ -3168,16 +3141,9 @@ function setupStatusTracker() {
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
-
-      try {
-        if (poppedOutTrackerWindow) {
-          poppedOutTrackerWindow.moveTo(geom.left, geom.top);
-          poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
 
       if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
         SessionNetwork.initBroadcastChannel();
@@ -3263,14 +3229,10 @@ function setupStatusTracker() {
     });
 
     setInterval(() => {
-      if (poppedOutTrackerWindow) {
-        if (poppedOutTrackerWindow.closed) {
-          redockTracker();
-        } else {
-          saveTrackerBoundsFromRef(poppedOutTrackerWindow);
-        }
+      if (poppedOutTrackerWindow && poppedOutTrackerWindow.closed) {
+        redockTracker();
       }
-    }, 250);
+    }, 500);
 
     if (!modal || !btnOpen) return;
 
@@ -6557,16 +6519,9 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedPartyDisplayBounds(), { width: 840, height: 480, left: 120, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
+    poppedOutPartyWindow = window.open(`party_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
-
-    try {
-      if (poppedOutPartyWindow) {
-        poppedOutPartyWindow.moveTo(geom.left, geom.top);
-        poppedOutPartyWindow.resizeTo(geom.width, geom.height);
-      }
-    } catch (e) {}
 
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
@@ -6651,14 +6606,10 @@ function setupSessionAndGMHub() {
   });
 
   setInterval(() => {
-    if (poppedOutPartyWindow) {
-      if (poppedOutPartyWindow.closed) {
-        redockPartyDisplay();
-      } else {
-        savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
-      }
+    if (poppedOutPartyWindow && poppedOutPartyWindow.closed) {
+      redockPartyDisplay();
     }
-  }, 250);
+  }, 500);
 
   if (txtSearch) {
     txtSearch.addEventListener("input", (e) => {
@@ -7655,16 +7606,9 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedGMBounds(), { width: 1100, height: 750, left: 100, top: 100 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
+    poppedOutGMWindow = window.open(`gm_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
-
-    try {
-      if (poppedOutGMWindow) {
-        poppedOutGMWindow.moveTo(geom.left, geom.top);
-        poppedOutGMWindow.resizeTo(geom.width, geom.height);
-      }
-    } catch (e) {}
 
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
@@ -7725,14 +7669,10 @@ function setupSessionAndGMHub() {
     }
   });
   setInterval(() => {
-    if (poppedOutGMWindow) {
-      if (poppedOutGMWindow.closed) {
-        redockGM(false);
-      } else {
-        saveGMBoundsFromRef(poppedOutGMWindow);
-      }
+    if (poppedOutGMWindow && poppedOutGMWindow.closed) {
+      redockGM(false);
     }
-  }, 250);
+  }, 500);
 
   if (btnOpenGM) {
     btnOpenGM.addEventListener("click", openGMTab);

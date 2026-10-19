@@ -138,7 +138,7 @@
 
     <!-- Right: Status Badge, Live Clock, Re-dock -->
     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto;">
-      <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.70 (b120)</span>
+      <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.71 (b121)</span>
       <span class="badge" id="lblPartyWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
       <span class="badge" id="lblPartyWinSessionBadge" style="background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color); font-weight: 600; font-size: 11px;">Standby</span>
       <span id="lblPartyWinSessionClock" style="font-family: monospace; font-size: 12px; font-weight: 700; color: var(--accent-primary); display: none;">00:00:00</span>
@@ -146,57 +146,9 @@
         <input type="checkbox" id="chkWinGMIncludeCharInParty" style="cursor: pointer;">
         Include Editor Sheet
       </label>
-      <div style="display: flex; align-items: center; gap: 4px;">
-        <span id="lblWindowBoundsBadge" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-muted); font-family: monospace; user-select: none; cursor: pointer;" title="Current window size and screen coordinates. Click to manually adjust position or size.">📍 Ready</span>
-        <button type="button" class="btn btn-secondary" id="btnSaveWindowBounds" title="Save current window size and screen position" style="height: 24px; padding: 0 8px; font-size: 11px; font-weight: 600;">💾 Save</button>
-        <button type="button" class="btn btn-secondary" id="btnOpenBoundsModal" title="Custom Size &amp; Position settings and presets" style="height: 24px; padding: 0 6px; font-size: 12px;">⚙</button>
-      </div>
       <button type="button" class="btn btn-secondary" id="btnRedockPartyDisplayWindow" onclick="window.redockPartyDisplayWindow()" style="height: 24px; padding: 0 10px; font-size: 11px; font-weight: 600; cursor: pointer;">
         ⬅ Re-dock
       </button>
-    </div>
-  </div>
-
-  <!-- Manual Size & Position Dialog Modal -->
-  <div id="boundsSettingsModal" style="display: none; position: fixed; z-index: 9999; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; backdrop-filter: blur(2px);">
-    <div style="background: var(--bg-app); border: 1px solid var(--border-color); border-radius: 8px; width: 340px; max-width: 92vw; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <strong style="font-size: 14px; color: var(--text-main);">📍 Window Size &amp; Position</strong>
-        <button type="button" id="btnCloseBoundsModal" style="background: transparent; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted);">&times;</button>
-      </div>
-      <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
-        Configure or save the exact dimensions and screen coordinates for this popout window.
-      </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-        <div>
-          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 2px;">Width (px)</label>
-          <input type="number" id="numModalWidth" min="300" max="5000" style="width: 100%; height: 28px; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-main); box-sizing: border-box;">
-        </div>
-        <div>
-          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 2px;">Height (px)</label>
-          <input type="number" id="numModalHeight" min="200" max="5000" style="width: 100%; height: 28px; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-main); box-sizing: border-box;">
-        </div>
-        <div>
-          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 2px;">Screen X (Left)</label>
-          <input type="number" id="numModalLeft" style="width: 100%; height: 28px; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-main); box-sizing: border-box;">
-        </div>
-        <div>
-          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 2px;">Screen Y (Top)</label>
-          <input type="number" id="numModalTop" style="width: 100%; height: 28px; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-main); box-sizing: border-box;">
-        </div>
-      </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-        <span style="font-size: 11px; color: var(--text-muted); width: 100%; margin-bottom: 2px;">Quick Presets:</span>
-        <button type="button" class="btn btn-secondary" id="btnPresetCurrent" style="font-size: 11px; padding: 2px 8px; height: 24px;">Capture Current</button>
-        <button type="button" class="btn btn-secondary" id="btnPresetDefault" style="font-size: 11px; padding: 2px 8px; height: 24px;">Default</button>
-        <button type="button" class="btn btn-secondary" id="btnPresetLeftHalf" style="font-size: 11px; padding: 2px 8px; height: 24px;">Left Half</button>
-        <button type="button" class="btn btn-secondary" id="btnPresetRightHalf" style="font-size: 11px; padding: 2px 8px; height: 24px;">Right Half</button>
-        <button type="button" class="btn btn-secondary" id="btnPresetCenter" style="font-size: 11px; padding: 2px 8px; height: 24px;">Center</button>
-      </div>
-      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
-        <button type="button" class="btn btn-secondary" id="btnCancelBoundsModal" style="height: 28px; padding: 0 12px; font-size: 12px;">Cancel</button>
-        <button type="button" class="btn btn-primary" id="btnApplyBoundsModal" style="height: 28px; padding: 0 14px; font-size: 12px; font-weight: 600;">Apply &amp; Save</button>
-      </div>
     </div>
   </div>
 
@@ -232,45 +184,15 @@
 
     const FALLBACK_BOUNDS = { width: 840, height: 480, left: 120, top: 120 };
 
-    function getActualBounds() {
-      const left = Math.round((window.screenX !== undefined) ? window.screenX : (window.screenLeft !== undefined ? window.screenLeft : 0));
-      const top = Math.round((window.screenY !== undefined) ? window.screenY : (window.screenTop !== undefined ? window.screenTop : 0));
-      const width = Math.round(window.outerWidth || window.innerWidth || FALLBACK_BOUNDS.width);
-      const height = Math.round(window.outerHeight || window.innerHeight || FALLBACK_BOUNDS.height);
-      return { left, top, width, height };
-    }
-
-    function updateBoundsBadge(b) {
-      const badge = document.getElementById('lblWindowBoundsBadge');
-      if (badge && b && typeof b.width === 'number' && typeof b.height === 'number') {
-        const w = Math.round(b.width);
-        const h = Math.round(b.height);
-        const x = Math.round(b.left);
-        const y = Math.round(b.top);
-        badge.textContent = `📍 ${w}×${h} at (${x}, ${y})`;
-        badge.title = `Screen position: X=${x}, Y=${y} | Dimensions: ${w}px wide, ${h}px high.\nClick to adjust size & position or apply presets.`;
-      }
-    }
-
     function getInitialBounds() {
-      try {
-        const p = new URLSearchParams(window.location.search);
-        const urlW = parseInt(p.get('w'), 10);
-        const urlH = parseInt(p.get('h'), 10);
-        const urlX = parseInt(p.get('x'), 10);
-        const urlY = parseInt(p.get('y'), 10);
-        if (urlW >= 250 && urlH >= 200 && !isNaN(urlX) && !isNaN(urlY) && Math.abs(urlX) < 30000 && Math.abs(urlY) < 30000) {
-          return { width: urlW, height: urlH, left: urlX, top: urlY };
-        }
-      } catch (e) {}
-
+      // 1. Child window's own isolated localStorage checked FIRST
       try {
         const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
         if (saved) {
           const b = JSON.parse(saved);
           if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 &&
-              typeof b.left === 'number' && !isNaN(b.left) && Math.abs(b.left) < 30000 &&
-              typeof b.top === 'number' && !isNaN(b.top) && Math.abs(b.top) < 30000) {
+              typeof b.left === 'number' && !isNaN(b.left) && Math.abs(b.left) < 50000 &&
+              typeof b.top === 'number' && !isNaN(b.top) && Math.abs(b.top) < 50000) {
             return {
               width: Math.round(b.width),
               height: Math.round(b.height),
@@ -281,10 +203,23 @@
         }
       } catch (e) {}
 
+      // 2. Authoritative URL query parameters passed directly from opener on launch
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const urlW = parseInt(p.get('w'), 10);
+        const urlH = parseInt(p.get('h'), 10);
+        const urlX = parseInt(p.get('x'), 10);
+        const urlY = parseInt(p.get('y'), 10);
+        if (urlW >= 250 && urlH >= 200 && !isNaN(urlX) && !isNaN(urlY) && Math.abs(urlX) < 50000 && Math.abs(urlY) < 50000) {
+          return { width: urlW, height: urlH, left: urlX, top: urlY };
+        }
+      } catch (e) {}
+
+      // 3. Direct opener query if same-origin permitted
       try {
         if (window.opener && !window.opener.closed && typeof window.opener[OPENER_GET_BOUNDS_FN] === 'function') {
           const ob = window.opener[OPENER_GET_BOUNDS_FN]();
-          if (ob && typeof ob === 'object' && ob.width >= 250 && ob.height >= 200 && Math.abs(ob.left) < 30000 && Math.abs(ob.top) < 30000) {
+          if (ob && typeof ob === 'object' && ob.width >= 250 && ob.height >= 200 && Math.abs(ob.left) < 50000 && Math.abs(ob.top) < 50000) {
             return {
               width: Math.round(ob.width),
               height: Math.round(ob.height),
@@ -298,14 +233,10 @@
       return { ...FALLBACK_BOUNDS };
     }
 
-    let _isSettled = false;
     window._lastBounds = getInitialBounds();
-    updateBoundsBadge(window._lastBounds);
 
     function redockPartyDisplayWindow() {
-      if (_isSettled) {
-        saveWindowBounds();
-      }
+      saveWindowBounds();
       try {
         localStorage.setItem(`mm2e_${POPUP_TYPE}_docked`, Date.now().toString());
       } catch (e) {}
@@ -338,20 +269,27 @@
     const btnRedock = document.getElementById('btnRedockPartyDisplayWindow');
     if (btnRedock) btnRedock.addEventListener('click', redockPartyDisplayWindow);
 
-    function saveWindowBounds(bounds, showFeedback = false) {
+    function getActualBounds() {
+      const left = Math.round((window.screenX !== undefined) ? window.screenX : (window.screenLeft !== undefined ? window.screenLeft : 0));
+      const top = Math.round((window.screenY !== undefined) ? window.screenY : (window.screenTop !== undefined ? window.screenTop : 0));
+      const width = Math.round(window.outerWidth || window.innerWidth || FALLBACK_BOUNDS.width);
+      const height = Math.round(window.outerHeight || window.innerHeight || FALLBACK_BOUNDS.height);
+      return { left, top, width, height };
+    }
+
+    function saveWindowBounds(bounds) {
       try {
         if (!bounds) {
           bounds = getActualBounds();
-          if (typeof bounds.left !== 'number' || isNaN(bounds.left) ||
-              typeof bounds.top !== 'number' || isNaN(bounds.top) ||
-              Math.abs(bounds.left) >= 30000 || Math.abs(bounds.top) >= 30000 ||
-              bounds.width < 250 || bounds.height < 200) {
-            return;
-          }
+        }
+        if (typeof bounds.left !== 'number' || isNaN(bounds.left) ||
+            typeof bounds.top !== 'number' || isNaN(bounds.top) ||
+            Math.abs(bounds.left) >= 50000 || Math.abs(bounds.top) >= 50000 ||
+            bounds.width < 250 || bounds.height < 200) {
+          return;
         }
 
         window._lastBounds = bounds;
-        updateBoundsBadge(bounds);
 
         try { localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds)); } catch (e) {}
 
@@ -373,255 +311,37 @@
             window.opener[OPENER_BOUNDS_FN](bounds);
           }
         } catch (e) {}
-
-        if (showFeedback) {
-          const btnSave = document.getElementById('btnSaveWindowBounds');
-          if (btnSave) {
-            const orig = btnSave.innerHTML;
-            btnSave.innerHTML = '✓ Saved!';
-            btnSave.style.color = '#10b981';
-            btnSave.style.borderColor = '#10b981';
-            setTimeout(() => {
-              btnSave.innerHTML = orig;
-              btnSave.style.color = '';
-              btnSave.style.borderColor = '';
-            }, 1500);
-          }
-        }
       } catch (e) {}
     }
     window.saveWindowBounds = saveWindowBounds;
 
-    function initBoundsModal() {
-      const modal = document.getElementById('boundsSettingsModal');
-      const btnOpen = document.getElementById('btnOpenBoundsModal');
-      const badge = document.getElementById('lblWindowBoundsBadge');
-      const btnClose = document.getElementById('btnCloseBoundsModal');
-      const btnCancel = document.getElementById('btnCancelBoundsModal');
-      const btnApply = document.getElementById('btnApplyBoundsModal');
-      const btnSave = document.getElementById('btnSaveWindowBounds');
-
-      if (btnSave) {
-        btnSave.addEventListener('click', () => {
-          saveWindowBounds(null, true);
-        });
-      }
-
-      function openModal() {
-        if (!modal) return;
-        const cur = getActualBounds();
-        const b = (window._lastBounds && window._lastBounds.width >= 250) ? window._lastBounds : cur;
-        const numW = document.getElementById('numModalWidth');
-        const numH = document.getElementById('numModalHeight');
-        const numX = document.getElementById('numModalLeft');
-        const numY = document.getElementById('numModalTop');
-        if (numW) numW.value = Math.round(b.width || FALLBACK_BOUNDS.width);
-        if (numH) numH.value = Math.round(b.height || FALLBACK_BOUNDS.height);
-        if (numX) numX.value = Math.round(b.left || FALLBACK_BOUNDS.left);
-        if (numY) numY.value = Math.round(b.top || FALLBACK_BOUNDS.top);
-        modal.style.display = 'flex';
-      }
-
-      function closeModal() {
-        if (modal) modal.style.display = 'none';
-      }
-
-      if (btnOpen) btnOpen.addEventListener('click', openModal);
-      if (badge) badge.addEventListener('click', openModal);
-      if (btnClose) btnClose.addEventListener('click', closeModal);
-      if (btnCancel) btnCancel.addEventListener('click', closeModal);
-
-      document.getElementById('btnPresetCurrent')?.addEventListener('click', () => {
-        const cur = getActualBounds();
-        const numW = document.getElementById('numModalWidth');
-        const numH = document.getElementById('numModalHeight');
-        const numX = document.getElementById('numModalLeft');
-        const numY = document.getElementById('numModalTop');
-        if (numW) numW.value = cur.width;
-        if (numH) numH.value = cur.height;
-        if (numX) numX.value = cur.left;
-        if (numY) numY.value = cur.top;
-      });
-
-      document.getElementById('btnPresetDefault')?.addEventListener('click', () => {
-        const numW = document.getElementById('numModalWidth');
-        const numH = document.getElementById('numModalHeight');
-        const numX = document.getElementById('numModalLeft');
-        const numY = document.getElementById('numModalTop');
-        if (numW) numW.value = FALLBACK_BOUNDS.width;
-        if (numH) numH.value = FALLBACK_BOUNDS.height;
-        if (numX) numX.value = FALLBACK_BOUNDS.left;
-        if (numY) numY.value = FALLBACK_BOUNDS.top;
-      });
-
-      document.getElementById('btnPresetLeftHalf')?.addEventListener('click', () => {
-        const sw = window.screen.availWidth || 1920;
-        const sh = window.screen.availHeight || 1080;
-        const sl = window.screen.availLeft || 0;
-        const st = window.screen.availTop || 0;
-        const numW = document.getElementById('numModalWidth');
-        const numH = document.getElementById('numModalHeight');
-        const numX = document.getElementById('numModalLeft');
-        const numY = document.getElementById('numModalTop');
-        if (numW) numW.value = Math.round(sw / 2);
-        if (numH) numH.value = sh;
-        if (numX) numX.value = sl;
-        if (numY) numY.value = st;
-      });
-
-      document.getElementById('btnPresetRightHalf')?.addEventListener('click', () => {
-        const sw = window.screen.availWidth || 1920;
-        const sh = window.screen.availHeight || 1080;
-        const sl = window.screen.availLeft || 0;
-        const st = window.screen.availTop || 0;
-        const numW = document.getElementById('numModalWidth');
-        const numH = document.getElementById('numModalHeight');
-        const numX = document.getElementById('numModalLeft');
-        const numY = document.getElementById('numModalTop');
-        if (numW) numW.value = Math.round(sw / 2);
-        if (numH) numH.value = sh;
-        if (numX) numX.value = Math.round(sl + sw / 2);
-        if (numY) numY.value = st;
-      });
-
-      document.getElementById('btnPresetCenter')?.addEventListener('click', () => {
-        const sw = window.screen.availWidth || 1920;
-        const sh = window.screen.availHeight || 1080;
-        const sl = window.screen.availLeft || 0;
-        const st = window.screen.availTop || 0;
-        const w = parseInt(document.getElementById('numModalWidth')?.value, 10) || FALLBACK_BOUNDS.width;
-        const h = parseInt(document.getElementById('numModalHeight')?.value, 10) || FALLBACK_BOUNDS.height;
-        const numX = document.getElementById('numModalLeft');
-        const numY = document.getElementById('numModalTop');
-        if (numX) numX.value = Math.max(0, Math.round(sl + (sw - w) / 2));
-        if (numY) numY.value = Math.max(0, Math.round(st + (sh - h) / 2));
-      });
-
-      if (btnApply) {
-        btnApply.addEventListener('click', () => {
-          const w = Math.max(300, parseInt(document.getElementById('numModalWidth')?.value, 10) || FALLBACK_BOUNDS.width);
-          const h = Math.max(200, parseInt(document.getElementById('numModalHeight')?.value, 10) || FALLBACK_BOUNDS.height);
-          const x = parseInt(document.getElementById('numModalLeft')?.value, 10);
-          const y = parseInt(document.getElementById('numModalTop')?.value, 10);
-          const left = isNaN(x) ? FALLBACK_BOUNDS.left : x;
-          const top = isNaN(y) ? FALLBACK_BOUNDS.top : y;
-
-          const bounds = { width: w, height: h, left, top };
-          try {
-            window.moveTo(left, top);
-            window.resizeTo(w, h);
-          } catch (e) {}
-          saveWindowBounds(bounds, true);
-          closeModal();
-        });
-      }
-    }
-
-    if (document.readyState === 'loading') {
-      window.addEventListener('DOMContentLoaded', initBoundsModal);
-    } else {
-      initBoundsModal();
-    }
-
-    function restoreWindowBounds() {
-      try {
-        const b = getInitialBounds();
-        if (!b) return;
-        try {
-          if (typeof b.left === 'number' && typeof b.top === 'number' && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
-            window.moveTo(b.left, b.top);
-          }
-          if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 250 && b.height >= 200) {
-            window.resizeTo(b.width, b.height);
-          }
-        } catch (e) {}
-        window._lastBounds = b;
-        updateBoundsBadge(b);
-      } catch (e) {}
-    }
-
-    restoreWindowBounds();
-
-    setTimeout(() => {
-      _isSettled = true;
-      try {
-        const actual = getActualBounds();
-        if (typeof actual.left === 'number' && !isNaN(actual.left) && Math.abs(actual.left) < 30000 &&
-            typeof actual.top === 'number' && !isNaN(actual.top) && Math.abs(actual.top) < 30000 &&
-            actual.width >= 250 && actual.height >= 200) {
-          window._lastBounds = actual;
-          updateBoundsBadge(window._lastBounds);
-          saveWindowBounds(window._lastBounds);
-        }
-      } catch (e) {}
-    }, 350);
-
-    try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ type: 'MM2E_REQ_BOUNDS', key: STORAGE_KEY_BOUNDS, popupType: POPUP_TYPE }, '*');
-      }
-    } catch (e) {}
-
-    window.addEventListener('message', (event) => {
-      if (!event.data || typeof event.data !== 'object') return;
-      if (event.data.type === 'MM2E_RESP_BOUNDS' && event.data.key === STORAGE_KEY_BOUNDS && event.data.bounds) {
-        if (!_isSettled) {
-          const b = event.data.bounds;
-          if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
-            window._lastBounds = b;
-            updateBoundsBadge(b);
-            try {
-              window.moveTo(b.left, b.top);
-              window.resizeTo(b.width, b.height);
-            } catch (e) {}
-          }
-        }
-      }
-    });
-
+    // Track resize: debounce save to storage
     window.addEventListener('resize', () => {
-      const cur = getActualBounds();
-      if (cur.width >= 250 && cur.height >= 200 && Math.abs(cur.left) < 30000 && Math.abs(cur.top) < 30000) {
-        updateBoundsBadge(cur);
-      }
-      if (_isSettled) {
-        clearTimeout(window._resTimer);
-        window._resTimer = setTimeout(() => saveWindowBounds(), 150);
-      }
+      clearTimeout(window._resTimer);
+      window._resTimer = setTimeout(() => {
+        saveWindowBounds();
+      }, 200);
     });
 
+    // Periodic check for window position changes (every 400ms)
     setInterval(() => {
       const cur = getActualBounds();
-      if (cur.width < 250 || cur.height < 200 || Math.abs(cur.left) >= 30000 || Math.abs(cur.top) >= 30000) return;
-
-      updateBoundsBadge(cur);
-
-      if (_isSettled) {
-        if (!window._lastBounds ||
-            Math.abs(window._lastBounds.left - cur.left) > 2 ||
-            Math.abs(window._lastBounds.top - cur.top) > 2 ||
-            Math.abs(window._lastBounds.width - cur.width) > 2 ||
-            Math.abs(window._lastBounds.height - cur.height) > 2) {
-          saveWindowBounds(cur);
-        }
+      if (cur.width < 250 || cur.height < 200 || Math.abs(cur.left) >= 50000 || Math.abs(cur.top) >= 50000) return;
+      if (!window._lastBounds ||
+          Math.abs(window._lastBounds.left - cur.left) > 4 ||
+          Math.abs(window._lastBounds.top - cur.top) > 4 ||
+          Math.abs(window._lastBounds.width - cur.width) > 4 ||
+          Math.abs(window._lastBounds.height - cur.height) > 4) {
+        saveWindowBounds(cur);
       }
-    }, 150);
+    }, 400);
 
-    window.addEventListener('mouseup', () => {
-      const cur = getActualBounds();
-      updateBoundsBadge(cur);
-      if (_isSettled) saveWindowBounds(cur);
-    });
-    window.addEventListener('focus', () => {
-      const cur = getActualBounds();
-      updateBoundsBadge(cur);
-      if (_isSettled) saveWindowBounds(cur);
-    });
-
+    // Save on mouseup, blur, pagehide, and beforeunload
+    window.addEventListener('mouseup', () => saveWindowBounds());
+    window.addEventListener('blur', () => saveWindowBounds());
+    window.addEventListener('pagehide', () => saveWindowBounds());
     window.addEventListener('beforeunload', () => {
-      if (_isSettled) {
-        saveWindowBounds();
-      }
+      saveWindowBounds();
       try {
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({ type: 'MM2E_POPOUT_DOCKED', popupType: POPUP_TYPE }, '*');

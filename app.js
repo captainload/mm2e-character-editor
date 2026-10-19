@@ -2079,6 +2079,8 @@ window.setupTabs = setupTabs;
 
 // ================= REFERENCE TABLES POPOUT CONTROLLER =================
 function setupTablesPopout() {
+  let _tablesOpening = false;
+
   function getSavedTablesBounds() {
     const fallback = { width: 920, height: 680, left: 160, top: 120 };
     try {
@@ -2098,6 +2100,7 @@ function setupTablesPopout() {
   window.getSavedTablesBounds = getSavedTablesBounds;
 
   function saveTablesBoundsFromRef(win) {
+    if (_tablesOpening) return;
     if (!win || win.closed) return;
     try {
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
@@ -2141,9 +2144,35 @@ function setupTablesPopout() {
     const featureTop = Math.round(openTop);
     const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    poppedOutTablesWindow = window.open(`tables_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
+    _tablesOpening = true;
+    poppedOutTablesWindow = window.open(`tables_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
+
+    try {
+      if (poppedOutTablesWindow) {
+        poppedOutTablesWindow.moveTo(openLeft, openTop);
+        poppedOutTablesWindow.resizeTo(openWidth, openHeight);
+      }
+    } catch (e) {}
+
+    setTimeout(() => {
+      try {
+        if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
+          poppedOutTablesWindow.moveTo(openLeft, openTop);
+          poppedOutTablesWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+    }, 50);
+
+    setTimeout(() => {
+      try {
+        if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
+          poppedOutTablesWindow.moveTo(openLeft, openTop);
+          poppedOutTablesWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+    }, 200);
 
     setTimeout(() => {
       try {
@@ -2156,6 +2185,10 @@ function setupTablesPopout() {
         }
       } catch (e) {}
     }, 150);
+
+    setTimeout(() => {
+      _tablesOpening = false;
+    }, 800);
   }
   window.openTablesPopout = openTablesPopout;
 
@@ -3006,6 +3039,8 @@ function setupStatusTracker() {
     const btnAdvanceAll = document.getElementById("btnAdvanceAllFades");
 
     // Popout & Docking Management
+    let _trackerOpening = false;
+
     function getSavedTrackerBounds() {
       const fallback = { width: 880, height: 660, left: 140, top: 140 };
       try {
@@ -3025,6 +3060,7 @@ function setupStatusTracker() {
     window.getSavedTrackerBounds = getSavedTrackerBounds;
 
     function saveTrackerBoundsFromRef(win) {
+      if (_trackerOpening) return;
       if (!win || win.closed) return;
       try {
         const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
@@ -3073,9 +3109,35 @@ function setupStatusTracker() {
       const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
-      poppedOutTrackerWindow = window.open(`tracker_window.html?theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
+      _trackerOpening = true;
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
+
+      try {
+        if (poppedOutTrackerWindow) {
+          poppedOutTrackerWindow.moveTo(openLeft, openTop);
+          poppedOutTrackerWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+
+      setTimeout(() => {
+        try {
+          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+            poppedOutTrackerWindow.moveTo(openLeft, openTop);
+            poppedOutTrackerWindow.resizeTo(openWidth, openHeight);
+          }
+        } catch (e) {}
+      }, 50);
+
+      setTimeout(() => {
+        try {
+          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+            poppedOutTrackerWindow.moveTo(openLeft, openTop);
+            poppedOutTrackerWindow.resizeTo(openWidth, openHeight);
+          }
+        } catch (e) {}
+      }, 200);
 
       if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
         SessionNetwork.initBroadcastChannel();
@@ -3116,6 +3178,10 @@ function setupStatusTracker() {
         } catch (e) {}
         syncStatusTrackerUI();
       }, 350);
+
+      setTimeout(() => {
+        _trackerOpening = false;
+      }, 800);
     }
     window.openTrackerPopout = openTrackerPopout;
 
@@ -6403,6 +6469,7 @@ function setupSessionAndGMHub() {
   }
 
   poppedOutPartyWindow = null;
+  let _partyOpening = false;
 
   function getSavedPartyDisplayBounds() {
     const fallback = { width: 840, height: 480, left: 120, top: 120 };
@@ -6423,6 +6490,7 @@ function setupSessionAndGMHub() {
   window.getSavedPartyDisplayBounds = getSavedPartyDisplayBounds;
 
   function savePartyDisplayBoundsFromRef(win) {
+    if (_partyOpening) return;
     if (!win || win.closed) return;
     try {
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
@@ -6458,9 +6526,36 @@ function setupSessionAndGMHub() {
     const featureTop = Math.round(openTop);
     const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    poppedOutPartyWindow = window.open(`party_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
+    _partyOpening = true;
+    poppedOutPartyWindow = window.open(`party_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
+
+    try {
+      if (poppedOutPartyWindow) {
+        poppedOutPartyWindow.moveTo(openLeft, openTop);
+        poppedOutPartyWindow.resizeTo(openWidth, openHeight);
+      }
+    } catch (e) {}
+
+    setTimeout(() => {
+      try {
+        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
+          poppedOutPartyWindow.moveTo(openLeft, openTop);
+          poppedOutPartyWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+    }, 50);
+
+    setTimeout(() => {
+      try {
+        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
+          poppedOutPartyWindow.moveTo(openLeft, openTop);
+          poppedOutPartyWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+    }, 200);
+
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
     }
@@ -6489,6 +6584,10 @@ function setupSessionAndGMHub() {
       } catch (e) {}
       syncPartyRosterUI();
     }, 350);
+
+    setTimeout(() => {
+      _partyOpening = false;
+    }, 800);
   }
   window.openPartyDisplayPopout = openPartyDisplayPopout;
 
@@ -7484,6 +7583,8 @@ function setupSessionAndGMHub() {
   window.openGMTab = openGMTab;
 
   // ================= GM CAMPAIGN HUB POPOUT CONTROLLER =================
+  let _gmOpening = false;
+
   function getSavedGMBounds() {
     const fallback = { width: 1100, height: 750, left: 100, top: 100 };
     try {
@@ -7503,6 +7604,7 @@ function setupSessionAndGMHub() {
   window.getSavedGMBounds = getSavedGMBounds;
 
   function saveGMBoundsFromRef(win) {
+    if (_gmOpening) return;
     if (!win || win.closed) return;
     try {
       const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
@@ -7550,9 +7652,35 @@ function setupSessionAndGMHub() {
     const featureTop = Math.round(openTop);
     const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    poppedOutGMWindow = window.open(`gm_window.html?theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
+    _gmOpening = true;
+    poppedOutGMWindow = window.open(`gm_window.html?v=165&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
+
+    try {
+      if (poppedOutGMWindow) {
+        poppedOutGMWindow.moveTo(openLeft, openTop);
+        poppedOutGMWindow.resizeTo(openWidth, openHeight);
+      }
+    } catch (e) {}
+
+    setTimeout(() => {
+      try {
+        if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
+          poppedOutGMWindow.moveTo(openLeft, openTop);
+          poppedOutGMWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+    }, 50);
+
+    setTimeout(() => {
+      try {
+        if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
+          poppedOutGMWindow.moveTo(openLeft, openTop);
+          poppedOutGMWindow.resizeTo(openWidth, openHeight);
+        }
+      } catch (e) {}
+    }, 200);
 
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
@@ -7572,6 +7700,10 @@ function setupSessionAndGMHub() {
         }
       } catch (e) {}
     }, 150);
+
+    setTimeout(() => {
+      _gmOpening = false;
+    }, 800);
   }
   window.openGMPopout = openGMPopout;
 

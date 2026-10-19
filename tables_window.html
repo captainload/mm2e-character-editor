@@ -372,7 +372,24 @@
     const FALLBACK_BOUNDS = { width: 920, height: 680, left: 160, top: 120 };
 
     function getInitialBounds() {
-      // 1. Child window's own isolated localStorage fallback if available
+      // 1. Authoritative URL query parameters passed directly from opener on launch
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const urlW = parseInt(p.get('w'), 10);
+        const urlH = parseInt(p.get('h'), 10);
+        const urlX = parseInt(p.get('x'), 10);
+        const urlY = parseInt(p.get('y'), 10);
+        if (urlW >= 250 && urlH >= 200 && !isNaN(urlX) && !isNaN(urlY) && Math.abs(urlX) < 10000 && Math.abs(urlY) < 10000) {
+          return {
+            width: urlW,
+            height: urlH,
+            left: urlX,
+            top: urlY
+          };
+        }
+      } catch (e) {}
+
+      // 2. Child window's own isolated localStorage fallback if available
       try {
         const saved = localStorage.getItem(STORAGE_KEY_BOUNDS);
         if (saved) {
@@ -387,23 +404,6 @@
               top: Math.round(b.top)
             };
           }
-        }
-      } catch (e) {}
-
-      // 2. Authoritative URL query parameters passed directly from opener on launch
-      try {
-        const p = new URLSearchParams(window.location.search);
-        const urlW = parseInt(p.get('w'), 10);
-        const urlH = parseInt(p.get('h'), 10);
-        const urlX = parseInt(p.get('x'), 10);
-        const urlY = parseInt(p.get('y'), 10);
-        if (urlW >= 250 && urlH >= 200 && !isNaN(urlX) && !isNaN(urlY) && Math.abs(urlX) < 10000 && Math.abs(urlY) < 10000) {
-          return {
-            width: urlW,
-            height: urlH,
-            left: urlX,
-            top: urlY
-          };
         }
       } catch (e) {}
 
@@ -513,15 +513,17 @@
             window.resizeTo(b.width, b.height);
           }
         } catch (e) {}
+        window._lastBounds = b;
         setTimeout(() => {
           _isRestoringBounds = false;
-        }, 300);
+        }, 500);
       } catch (e) {
         _isRestoringBounds = false;
       }
     }
 
-    // Try programmatic restoration after DOM ready and window load
+    // Try programmatic restoration immediately, after DOM ready, and on window load
+    restoreWindowBounds();
     window.addEventListener('DOMContentLoaded', () => { setTimeout(restoreWindowBounds, 25); });
     window.addEventListener('load', () => { setTimeout(restoreWindowBounds, 50); });
 

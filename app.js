@@ -2195,7 +2195,7 @@ function setupTablesPopout() {
     const geom = preparePopoutGeometry(getSavedTablesBounds(), { width: 920, height: 680, left: 160, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=168&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
+    poppedOutTablesWindow = window.open(`tables_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
 
@@ -2205,24 +2205,6 @@ function setupTablesPopout() {
         poppedOutTablesWindow.resizeTo(geom.width, geom.height);
       }
     } catch (e) {}
-
-    setTimeout(() => {
-      try {
-        if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
-          poppedOutTablesWindow.moveTo(geom.left, geom.top);
-          poppedOutTablesWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
-    }, 50);
-
-    setTimeout(() => {
-      try {
-        if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
-          poppedOutTablesWindow.moveTo(geom.left, geom.top);
-          poppedOutTablesWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
-    }, 200);
 
     setTimeout(() => {
       try {
@@ -2244,6 +2226,7 @@ function setupTablesPopout() {
 
   function redockTables(closeRef = true) {
     if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
+      saveTablesBoundsFromRef(poppedOutTablesWindow);
       if (closeRef) {
         try { poppedOutTablesWindow.close(); } catch (e) {}
       }
@@ -2278,6 +2261,8 @@ function setupTablesPopout() {
     if (poppedOutTablesWindow) {
       if (poppedOutTablesWindow.closed) {
         redockTables(false);
+      } else {
+        saveTablesBoundsFromRef(poppedOutTablesWindow);
       }
     }
   }, 250);
@@ -3183,7 +3168,7 @@ function setupStatusTracker() {
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=168&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
@@ -3193,24 +3178,6 @@ function setupStatusTracker() {
           poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
-
-      setTimeout(() => {
-        try {
-          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-            poppedOutTrackerWindow.moveTo(geom.left, geom.top);
-            poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
-          }
-        } catch (e) {}
-      }, 50);
-
-      setTimeout(() => {
-        try {
-          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-            poppedOutTrackerWindow.moveTo(geom.left, geom.top);
-            poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
-          }
-        } catch (e) {}
-      }, 200);
 
       if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
         SessionNetwork.initBroadcastChannel();
@@ -3260,6 +3227,7 @@ function setupStatusTracker() {
 
     function redockTracker(closeRef = true) {
       if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
+        saveTrackerBoundsFromRef(poppedOutTrackerWindow);
         if (closeRef) {
           try { poppedOutTrackerWindow.close(); } catch (e) {}
         }
@@ -3298,6 +3266,8 @@ function setupStatusTracker() {
       if (poppedOutTrackerWindow) {
         if (poppedOutTrackerWindow.closed) {
           redockTracker();
+        } else {
+          saveTrackerBoundsFromRef(poppedOutTrackerWindow);
         }
       }
     }, 250);
@@ -6587,7 +6557,7 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedPartyDisplayBounds(), { width: 840, height: 480, left: 120, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=168&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
+    poppedOutPartyWindow = window.open(`party_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
 
@@ -6597,24 +6567,6 @@ function setupSessionAndGMHub() {
         poppedOutPartyWindow.resizeTo(geom.width, geom.height);
       }
     } catch (e) {}
-
-    setTimeout(() => {
-      try {
-        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
-          poppedOutPartyWindow.moveTo(geom.left, geom.top);
-          poppedOutPartyWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
-    }, 50);
-
-    setTimeout(() => {
-      try {
-        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
-          poppedOutPartyWindow.moveTo(geom.left, geom.top);
-          poppedOutPartyWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
-    }, 200);
 
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
@@ -6653,6 +6605,7 @@ function setupSessionAndGMHub() {
 
   function redockPartyDisplay(closeRef = true) {
     if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
+      savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
       if (closeRef) {
         try { poppedOutPartyWindow.close(); } catch (e) {}
       }
@@ -6701,6 +6654,8 @@ function setupSessionAndGMHub() {
     if (poppedOutPartyWindow) {
       if (poppedOutPartyWindow.closed) {
         redockPartyDisplay();
+      } else {
+        savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
       }
     }
   }, 250);
@@ -7700,7 +7655,7 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedGMBounds(), { width: 1100, height: 750, left: 100, top: 100 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=168&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
+    poppedOutGMWindow = window.open(`gm_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
 
@@ -7710,24 +7665,6 @@ function setupSessionAndGMHub() {
         poppedOutGMWindow.resizeTo(geom.width, geom.height);
       }
     } catch (e) {}
-
-    setTimeout(() => {
-      try {
-        if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
-          poppedOutGMWindow.moveTo(geom.left, geom.top);
-          poppedOutGMWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
-    }, 50);
-
-    setTimeout(() => {
-      try {
-        if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
-          poppedOutGMWindow.moveTo(geom.left, geom.top);
-          poppedOutGMWindow.resizeTo(geom.width, geom.height);
-        }
-      } catch (e) {}
-    }, 200);
 
     if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
       SessionNetwork.initBroadcastChannel();
@@ -7756,6 +7693,7 @@ function setupSessionAndGMHub() {
 
   function redockGM(closeRef = true) {
     if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
+      saveGMBoundsFromRef(poppedOutGMWindow);
       if (closeRef) {
         try { poppedOutGMWindow.close(); } catch (e) {}
       }
@@ -7790,6 +7728,8 @@ function setupSessionAndGMHub() {
     if (poppedOutGMWindow) {
       if (poppedOutGMWindow.closed) {
         redockGM(false);
+      } else {
+        saveGMBoundsFromRef(poppedOutGMWindow);
       }
     }
   }, 250);

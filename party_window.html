@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Party Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=75">
+  <link rel="stylesheet" href="styles.css?v=76">
   <script>
     (function() {
       function getActiveTheme() {
@@ -244,8 +244,7 @@
       return { ...FALLBACK_BOUNDS };
     }
 
-    let _isRestoringBounds = true;
-    let _hasUserManipulatedBounds = false;
+    let _isSettled = false;
 
     // Seed _lastBounds immediately so poll interval doesn't overwrite with transient values
     window._lastBounds = getInitialBounds();
@@ -255,7 +254,7 @@
     // 1. RE-DOCKING LOGIC (Declared first so it's always ready)
     // ==========================================
     function redockPartyDisplayWindow() {
-      if (_hasUserManipulatedBounds) {
+      if (_isSettled) {
         saveWindowBounds();
       }
 
@@ -314,60 +313,62 @@
     // ==========================================
     // 2. BOUNDS PERSISTENCE (Size & Position)
     // ==========================================
-    function saveWindowBounds() {
-      if (_isRestoringBounds) return;
+    function saveWindowBounds(bounds) {
       try {
-        const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
-        const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
-        const width = Math.round(window.outerWidth || window.innerWidth);
-        const height = Math.round(window.outerHeight || window.innerHeight);
+        if (!bounds) {
+          const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+          const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+          const width = Math.round(window.outerWidth || window.innerWidth);
+          const height = Math.round(window.outerHeight || window.innerHeight);
 
-        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-            Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 250 && height >= 200) {
-          const bounds = { left, top, width, height };
-          window._lastBounds = bounds;
-          _hasUserManipulatedBounds = true;
-          updateBoundsBadge(bounds);
-
-          // 1. Save in popout's local storage
-          try {
-            localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
-          } catch (e) {}
-
-          // 2. BroadcastChannel
-          try {
-            if (typeof BroadcastChannel !== 'undefined') {
-              const bc = new BroadcastChannel('mm2e_session_channel');
-              bc.postMessage({ type: BROADCAST_BOUNDS_TYPE, bounds: bounds });
-            }
-          } catch (e) {}
-
-          // 3. Post message to opener window (cross-origin and file:/// safe!)
-          try {
-            if (window.opener && !window.opener.closed) {
-              window.opener.postMessage({
-                type: 'MM2E_WINDOW_BOUNDS',
-                key: STORAGE_KEY_BOUNDS,
-                popupType: 'party',
-                bounds: bounds
-              }, '*');
-            }
-          } catch (e) {}
-
-          // 4. Direct opener call fallback if same origin
-          try {
-            if (window.opener && !window.opener.closed && typeof window.opener.savePartyDisplayBoundsDirect === 'function') {
-              window.opener.savePartyDisplayBoundsDirect(bounds);
-            }
-          } catch (e) {}
-
-          // 5. SessionNetwork broadcast
-          try {
-            if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
-              SessionNetwork.sendLocalBroadcast({ type: BROADCAST_BOUNDS_TYPE, bounds });
-            }
-          } catch (e) {}
+          if (typeof left !== 'number' || isNaN(left) || typeof top !== 'number' || isNaN(top) ||
+              Math.abs(left) >= 30000 || Math.abs(top) >= 30000 || width < 250 || height < 200) {
+            return;
+          }
+          bounds = { left, top, width, height };
         }
+
+        window._lastBounds = bounds;
+        updateBoundsBadge(bounds);
+
+        // 1. Save in popout's local storage
+        try {
+          localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds));
+        } catch (e) {}
+
+        // 2. BroadcastChannel
+        try {
+          if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('mm2e_session_channel');
+            bc.postMessage({ type: BROADCAST_BOUNDS_TYPE, bounds: bounds });
+          }
+        } catch (e) {}
+
+        // 3. Post message to opener window (cross-origin and file:/// safe!)
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({
+              type: 'MM2E_WINDOW_BOUNDS',
+              key: STORAGE_KEY_BOUNDS,
+              popupType: 'party',
+              bounds: bounds
+            }, '*');
+          }
+        } catch (e) {}
+
+        // 4. Direct opener call fallback if same origin
+        try {
+          if (window.opener && !window.opener.closed && typeof window.opener.savePartyDisplayBoundsDirect === 'function') {
+            window.opener.savePartyDisplayBoundsDirect(bounds);
+          }
+        } catch (e) {}
+
+        // 5. SessionNetwork broadcast
+        try {
+          if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.sendLocalBroadcast === 'function') {
+            SessionNetwork.sendLocalBroadcast({ type: BROADCAST_BOUNDS_TYPE, bounds });
+          }
+        } catch (e) {}
       } catch (e) {}
     }
     window.saveWindowBounds = saveWindowBounds;
@@ -377,7 +378,6 @@
         const b = getInitialBounds();
         if (!b) return;
 
-        _isRestoringBounds = true;
         try {
           if (typeof b.left === 'number' && typeof b.top === 'number' && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
             window.moveTo(b.left, b.top);
@@ -388,34 +388,30 @@
         } catch (e) {}
         window._lastBounds = b;
         updateBoundsBadge(b);
-        setTimeout(() => {
-          // Synchronize _lastBounds to the ACTUAL settled coordinates without saving to storage!
-          const actualLeft = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
-          const actualTop = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
-          const actualWidth = Math.round(window.outerWidth || window.innerWidth);
-          const actualHeight = Math.round(window.outerHeight || window.innerHeight);
-
-          if (typeof actualLeft === 'number' && !isNaN(actualLeft) && Math.abs(actualLeft) < 30000 &&
-              typeof actualTop === 'number' && !isNaN(actualTop) && Math.abs(actualTop) < 30000 &&
-              actualWidth >= 250 && actualHeight >= 200) {
-            window._lastBounds = { left: actualLeft, top: actualTop, width: actualWidth, height: actualHeight };
-            updateBoundsBadge(window._lastBounds);
-          }
-          _isRestoringBounds = false;
-        }, 500);
-      } catch (e) {
-        _isRestoringBounds = false;
-      }
+      } catch (e) {}
     }
 
-    // Try restoring bounds immediately, after DOM ready, and on window load
+    // Restore bounds once at startup
     restoreWindowBounds();
-    window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(restoreWindowBounds, 25);
-    });
-    window.addEventListener('load', () => {
-      setTimeout(restoreWindowBounds, 50);
-    });
+
+    // After 350ms initial browser placement has settled, record settled coordinates and enable auto-saving
+    setTimeout(() => {
+      _isSettled = true;
+      try {
+        const actualLeft = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+        const actualTop = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+        const actualWidth = Math.round(window.outerWidth || window.innerWidth);
+        const actualHeight = Math.round(window.outerHeight || window.innerHeight);
+
+        if (typeof actualLeft === 'number' && !isNaN(actualLeft) && Math.abs(actualLeft) < 30000 &&
+            typeof actualTop === 'number' && !isNaN(actualTop) && Math.abs(actualTop) < 30000 &&
+            actualWidth >= 250 && actualHeight >= 200) {
+          window._lastBounds = { left: actualLeft, top: actualTop, width: actualWidth, height: actualHeight };
+          updateBoundsBadge(window._lastBounds);
+          saveWindowBounds(window._lastBounds);
+        }
+      } catch (e) {}
+    }, 350);
 
     // Request authoritative saved bounds from opener (works across file:/// origins)
     try {
@@ -427,29 +423,40 @@
     window.addEventListener('message', (event) => {
       if (!event.data || typeof event.data !== 'object') return;
       if (event.data.type === 'MM2E_RESP_BOUNDS' && event.data.key === STORAGE_KEY_BOUNDS && event.data.bounds) {
-        const b = event.data.bounds;
-        if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
-          window._lastBounds = b;
-          updateBoundsBadge(b);
-          try {
-            window.moveTo(b.left, b.top);
-            window.resizeTo(b.width, b.height);
-          } catch (e) {}
+        // Only adopt opener bounds if child hasn't settled yet
+        if (!_isSettled) {
+          const b = event.data.bounds;
+          if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
+            window._lastBounds = b;
+            updateBoundsBadge(b);
+            try {
+              window.moveTo(b.left, b.top);
+              window.resizeTo(b.width, b.height);
+            } catch (e) {}
+          }
         }
       }
     });
 
-    // Track resize with debounce
+    // Track resize: update badge immediately, and debounce save to storage
     window.addEventListener('resize', () => {
-      if (_isRestoringBounds) return;
-      _hasUserManipulatedBounds = true;
-      clearTimeout(window._resTimer);
-      window._resTimer = setTimeout(saveWindowBounds, 200);
+      const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
+      const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
+      const width = Math.round(window.outerWidth || window.innerWidth);
+      const height = Math.round(window.outerHeight || window.innerHeight);
+
+      if (width >= 250 && height >= 200 && Math.abs(left) < 30000 && Math.abs(top) < 30000) {
+        updateBoundsBadge({ left, top, width, height });
+      }
+
+      if (_isSettled) {
+        clearTimeout(window._resTimer);
+        window._resTimer = setTimeout(() => saveWindowBounds(), 150);
+      }
     });
 
-    // Periodic poll for position changes (handling user dragging the window)
+    // Periodic poll for position changes: ALWAYS keep badge live, and save when moved/resized
     setInterval(() => {
-      if (_isRestoringBounds) return;
       const left = Math.round((window.screenX !== undefined) ? window.screenX : window.screenLeft);
       const top = Math.round((window.screenY !== undefined) ? window.screenY : window.screenTop);
       const width = Math.round(window.outerWidth || window.innerWidth);
@@ -457,18 +464,22 @@
 
       if (width < 250 || height < 200 || Math.abs(left) >= 30000 || Math.abs(top) >= 30000) return;
 
-      if (!window._lastBounds ||
-          Math.abs(window._lastBounds.left - left) > 8 ||
-          Math.abs(window._lastBounds.top - top) > 8 ||
-          Math.abs(window._lastBounds.width - width) > 8 ||
-          Math.abs(window._lastBounds.height - height) > 8) {
-        _hasUserManipulatedBounds = true;
-        saveWindowBounds();
+      // Real-time badge update so user gets instant visual confirmation
+      updateBoundsBadge({ left, top, width, height });
+
+      if (_isSettled) {
+        if (!window._lastBounds ||
+            Math.abs(window._lastBounds.left - left) > 2 ||
+            Math.abs(window._lastBounds.top - top) > 2 ||
+            Math.abs(window._lastBounds.width - width) > 2 ||
+            Math.abs(window._lastBounds.height - height) > 2) {
+          saveWindowBounds({ left, top, width, height });
+        }
       }
-    }, 250);
+    }, 200);
 
     window.addEventListener('beforeunload', () => {
-      if (_hasUserManipulatedBounds) {
+      if (_isSettled) {
         saveWindowBounds();
       }
       try {

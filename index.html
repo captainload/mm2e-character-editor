@@ -67,6 +67,13 @@
       color: #ffffff;
     }
   </style>
+  <script>
+    try {
+      if (localStorage.getItem("mm2e_menus_on_left") === "true") {
+        document.documentElement.classList.add("menus-on-left");
+      }
+    } catch(e) {}
+  </script>
 </head>
 <body>
 
@@ -78,7 +85,7 @@
         <span class="title-primary">Mutants &amp; Masterminds</span>
         <span class="title-secondary">
           2nd Ed. Hero Builder
-          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 125). Click to check for updates &amp; clear cache.">v1.73 (b125)</span>
+          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 126). Click to check for updates &amp; clear cache.">v1.73 (b126)</span>
         </span>
       </h1>
       
@@ -92,13 +99,13 @@
         <button class="btn btn-secondary" id="btnOpenImportAudit" style="display: none; align-items: center; gap: 4px;" title="View Hero Lab Import Audit Report">📋 Audit</button>
         <input type="file" id="fileLoadHero" accept=".mm2e,.json,.por" style="display: none;">
         
+        <button class="btn btn-secondary" id="btnHelpApp" onclick="window.openAboutModal ? window.openAboutModal() : (document.getElementById('aboutModal') &amp;&amp; document.getElementById('aboutModal').classList.add('active'))" style="display: flex; align-items: center; gap: 4px;" title="Help &amp; User Guide">
+          ❓ Help
+        </button>
+
         <!-- Theme/Options Toggle with dots handled dynamically in JS -->
         <button class="btn btn-secondary" id="btnToggleOptions" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           ⚙ Options
-        </button>
-
-        <button class="btn btn-secondary" id="btnHelpApp" onclick="window.openAboutModal ? window.openAboutModal() : (document.getElementById('aboutModal') &amp;&amp; document.getElementById('aboutModal').classList.add('active'))" style="display: flex; align-items: center; gap: 4px;" title="Help &amp; User Guide">
-          ❓ Help
         </button>
 
         <!-- Main Menu Dropdown at far right -->
@@ -136,61 +143,32 @@
         </div>
       </div>
 
-      <!-- Options Drop-Down Window / Modal -->
-      <div class="options-dropdown prevent-resize" id="optionsModal" style="display: none; flex-direction: row; gap: 20px;">
-        <div style="flex: 1; min-width: 200px;">
-          <h3>House Rules</h3>
-          <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
-            <label for="toggleEnhancedTraitBoost" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Allows Enhanced Trait to increase power effect ranks (not rules-legal normally)">
-              Enhanced Trait can boost effects:
-            </label>
-            <input type="checkbox" id="toggleEnhancedTraitBoost" style="cursor: pointer;">
-          </div>
-          <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
-            <label for="toggleAltFormVariablePL" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Allows Alternate Forms (Metamorph) to have different Power Levels than the primary hero (locked to main form PL by default)">
-              Allow variable PL for alternate forms:
-            </label>
-            <input type="checkbox" id="toggleAltFormVariablePL" style="cursor: pointer;">
-          </div>
-          <div id="rowBoostAltersRanks" style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
-            <label for="toggleBoostAltersRanks" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Boost alters ranks instead of Power Points, working like Enhanced Trait, with fade applying to ranks rather than PP">
-              Boost alters ranks instead of PP:
-            </label>
-            <input type="checkbox" id="toggleBoostAltersRanks" style="cursor: pointer;">
-          </div>
-          <div id="rowDisablePerceptionRange" style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
-            <label for="toggleDisablePerceptionRange" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Disables Perception range upgrades for powers and adds 'No Attack Roll' (+1 PP/r) extra to allow auto-hits within normal Ranged distance increments">
-              Disable Perception range / Enable "No Attack Roll":
-            </label>
-            <input type="checkbox" id="toggleDisablePerceptionRange" style="cursor: pointer;">
-          </div>
-
-          <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-            <h3>Legacy Core Rules (2nd Ed)</h3>
-            <div style="margin-top: 6px; padding: 6px 0; display: flex; justify-content: space-between; align-items: center;">
-              <label for="toggleEnableLegacyCoreModifiers" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Enable legacy standalone Core 2E modifiers (Continuous, Sustained) in power modifier dropdowns instead of relying solely on the unified Ultimate Power Duration extra">
-                Enable legacy Core modifiers:
-              </label>
-              <input type="checkbox" id="toggleEnableLegacyCoreModifiers" style="cursor: pointer;">
-            </div>
-            
-            <details style="margin-top: 8px; font-size: var(--font-size-fine-print); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px 8px;">
-              <summary style="cursor: pointer; font-weight: 600; color: var(--accent-primary); user-select: none;">ℹ View Included Legacy Traits</summary>
-              <div style="margin-top: 6px; line-height: 1.4; color: var(--text-muted);">
-                <div><strong>Legacy Modifiers:</strong> Continuous (+1/r), Sustained (+1/r or +0), Duration (Continuous), Duration (Sustained).</div>
-                <div style="margin-top: 4px; font-style: italic; color: var(--text-main);">Note: Unified Ultimate Power Duration (+1/r per step) is always available. Full compatibility with imported Hero Lab profiles is always preserved.</div>
-              </div>
-            </details>
-          </div>
+      <!-- Options Drop-Down Window / Modal (Scrollable Single Column) -->
+      <div class="options-dropdown prevent-resize" id="optionsModal" style="display: none;">
+        <!-- Header / Close -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; margin-bottom: 2px;">
+          <h2 style="font-size: var(--font-size-labels); margin: 0; display: flex; align-items: center; gap: 6px; color: var(--accent-primary);">
+            ⚙ Preferences &amp; Options
+          </h2>
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('optionsModal').classList.remove('show');" style="padding: 2px 8px; font-size: 13px; line-height: 1;" title="Close Options">✕</button>
         </div>
-        <div style="flex: 1; min-width: 250px;">
-          <h3>Display & Interface Settings</h3>
+
+        <!-- Section 1: Display & Interface Settings -->
+        <div class="options-card">
+          <h3>Display &amp; Interface Settings</h3>
           
-          <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;">
+          <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 8px;">
             <!-- Filled dynamically by JS -->
           </button>
 
-          <div style="margin-top: 6px; padding: 6px 0; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+          <div style="margin-top: 4px; padding: 4px 0; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <label for="chkMenusOnLeft" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Places Main, Options, and Help buttons on the left side of the top bar (traditional UX placement)">
+              Menus on left (traditional UX):
+            </label>
+            <input type="checkbox" id="chkMenusOnLeft" style="cursor: pointer;">
+          </div>
+
+          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
             <label for="togglePersistentHeader" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
               Persistent Top Bar:
             </label>
@@ -212,7 +190,7 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
                 <label>Headers &amp; Titles:</label>
               </div>
               <span class="secondary-text" id="valLabelFont">16px</span>
@@ -223,7 +201,7 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
                 <label>Body &amp; Trait Details:</label>
               </div>
               <span class="secondary-text" id="valSecondaryFont">14px</span>
@@ -234,7 +212,7 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('FinePrint', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFont('FinePrint', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
                 <label>Fine Print &amp; Footnotes:</label>
               </div>
               <span class="secondary-text" id="valFinePrintFont">13px</span>
@@ -250,7 +228,7 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
                 <label>Primary Buttons &amp; Inputs:</label>
               </div>
               <span class="secondary-text" id="valControlFont">14px</span>
@@ -261,7 +239,7 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('MinorControl', 15)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFont('MinorControl', 15)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
                 <label>Sub-Controls &amp; Dropdowns:</label>
               </div>
               <span class="secondary-text" id="valMinorControlFont">15px</span>
@@ -272,7 +250,7 @@
           <div class="font-control-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <button class="btn btn-secondary" onclick="resetFont('Tags', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFont('Tags', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
                 <label>Tags, Badges &amp; Chips:</label>
               </div>
               <span class="secondary-text" id="valTagFont">13px</span>
@@ -281,105 +259,134 @@
           </div>
         </div>
 
-        <!-- Save / Load Folder & Alerts Column -->
-        <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 12px;">
-          <!-- Save / Load Folder Preferences -->
-          <div>
-            <h3 style="font-size: var(--font-size-labels); margin-bottom: 6px;">Save / Load Folder</h3>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: var(--font-size-secondary);">
-              <span style="color: var(--text-muted);">Default:</span>
-              <span id="lblActiveFolder" style="font-weight: 600; color: var(--text-main); font-family: ui-monospace, monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Current default save/load folder">[Project Default]</span>
-            </div>
-            <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn btn-secondary" id="btnSetCustomFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
-                📁 Set Folder...
-              </button>
-              <button type="button" class="btn btn-secondary" id="btnResetFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
-                ↺ Reset to Default
-              </button>
-            </div>
-            <div id="boxFirefoxNotice" style="display: none; margin-top: 8px; padding: 6px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.35;">
-              <div>🦊 <strong>Firefox Saving:</strong> In <em>Firefox Settings &gt; Downloads</em>, check <strong>"Always ask you where to save files"</strong>. When saving, click <strong>OK / Save File</strong> on Firefox's prompt to choose your save folder.</div>
-              <button type="button" class="btn btn-secondary" onclick="if(window.openFirefoxSettings) window.openFirefoxSettings(); else window.open('about:preferences#general', '_blank');" style="margin-top: 6px; font-size: var(--font-size-minor-controls); padding: 3px 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;">⚙ Open Firefox Downloads Settings</button>
-              <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 4px;">If button doesn't work: Go to <strong>Menu button (☰) &gt; Settings &gt; Downloads</strong> (or <strong>Tools &gt; Settings &gt; Downloads</strong> from the top menu). Address fallback: <code>about:preferences#general</code></div>
-            </div>
+        <!-- Section 2: House Rules -->
+        <div class="options-card">
+          <h3>House Rules</h3>
+          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleEnhancedTraitBoost" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Allows Enhanced Trait to increase power effect ranks (not rules-legal normally)">
+              Enhanced Trait can boost effects:
+            </label>
+            <input type="checkbox" id="toggleEnhancedTraitBoost" style="cursor: pointer;">
           </div>
-
-          <!-- Disable Warnings & Alerts Options (reorganized below save/load settings) -->
-          <div style="border-top: 1px dashed var(--border-color); padding-top: 8px;">
-            <h3 style="font-size: var(--font-size-labels); margin-bottom: 6px;">Alerts &amp; Prompts</h3>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
-                <input type="checkbox" id="chkDisableWarnings" style="cursor: pointer;">
-                Disable non-critical power option alerts
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
-                <input type="checkbox" id="chkDisableDeleteWarning" style="cursor: pointer;">
-                Disable power container deletion warnings
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
-                <input type="checkbox" id="chkDisableResWarning" style="cursor: pointer;">
-                Disable screen resolution warning
-              </label>
-            </div>
+          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleAltFormVariablePL" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Allows Alternate Forms (Metamorph) to have different Power Levels than the primary hero (locked to main form PL by default)">
+              Allow variable PL for alternate forms:
+            </label>
+            <input type="checkbox" id="toggleAltFormVariablePL" style="cursor: pointer;">
           </div>
-
-          <!-- Discord Webhooks (Dual Roll & Chat Broadcasting) -->
-          <div style="border-top: 1px dashed var(--border-color); padding-top: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;">
-              <h3 style="font-size: var(--font-size-labels); margin: 0; display: flex; align-items: center; gap: 6px;">
-                💬 Discord Webhooks
-              </h3>
-              <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                <span class="badge" id="lblDiscordRollsStatus" style="font-size: 10px; padding: 2px 6px; background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color);">🎲 Rolls: Off</span>
-                <span class="badge" id="lblDiscordChatStatus" style="font-size: 10px; padding: 2px 6px; background: rgba(107, 114, 128, 0.15); color: var(--text-muted); border: 1px solid var(--border-color);">💬 Chat: Off</span>
-              </div>
-            </div>
-            <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
-              Echo dice rolls and tabletop chat directly to your Discord channels. You can assign separate webhooks for Rolls and Chat, or select the same webhook for both.
-            </div>
-
-            <!-- Webhook List -->
-            <div id="discordWebhooksList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; max-height: 150px; overflow-y: auto;">
-              <!-- Dynamically populated -->
-            </div>
-
-            <!-- Add Webhook Controls -->
-            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px;">
-              <div style="font-size: var(--font-size-fine-print); font-weight: 600; color: var(--text-muted);">+ New Webhook:</div>
-              <input type="text" id="txtDiscordWebhookName" placeholder="Name (e.g. #dice-rolls or #game-chat)" style="height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
-              <div style="display: flex; gap: 4px;">
-                <input type="url" id="txtDiscordWebhookUrl" placeholder="https://discord.com/api/webhooks/..." style="flex: 1; height: 24px; font-size: var(--font-size-minor-controls); padding: 2px 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 3px;">
-                <button type="button" class="btn btn-primary" id="btnAddDiscordWebhook" style="height: 24px; padding: 0 8px; font-size: var(--font-size-minor-controls); white-space: nowrap;">+ Add</button>
-              </div>
-              <div style="display: flex; align-items: center; gap: 12px; margin-top: 2px;">
-                <label style="display: flex; align-items: center; gap: 4px; font-size: var(--font-size-fine-print); cursor: pointer; color: var(--text-muted); user-select: none;">
-                  <input type="checkbox" id="chkNewWebhookForRolls" checked style="cursor: pointer; margin: 0;"> 🎲 Assign for Rolls
-                </label>
-                <label style="display: flex; align-items: center; gap: 4px; font-size: var(--font-size-fine-print); cursor: pointer; color: var(--text-muted); user-select: none;">
-                  <input type="checkbox" id="chkNewWebhookForChat" checked style="cursor: pointer; margin: 0;"> 💬 Assign for Chat
-                </label>
-              </div>
-            </div>
+          <div id="rowBoostAltersRanks" style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleBoostAltersRanks" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Boost alters ranks instead of Power Points, working like Enhanced Trait, with fade applying to ranks rather than PP">
+              Boost alters ranks instead of PP:
+            </label>
+            <input type="checkbox" id="toggleBoostAltersRanks" style="cursor: pointer;">
           </div>
-
-          <!-- Application Updates & Cache Management -->
-          <div style="border-top: 1px dashed var(--border-color); padding-top: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <h3 style="font-size: var(--font-size-labels); margin: 0; display: flex; align-items: center; gap: 6px;">
-                🔄 Version &amp; Updates
-              </h3>
-              <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b125)</span>
-            </div>
-            <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
-              If GitHub was recently updated and your browser is serving an older cached version, click below to unregister stale Service Workers, clear cache, and reload the latest build.
-            </div>
-            <button type="button" class="btn btn-secondary" id="btnForceCheckUpdates" style="width: 100%; font-size: var(--font-size-minor-controls); padding: 4px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; color: var(--accent-primary);">
-              🔄 Check for Updates &amp; Clear Cache
-            </button>
+          <div id="rowDisablePerceptionRange" style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleDisablePerceptionRange" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Disables Perception range upgrades for powers and adds 'No Attack Roll' (+1 PP/r) extra to allow auto-hits within normal Ranged distance increments">
+              Disable Perception range / Enable "No Attack Roll":
+            </label>
+            <input type="checkbox" id="toggleDisablePerceptionRange" style="cursor: pointer;">
           </div>
         </div>
 
+        <!-- Section 3: Legacy Core Rules -->
+        <div class="options-card">
+          <h3>Legacy Core Rules (2nd Ed)</h3>
+          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+            <label for="toggleEnableLegacyCoreModifiers" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Enable legacy standalone Core 2E modifiers (Continuous, Sustained) in power modifier dropdowns instead of relying solely on the unified Ultimate Power Duration extra">
+              Enable legacy Core modifiers:
+            </label>
+            <input type="checkbox" id="toggleEnableLegacyCoreModifiers" style="cursor: pointer;">
+          </div>
+          
+          <details style="margin-top: 6px; font-size: var(--font-size-fine-print); background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px 8px;">
+            <summary style="cursor: pointer; font-weight: 600; color: var(--accent-primary); user-select: none;">ℹ View Included Legacy Traits</summary>
+            <div style="margin-top: 6px; line-height: 1.4; color: var(--text-muted);">
+              <div><strong>Legacy Modifiers:</strong> Continuous (+1/r), Sustained (+1/r or +0), Duration (Continuous), Duration (Sustained).</div>
+              <div style="margin-top: 4px; font-style: italic; color: var(--text-main);">Note: Unified Ultimate Power Duration (+1/r per step) is always available. Full compatibility with imported Hero Lab profiles is always preserved.</div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Section 4: Save / Load Folder -->
+        <div class="options-card">
+          <h3>Save / Load Folder</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: var(--font-size-secondary);">
+            <span style="color: var(--text-muted);">Default:</span>
+            <span id="lblActiveFolder" style="font-weight: 600; color: var(--text-main); font-family: ui-monospace, monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Current default save/load folder">[Project Default]</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-secondary" id="btnSetCustomFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
+              📁 Set Folder...
+            </button>
+            <button type="button" class="btn btn-secondary" id="btnResetFolder" style="flex: 1; font-size: var(--font-size-minor-controls); padding: 4px 6px;">
+              ↺ Reset to Default
+            </button>
+          </div>
+          <div id="boxFirefoxNotice" style="display: none; margin-top: 8px; padding: 6px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.35;">
+            <div>🦊 <strong>Firefox Saving:</strong> In <em>Firefox Settings &gt; Downloads</em>, check <strong>"Always ask you where to save files"</strong>. When saving, click <strong>OK / Save File</strong> on Firefox's prompt to choose your save folder.</div>
+            <button type="button" class="btn btn-secondary" onclick="if(window.openFirefoxSettings) window.openFirefoxSettings(); else window.open('about:preferences#general', '_blank');" style="margin-top: 6px; font-size: var(--font-size-minor-controls); padding: 3px 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;">⚙ Open Firefox Downloads Settings</button>
+            <div style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-top: 4px;">If button doesn't work: Go to <strong>Menu button (☰) &gt; Settings &gt; Downloads</strong> (or <strong>Tools &gt; Settings &gt; Downloads</strong> from the top menu). Address fallback: <code>about:preferences#general</code></div>
+          </div>
+        </div>
+
+        <!-- Section 5: Alerts & Prompts -->
+        <div class="options-card">
+          <h3>Alerts &amp; Prompts</h3>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+              <input type="checkbox" id="chkDisableWarnings" style="cursor: pointer;">
+              Disable non-critical power option alerts
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+              <input type="checkbox" id="chkDisableDeleteWarning" style="cursor: pointer;">
+              Disable power container deletion warnings
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+              <input type="checkbox" id="chkDisableResWarning" style="cursor: pointer;">
+              Disable screen resolution warning
+            </label>
+          </div>
+        </div>
+
+        <!-- Section 6: Webhooks (Per-Campaign) -->
+        <div class="options-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <h3>💬 Webhooks Integration</h3>
+            <span class="badge" style="font-size: 10px; padding: 2px 6px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981;">Per-Campaign</span>
+          </div>
+          <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 8px;">
+            Webhooks are configured individually per campaign so that each game routes rolls and chat to its own channels (Discord, Slack, Guilded, Mattermost).
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('optionsModal').classList.remove('show'); if(window.openSessionCampaignsModal) window.openSessionCampaignsModal('webhooks');" style="width: 100%; font-size: var(--font-size-minor-controls); padding: 5px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600;">
+            🏰 Configure Campaign Webhooks...
+          </button>
+          
+          <!-- Hidden/Collapsible legacy inputs to ensure zero JS regressions if referenced -->
+          <div style="display: none;">
+            <span id="lblDiscordRollsStatus"></span>
+            <span id="lblDiscordChatStatus"></span>
+            <div id="discordWebhooksList"></div>
+            <input type="text" id="txtDiscordWebhookName">
+            <input type="url" id="txtDiscordWebhookUrl">
+            <button type="button" id="btnAddDiscordWebhook"></button>
+            <input type="checkbox" id="chkNewWebhookForRolls">
+            <input type="checkbox" id="chkNewWebhookForChat">
+          </div>
+        </div>
+
+        <!-- Section 7: Version & Updates -->
+        <div class="options-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <h3 style="margin: 0;">🔄 Version &amp; Updates</h3>
+            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b126)</span>
+          </div>
+          <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
+            If GitHub was recently updated and your browser is serving an older cached version, click below to unregister stale Service Workers, clear cache, and reload the latest build.
+          </div>
+          <button type="button" class="btn btn-secondary" id="btnForceCheckUpdates" style="width: 100%; font-size: var(--font-size-minor-controls); padding: 4px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; color: var(--accent-primary);">
+            🔄 Check for Updates &amp; Clear Cache
+          </button>
+        </div>
       </div>
     </header>
 
@@ -961,6 +968,9 @@
             <span style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; color: var(--accent-primary);" id="lblSessionCampaignNameTitle">
               🏰 <span id="lblSessionCampaignName">Campaign</span>
             </span>
+            <button type="button" class="btn btn-secondary" id="btnSessionCampaignsModal" style="height: 24px; padding: 0 8px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="View Synced Campaign Logs &amp; Configure Webhooks">
+              🏰 Campaigns
+            </button>
             <span class="badge" id="lblSessionNumberBadge" style="background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 600; font-size: 11px;">
               Session #1
             </span>
@@ -2450,6 +2460,103 @@
     </div>
   </div>
 
+  <!-- Session Campaigns & Synced Logs Modal -->
+  <div class="modal-overlay" id="sessionCampaignsModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 95%; max-width: 820px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px;">
+        <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+          <span>🏰</span> Campaign Hub &amp; Synced Logs
+        </h3>
+        <button class="info-popup-close" onclick="document.getElementById('sessionCampaignsModal').classList.remove('active')">✕</button>
+      </div>
+
+      <!-- Campaign Selector & Metadata Bar -->
+      <div style="padding: 10px 16px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 260px;">
+          <label for="selSessionCampPicker" style="font-weight: 600; font-size: var(--font-size-secondary); white-space: nowrap;">Campaign:</label>
+          <select id="selSessionCampPicker" style="flex: 1; height: 30px; font-weight: 600; font-size: var(--font-size-secondary); background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; cursor: pointer;"></select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <span class="badge" id="lblSessionCampMetaStatus" style="font-size: 11px; padding: 3px 8px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">Active Campaign</span>
+          <button type="button" class="btn btn-secondary" id="btnSessionCampSetActive" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls); display: none;">Switch to this Campaign</button>
+        </div>
+      </div>
+
+      <!-- Modal Nav Tabs -->
+      <div style="display: flex; border-bottom: 1px solid var(--border-color); background: var(--bg-panel);">
+        <button type="button" class="tab-button active" id="tabBtnSessionCampLogs" style="flex: 1; padding: 8px 12px; font-size: var(--font-size-secondary); font-weight: 600; border: none; border-bottom: 2px solid var(--accent-primary); background: var(--bg-card); color: var(--text-main); cursor: pointer;">
+          📜 Synced Session Log
+        </button>
+        <button type="button" class="tab-button" id="tabBtnSessionCampWebhooks" style="flex: 1; padding: 8px 12px; font-size: var(--font-size-secondary); font-weight: 600; border: none; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer;">
+          💬 Webhook Integrations
+        </button>
+      </div>
+
+      <!-- Tab 1: Synced Session Log -->
+      <div id="tabContentSessionCampLogs" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 12px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 200px;">
+            <input type="text" id="txtSessionCampLogSearch" placeholder="Filter log entries (name, roll, message)..." style="flex: 1; height: 28px; font-size: var(--font-size-secondary); padding: 0 8px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;">
+            <button type="button" class="btn btn-secondary" id="btnSessionCampLogClearSearch" style="height: 28px; padding: 0 8px; font-size: var(--font-size-minor-controls);">Clear</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="lblSessionCampLogCount" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">0 entries</span>
+            <button type="button" class="btn btn-secondary" id="btnSessionCampLogExport" style="height: 28px; padding: 0 10px; font-size: var(--font-size-minor-controls); display: inline-flex; align-items: center; gap: 4px;">📥 Export Log</button>
+          </div>
+        </div>
+        <div id="boxSessionCampLogContainer" style="flex: 1; min-height: 250px; max-height: 380px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; font-size: var(--font-size-secondary);">
+          <!-- Log items rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Tab 2: Webhook Integrations -->
+      <div id="tabContentSessionCampWebhooks" style="display: none; flex-direction: column; flex: 1; overflow-y: auto; padding: 14px 16px; gap: 12px;">
+        <div style="background: var(--bg-card); border-left: 3px solid var(--accent-primary); padding: 10px 14px; border-radius: 4px; font-size: var(--font-size-secondary); line-height: 1.45;">
+          <strong>Universal Webhook Echoing:</strong> Automatically broadcast public dice rolls and session chat to external channels in real time. Works with <strong>Discord</strong>, <strong>Slack</strong>, <strong>Guilded</strong>, <strong>Mattermost</strong>, or any custom HTTP relay. Payloads include both <code>content</code> and <code>text</code> for seamless multi-service compatibility.
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">
+          <input type="checkbox" id="chkCampSameWebhook" style="cursor: pointer; width: 16px; height: 16px;">
+          <label for="chkCampSameWebhook" style="font-weight: 600; font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+            Use the same webhook for both Dice Rolls and Session Chat
+          </label>
+        </div>
+
+        <!-- Rolls Webhook URL -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <label for="txtCampRollsWebhookUrl" style="font-weight: 600; font-size: var(--font-size-secondary); display: flex; align-items: center; gap: 6px;">
+            <span>🎲</span> Dice Rolls Webhook URL:
+          </label>
+          <div style="display: flex; gap: 6px;">
+            <input type="url" id="txtCampRollsWebhookUrl" placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/..." style="flex: 1; height: 32px; font-size: var(--font-size-secondary); padding: 0 8px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;">
+            <button type="button" class="btn btn-secondary" id="btnTestCampRollsWebhook" style="height: 32px; padding: 0 10px; font-size: var(--font-size-minor-controls); white-space: nowrap;">🎲 Test Roll Ping</button>
+          </div>
+        </div>
+
+        <!-- Chat Webhook URL -->
+        <div id="boxCampChatWebhookContainer" style="display: flex; flex-direction: column; gap: 4px;">
+          <label for="txtCampChatWebhookUrl" style="font-weight: 600; font-size: var(--font-size-secondary); display: flex; align-items: center; gap: 6px;">
+            <span>💬</span> Session Chat Webhook URL:
+          </label>
+          <div style="display: flex; gap: 6px;">
+            <input type="url" id="txtCampChatWebhookUrl" placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/..." style="flex: 1; height: 32px; font-size: var(--font-size-secondary); padding: 0 8px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;">
+            <button type="button" class="btn btn-secondary" id="btnTestCampChatWebhook" style="height: 32px; padding: 0 10px; font-size: var(--font-size-minor-controls); white-space: nowrap;">💬 Test Chat Ping</button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <span id="lblCampWebhooksStatus" style="font-size: var(--font-size-fine-print); color: var(--text-muted);">Changes not yet saved</span>
+          <button type="button" class="btn btn-primary" id="btnSaveCampWebhooks" style="height: 32px; padding: 0 16px; font-weight: 600; font-size: var(--font-size-secondary);">💾 Save Campaign Webhooks</button>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('sessionCampaignsModal').classList.remove('active')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- About / Readme Modal Overlay -->
   <div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)this.classList.remove('active')">
     <div class="info-popup-box" style="width: 92%; max-width: 860px; max-height: 88vh; display: flex; flex-direction: column;">
@@ -2458,6 +2565,13 @@
           <span>❓</span> Help &amp; User Guide — M&amp;M 2E Hero Builder
         </h3>
         <button class="info-popup-close" id="modalAboutClose" onclick="document.getElementById('aboutModal').classList.remove('active')">✕</button>
+      </div>
+      <!-- Help Search Bar -->
+      <div style="padding: 8px 16px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-size: 14px;">🔍</span>
+        <input type="text" id="txtAboutSearch" placeholder="Search Help &amp; User Guide (e.g. webhooks, campaigns, themes, combat, popouts)..." style="flex: 1; min-width: 200px; height: 30px; font-size: var(--font-size-secondary); padding: 0 10px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;">
+        <button type="button" class="btn btn-secondary" id="btnAboutClearSearch" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls);" title="Clear Search">✕ Clear</button>
+        <span id="lblAboutSearchResultsCount" style="font-size: var(--font-size-fine-print); color: var(--text-muted); white-space: nowrap;"></span>
       </div>
       <div class="info-popup-body about-modal-body" id="aboutModalBody" style="flex: 1; overflow-y: auto; padding: 18px 24px; line-height: 1.6;">
         <!-- Readme markdown content loaded dynamically -->

@@ -59,16 +59,21 @@ Clicking `⚙ Options` in the top header opens the preferences and house rules c
 - Toggles whether modifiers strictly follow the original 2005 Core Rulebook definitions or the expanded, balanced standards from *Ultimate Power*.
 
 ### Appearance, Layout & Typography
-- **Theme Selector**: Choose between curated color schemes, including **Dark Modern** (default), **High Contrast**, **Midnight Blue**, **Slate**, **Retro Terminal**, **Light Paper**, and **Parchment**.
+- **Theme Selector**: Choose between 4 distinct visual themes:
+  - **Light**: High-clarity, crisp daytime theme with clean borders and sharp daytime contrast.
+  - **Dark**: Low-eyestrain dark modern slate theme designed for extended evening sessions.
+  - **Kitty**: Playful pastel theme featuring delightful rose-pink accents, soft violet cards, and cat-themed styling.
+  - **Parchment**: Classic tabletop warm parchment styling evoking golden-age superhero sourcebooks and weathered paper character folios.
+- **Menus on Left UI Option**: Traditional UX placement option that moves the action buttons (`📁 Main ▾`, `⚙ Options`, `❓ Help`) to the left side of the top header and reverses their order for standard desktop operating system familiarity.
 - **Sticky Header**: Keep the top status bar pinned while scrolling long sheets, or toggle off for maximum vertical space on small displays.
-- **Font Size Scaling**: Live slider to scale overall application typography from compact (80%) to large print (130%).
-- **Line Spacing**: Fine-tune vertical text density for optimal readability.
+- **Font Size Scaling**: Live slider to scale overall application typography across headers, body, fine print, controls, sub-controls, and badges.
+- **Freeze Options Dialog Size**: Keeps the options dropdown at a readable standard size while testing typography sliders.
 
 ### Workspace, Storage & Integrations
 - **Custom Save/Load Folder**: Utilizing the Chromium File System Access API, you can bind a default local folder on your computer for instantaneous one-click saving and loading without standard browser download prompts.
 - **Autosave Timer**: Configurable background autosave intervals (e.g., every 60 seconds) with an unobtrusive dirty-state badge (`● Unsaved Changes`).
 - **Sound Effects & Audio Cues**: Audible feedback for rolling d20s, critical hits, and condition status alerts.
-- **Dual Discord Webhooks Integration**: Dedicated broadcast pipelines for dice rolls and session chat (detailed below).
+- **Per-Campaign Webhooks**: Dedicated broadcast pipelines for dice rolls and session chat supporting Discord, Slack, Guilded, and Mattermost (detailed below).
 
 ---
 
@@ -264,51 +269,64 @@ The Session tab combines the best tabletop capabilities found on platforms like 
   - Typing `@` inside the chat bar opens an instant popover listing all connected players and the GM, allowing rapid secret whispers without memorizing handles.
 - **Sound Effects & Cues**:
   - Audible alerts for dice rolls, critical hits, and condition alerts.
+- **🏰 Campaigns Button & Synced Logs**:
+  - Direct access from the top control row on the Session tab.
+  - **Browse Synced Campaigns**: Switch between campaigns you've participated in and inspect metadata.
+  - **Most Recently Synced Session Log**: Inspect past rolls and chat messages from any campaign, complete with timestamps, author badges, roll breakdowns, and outcomes.
+  - **Real-Time Log Search & Filter**: Filter history entries by keyword, hero name, or roll type.
+  - **Export Session Log**: Download the complete campaign log as a formatted `.txt` file with one click.
+  - **Per-Campaign Webhooks**: Configure independent Dice Rolls and Session Chat webhooks for that specific campaign.
 - **Dual Webhooks Mirroring**:
-  - Stream session activity out to Discord channels in real time.
+  - Stream session activity out to external channels in real time.
 
 ---
 
-## 💬 Dual Discord Webhook Integration: How It Works
+## 💬 Multi-Service Webhook Integration (Discord, Slack, Guilded & Mattermost)
 
-MM2CG features deep, automated integration with Discord, allowing your tabletop group to bridge in-game action directly into your gaming group's Discord server.
+MM2CG features deep, automated webhook integration, allowing tabletop sessions to bridge in-game action directly into your group's community chat servers.
+
+### 🌐 Universal Service Compatibility: Discord, Slack, Guilded & Mattermost
+MM2CG webhook payloads are transmitted with multi-service compatibility attributes:
+- `content`: Read by **Discord** and **Guilded** (standard Markdown text formatting).
+- `text`: Read by **Slack**, **Mattermost**, **Google Chat**, and custom HTTP webhooks.
+- `username`: Displays the character and player name as the webhook sender.
+Because both fields are transmitted simultaneously in the JSON payload, you can paste webhook URLs from Discord, Slack, Guilded, or Mattermost directly into MM2CG without requiring third-party bot proxies!
 
 ### 📡 Outbound Webhook Architecture & Why It Is One-Way
-- **How Discord Incoming Webhooks Work**:
-  - A Discord webhook is a unique, secure HTTP POST endpoint generated by Discord (`https://discord.com/api/webhooks/{id}/{token}`) that allows external applications to push messages into a channel.
-  - **Why Webhooks Do Not Read Messages**: Standard Discord incoming webhooks are strictly **one-way (outbound only)**. Discord does not allow web browsers to read messages from a channel via a webhook URL without creating a full Discord Bot Application with privileged Gateway intents.
-  - **The MM2CG Solution**: MM2CG uses its built-in **Peer-to-Peer VTT** for real-time two-way synchronization between players and GM, while using Discord webhooks as an external broadcast mirror to publish rolls and chat directly into your community channels!
+- **How Webhooks Work**:
+  - Incoming webhooks are secure HTTP POST endpoints generated by your chat platform (e.g., `https://discord.com/api/webhooks/...` or `https://hooks.slack.com/services/...`) that accept push messages into a channel.
+  - **Why Webhooks Do Not Read Messages**: Standard incoming webhooks are strictly **one-way (outbound only)**. They allow applications to publish messages into a chat channel, but web browsers cannot read incoming chat messages from that channel through a webhook endpoint without running a privileged bot application with gateway intents.
+  - **The MM2CG Tabletop Solution**: MM2CG uses its built-in, encrypted **Peer-to-Peer VTT** for real-time two-way synchronization between players and GM, while using webhooks as an external broadcast mirror to publish public rolls and table chatter directly into your community servers!
 
 ### 🎲 Two Webhooks per Game: Dice Rolls & Session Chat
-Each game or campaign can configure **TWO separate webhooks**:
-
+Each campaign can configure **TWO separate webhooks**:
 1. **Dice Rolls Webhook (`🎲 Rolls`)**:
    - Dedicated channel for all attack checks, damage saves, skill checks, initiative, and hero point rerolls.
-   - Posts formatted two-line summaries: Character name, roll type, formula breakdown with bold totals, and outcome tags (e.g., `Batman — Toughness Save: 1d20+12 = **27** (Pass)`).
+   - Formats clean summaries: Character name, roll type, formula breakdown with bold totals, and outcome tags (e.g., `Superman — Toughness Save: 1d20+15 = **28** (Pass)`).
 2. **Session Chat Webhook (`💬 Chat`)**:
    - Dedicated channel for in-character dialogue, table talk, and GM scene descriptions.
-   - Formats messages with the character and player name as the Discord message author.
+   - Formats messages with the character and player name as the message author.
 3. **Same Webhook for Both (`🔗 Both`)**:
-   - If your server prefers having a single channel for all table activity (e.g., `#game-table`), simply check both `🎲 Rolls` and `💬 Chat`—or click `🔗 Both`—on a single webhook entry. All rolls and chat will route to that single channel seamlessly!
+   - Check the **"Use same webhook for both Rolls and Chat"** box if your group prefers routing all table activity into a single channel (e.g., `#game-table`).
 
-### 🏰 Campaign Overrides vs. Global Settings
-- **Global Options**: Configure default webhooks under `⚙ Options > 💬 Discord Webhooks`. These defaults are used across all solo and standard sessions.
-- **Per-Campaign Webhooks**: In the GM Campaign Hub (`👑 GM`), click **`💬 Discord Webhooks`** to assign specific webhooks for the active campaign. GMs running multiple campaigns (e.g., *Freedom League* vs. *Doom City*) can route each game to its own dedicated Discord channels!
+### 🏰 Configured Per Campaign
+- **Independent Routing**: Webhooks are configured individually per campaign in the **🏰 Campaigns** hub on the **Session** tab (or in the GM Hub). GMs and groups running multiple campaigns (e.g., *Freedom League* vs. *Doom City*) can route each game to its own dedicated server channels without cross-contamination.
 
 ### 🔒 Confidentiality & Whisper Protection
-- **Zero Leakage**: Secret GM-to-player whispers (`/w`, `/whisper`, `@recipient`) and GM silent rolls are **STRICTLY EXCLUDED** from Discord webhooks. Only public rolls and public chat are ever transmitted to Discord, safeguarding GM secrets and tactical maneuvers.
+- **Zero Leakage**: Secret GM-to-player whispers (`/w`, `/whisper`, `@recipient`) and GM silent rolls are **STRICTLY EXCLUDED** from webhook broadcasts. Only public rolls and public chat are ever transmitted to external webhooks, safeguarding GM secrets and tactical maneuvers.
 
-### 📋 Step-by-Step Discord Setup Guide
-1. **In Discord**:
-   - Go to your Discord server -> Open **Channel Settings** for the desired channel (e.g., `#dice-rolls`).
-   - Click **Integrations** -> **Webhooks** -> Click **New Webhook**.
-   - Name the webhook (e.g., `MM2CG Rolls`) and click **Copy Webhook URL**.
-   - (Optional) Repeat for your chat channel (e.g., `#session-chat`).
+### 📋 Step-by-Step Webhook Setup Guide
+1. **In Discord, Slack, Guilded, or Mattermost**:
+   - **Discord**: Channel Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
+   - **Slack**: Apps -> Incoming WebHooks -> Add to Slack -> Choose Channel -> Copy Webhook URL.
+   - **Guilded**: Server Settings -> Integrations -> Webhooks -> Create Webhook -> Copy URL.
+   - **Mattermost**: Integrations -> Incoming Webhooks -> Add Incoming Webhook -> Copy URL.
 2. **In MM2CG**:
-   - Open `⚙ Options` and scroll to **💬 Discord Webhooks**.
-   - Enter a Name (e.g., `#dice-rolls`) and paste the Webhook URL.
-   - Check `🎲 Assign for Rolls` and/or `💬 Assign for Chat` and click `+ Add`.
-   - Click `⚡ Test` to send a test embed and confirm that Discord receives the connection!
+   - Go to the **Session** tab and click **🏰 Campaigns** (or click `⚙ Options > 🏰 Configure Campaign Webhooks...`).
+   - Switch to the **💬 Webhook Integrations** tab.
+   - Paste the URLs into the **🎲 Dice Rolls Webhook** and/or **💬 Session Chat Webhook** fields (or check "Use same webhook for both").
+   - Click `🎲 Test Roll Ping` or `💬 Test Chat Ping` to confirm receipt!
+   - Click **💾 Save Campaign Webhooks**.
 
 ---
 
@@ -358,6 +376,20 @@ Each game or campaign can configure **TWO separate webhooks**:
 - **Transparent Audit**:
   - Breaks down your character's total budget into Abilities, Combat, Saves, Skills, Feats, and Powers.
   - Highlights trade-offs and flags any over-budget discrepancies.
+
+### 🏰 Campaign Hub & Synced Logs Modal
+- **Campaign Archive & Log Viewer**:
+  - View all campaigns you have created or joined, including active status, GM handle, and session counts.
+  - Browse complete session logs with timestamps, roll formulas, and dialogue entries.
+  - Real-time text search and filter across campaign logs.
+  - Download complete logs to formatted `.txt` files with one click.
+  - Configure per-campaign Dice Rolls and Session Chat webhooks.
+
+### ❓ Help & User Guide Modal
+- **Comprehensive Offline Manual**:
+  - Full tab-by-tab documentation of every editor control, house rule, and tabletop feature.
+  - **Live Search Bar**: Search topics in real time with keyword highlighting (`<mark>`) and `Enter`/`Shift+Enter` result cycling.
+  - Accessible at any time via `❓ Help` without disrupting your active character sheet.
 
 ### 📋 Hero Lab Import Audit Report
 - **Portfolio Reconciliation**:

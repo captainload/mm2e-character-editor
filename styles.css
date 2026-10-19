@@ -177,18 +177,19 @@ body {
   position: absolute;
   top: 100%;
   right: 16px;
-  width: max-content;
-  max-width: 90vw;
-  max-height: calc(100vh - 70px);
+  width: 94vw;
+  max-width: 540px;
+  max-height: calc(100vh - 75px);
   overflow-y: auto;
   background: var(--bg-panel);
   color: var(--text-main);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 12px 14px;
   z-index: 1000;
   margin-top: 6px;
+  box-sizing: border-box;
 }
 
 .options-dropdown.prevent-resize {
@@ -203,7 +204,60 @@ body {
 
 .options-dropdown.show {
   display: flex !important;
-  gap: 10px;
+  flex-direction: column !important;
+  gap: 12px;
+}
+
+.options-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.options-card h3 {
+  font-size: var(--font-size-labels);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 4px;
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: var(--accent-primary);
+}
+
+/* Menus on Left UI Option */
+html.menus-on-left .top-header,
+body.menus-on-left .top-header {
+  flex-direction: row-reverse;
+}
+
+html.menus-on-left .header-actions,
+body.menus-on-left .header-actions {
+  flex-direction: row-reverse;
+}
+
+html.menus-on-left .file-dropdown-menu,
+body.menus-on-left .file-dropdown-menu {
+  right: auto;
+  left: 0;
+}
+
+html.menus-on-left .options-dropdown,
+body.menus-on-left .options-dropdown {
+  right: auto;
+  left: 8px;
+  max-width: min(540px, calc(100vw - 16px));
+}
+
+.help-search-highlight {
+  background: #fef08a;
+  color: #854d0e;
+  padding: 1px 3px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+[data-theme="dark"] .help-search-highlight {
+  background: #ca8a04;
+  color: #ffffff;
 }
 
 .options-dropdown h3 {

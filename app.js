@@ -2108,7 +2108,7 @@ window.sanitizeWindowBounds = sanitizeWindowBounds;
 function preparePopoutGeometry(bounds, defaultBounds) {
   const sanitized = sanitizeWindowBounds(bounds, defaultBounds);
   const { width, height, left, top } = sanitized;
-  const features = `width=${width},height=${height},left=${left},top=${top},screenX=${left},screenY=${top},resizable=yes,scrollbars=yes`;
+  const features = `popup=yes,width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
 
   return {
     width,
@@ -2147,13 +2147,13 @@ function setupTablesPopout() {
     if (_tablesOpening) return;
     if (!win || win.closed) return;
     try {
-      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
-      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
+      const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
-        saveTablesBoundsDirect({ left, top, width, height });
+          Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
+        saveTablesBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
       }
     } catch (e) {}
   }
@@ -2179,7 +2179,19 @@ function setupTablesPopout() {
     const geom = preparePopoutGeometry(getSavedTablesBounds(), { width: 920, height: 680, left: 160, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
+    poppedOutTablesWindow = window.open(`tables_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "_blank", geom.features);
+    if (poppedOutTablesWindow) {
+      try { poppedOutTablesWindow.name = "MM2CG_TablesWindow"; } catch (e) {}
+      try {
+        poppedOutTablesWindow.resizeTo(geom.width, geom.height);
+        poppedOutTablesWindow.moveTo(geom.left, geom.top);
+      } catch (e) {}
+      try {
+        poppedOutTablesWindow.addEventListener('resize', () => {
+          saveTablesBoundsFromRef(poppedOutTablesWindow);
+        });
+      } catch (e) {}
+    }
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
 
@@ -2235,10 +2247,14 @@ function setupTablesPopout() {
     }
   });
   setInterval(() => {
-    if (poppedOutTablesWindow && poppedOutTablesWindow.closed) {
-      redockTables(false);
+    if (poppedOutTablesWindow) {
+      if (poppedOutTablesWindow.closed) {
+        redockTables(false);
+      } else {
+        saveTablesBoundsFromRef(poppedOutTablesWindow);
+      }
     }
-  }, 500);
+  }, 400);
 }
 setupTablesPopout();
 
@@ -3104,13 +3120,13 @@ function setupStatusTracker() {
       if (_trackerOpening) return;
       if (!win || win.closed) return;
       try {
-        const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
-        const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+        const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
+        const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
         const width = win.outerWidth || win.innerWidth;
         const height = win.outerHeight || win.innerHeight;
         if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-            Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
-          saveTrackerBoundsDirect({ left, top, width, height });
+            Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
+          saveTrackerBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
         }
       } catch (e) {}
     }
@@ -3141,7 +3157,19 @@ function setupStatusTracker() {
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "_blank", geom.features);
+      if (poppedOutTrackerWindow) {
+        try { poppedOutTrackerWindow.name = "MM2CG_TrackerWindow"; } catch (e) {}
+        try {
+          poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
+          poppedOutTrackerWindow.moveTo(geom.left, geom.top);
+        } catch (e) {}
+        try {
+          poppedOutTrackerWindow.addEventListener('resize', () => {
+            saveTrackerBoundsFromRef(poppedOutTrackerWindow);
+          });
+        } catch (e) {}
+      }
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
@@ -3229,10 +3257,14 @@ function setupStatusTracker() {
     });
 
     setInterval(() => {
-      if (poppedOutTrackerWindow && poppedOutTrackerWindow.closed) {
-        redockTracker();
+      if (poppedOutTrackerWindow) {
+        if (poppedOutTrackerWindow.closed) {
+          redockTracker();
+        } else {
+          saveTrackerBoundsFromRef(poppedOutTrackerWindow);
+        }
       }
-    }, 500);
+    }, 400);
 
     if (!modal || !btnOpen) return;
 
@@ -6495,13 +6527,13 @@ function setupSessionAndGMHub() {
     if (_partyOpening) return;
     if (!win || win.closed) return;
     try {
-      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
-      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
+      const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
-        savePartyDisplayBoundsDirect({ left, top, width, height });
+          Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
+        savePartyDisplayBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
       }
     } catch (e) {}
   }
@@ -6519,7 +6551,19 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedPartyDisplayBounds(), { width: 840, height: 480, left: 120, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
+    poppedOutPartyWindow = window.open(`party_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "_blank", geom.features);
+    if (poppedOutPartyWindow) {
+      try { poppedOutPartyWindow.name = "MM2CG_PartyDisplay"; } catch (e) {}
+      try {
+        poppedOutPartyWindow.resizeTo(geom.width, geom.height);
+        poppedOutPartyWindow.moveTo(geom.left, geom.top);
+      } catch (e) {}
+      try {
+        poppedOutPartyWindow.addEventListener('resize', () => {
+          savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
+        });
+      } catch (e) {}
+    }
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
 
@@ -6606,10 +6650,14 @@ function setupSessionAndGMHub() {
   });
 
   setInterval(() => {
-    if (poppedOutPartyWindow && poppedOutPartyWindow.closed) {
-      redockPartyDisplay();
+    if (poppedOutPartyWindow) {
+      if (poppedOutPartyWindow.closed) {
+        redockPartyDisplay();
+      } else {
+        savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
+      }
     }
-  }, 500);
+  }, 400);
 
   if (txtSearch) {
     txtSearch.addEventListener("input", (e) => {
@@ -7570,13 +7618,13 @@ function setupSessionAndGMHub() {
     if (_gmOpening) return;
     if (!win || win.closed) return;
     try {
-      const left = (win.screenX !== undefined) ? win.screenX : win.screenLeft;
-      const top = (win.screenY !== undefined) ? win.screenY : win.screenTop;
+      const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
+      const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
-        saveGMBoundsDirect({ left, top, width, height });
+          Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
+        saveGMBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
       }
     } catch (e) {}
   }
@@ -7606,7 +7654,19 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedGMBounds(), { width: 1100, height: 750, left: 100, top: 100 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=171&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
+    poppedOutGMWindow = window.open(`gm_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "_blank", geom.features);
+    if (poppedOutGMWindow) {
+      try { poppedOutGMWindow.name = "MM2CG_GMWindow"; } catch (e) {}
+      try {
+        poppedOutGMWindow.resizeTo(geom.width, geom.height);
+        poppedOutGMWindow.moveTo(geom.left, geom.top);
+      } catch (e) {}
+      try {
+        poppedOutGMWindow.addEventListener('resize', () => {
+          saveGMBoundsFromRef(poppedOutGMWindow);
+        });
+      } catch (e) {}
+    }
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
 
@@ -7669,10 +7729,14 @@ function setupSessionAndGMHub() {
     }
   });
   setInterval(() => {
-    if (poppedOutGMWindow && poppedOutGMWindow.closed) {
-      redockGM(false);
+    if (poppedOutGMWindow) {
+      if (poppedOutGMWindow.closed) {
+        redockGM(false);
+      } else {
+        saveGMBoundsFromRef(poppedOutGMWindow);
+      }
     }
-  }, 500);
+  }, 400);
 
   if (btnOpenGM) {
     btnOpenGM.addEventListener("click", openGMTab);

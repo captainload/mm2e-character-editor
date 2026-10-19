@@ -210,7 +210,7 @@
       </strong>
       <span class="badge" id="lblTrackerHeroName" style="font-size: var(--font-size-tags, 12px); font-weight: 600;">Hero</span>
       <span class="badge" id="lblTrackerWinStatus" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-weight: 600; font-size: 11px;">Live Sync</span>
-      <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.71 (b121)</span>
+      <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.72 (b122)</span>
     </div>
     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
       <button type="button" class="btn btn-secondary" id="btnRedockTrackerWindow" onclick="window.redockTrackerWindow()" style="height: 26px; padding: 0 10px; font-size: var(--font-size-fine-print, 12px); font-weight: 600; cursor: pointer;">
@@ -471,6 +471,15 @@
     }
 
     window._lastBounds = getInitialBounds();
+    try {
+      const _ib = window._lastBounds;
+      if (_ib && _ib.width >= 250 && _ib.height >= 200) {
+        window.resizeTo(_ib.width, _ib.height);
+        if (typeof _ib.left === 'number' && typeof _ib.top === 'number') {
+          window.moveTo(_ib.left, _ib.top);
+        }
+      }
+    } catch (e) {}
 
     // ==========================================
     // 1. RE-DOCKING LOGIC

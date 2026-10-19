@@ -2195,7 +2195,7 @@ function setupTablesPopout() {
     const geom = preparePopoutGeometry(getSavedTablesBounds(), { width: 920, height: 680, left: 160, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
+    poppedOutTablesWindow = window.open(`tables_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
 
@@ -3168,7 +3168,7 @@ function setupStatusTracker() {
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
@@ -6557,7 +6557,7 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedPartyDisplayBounds(), { width: 840, height: 480, left: 120, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
+    poppedOutPartyWindow = window.open(`party_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
 
@@ -7655,7 +7655,7 @@ function setupSessionAndGMHub() {
     const geom = preparePopoutGeometry(getSavedGMBounds(), { width: 1100, height: 750, left: 100, top: 100 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=169&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
+    poppedOutGMWindow = window.open(`gm_window.html?v=170&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
 

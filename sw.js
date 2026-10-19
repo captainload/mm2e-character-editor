@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mm2e-hero-builder-v119';
+const CACHE_NAME = 'mm2e-hero-builder-v120';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -49,6 +49,19 @@ self.addEventListener('activate', (event) => {
 // Network-First strategy: Fetch fresh files when online, fallback to cache when offline
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Popout windows and requests with cache-busting queries should always bypass cache and fetch fresh
+  try {
+    const url = new URL(event.request.url);
+    const isPopoutOrTimestamped = url.pathname.endsWith('_window.html') || url.searchParams.has('ts') || url.searchParams.has('nocache');
+    if (isPopoutOrTimestamped) {
+      event.respondWith(
+        fetch(event.request, { cache: 'no-store' })
+          .catch(() => caches.match(event.request))
+      );
+      return;
+    }
+  } catch (e) {}
 
   event.respondWith(
     fetch(event.request)

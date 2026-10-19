@@ -2077,6 +2077,21 @@ function setupTabs() {
 }
 window.setupTabs = setupTabs;
 
+// Active Pop-out Window References and Managers
+let poppedOutPartyWindow = null;
+window.poppedOutPartyWindow = null;
+let poppedOutTrackerWindow = null;
+window.poppedOutTrackerWindow = null;
+let poppedOutTablesWindow = null;
+window.poppedOutTablesWindow = null;
+let poppedOutGMWindow = null;
+window.poppedOutGMWindow = null;
+
+let tablesManager = null;
+let trackerManager = null;
+let partyManager = null;
+let gmManager = null;
+
 // In-memory bounds cache for high-fidelity cross-origin / file:/// resilience
 let _cachedTrackerBounds = null;
 let _cachedPartyDisplayBounds = null;
@@ -2121,140 +2136,535 @@ function preparePopoutGeometry(bounds, defaultBounds) {
 }
 window.preparePopoutGeometry = preparePopoutGeometry;
 
+// ================= DOM-MOUNTED POPOUT MANAGER FACTORY =================
+// Mirrors Marvel Super-Heroes seamless pop-out architecture:
+// Opens about:blank (guaranteed same-origin on both file:/// and https://),
+// mounts the live DOM element directly into the popout window, tracks position & size
+// via continuous 400ms polling + resize, and returns the live DOM element to its placeholder upon docking.
+function createPopoutManager(config) {
+  const {
+    id,
+    title,
+    storageKey,
+    poppedKey,
+    defaultBounds = { width: 840, height: 480, left: 120, top: 120 },
+    getContentEl,
+    getNoticeEl,
+    getPopoutButtonEl,
+    getRedockButtonEl,
+    buildHeaderControls,
+    onPopout,
+    onDock
+  } = config;
+
+  let win = null;
+  let placeholder = null;
+  let checkInterval = null;
+  let isOpening = false;
+
+  function getGeometry() {
+    let geo = null;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === 'object') {
+          geo = sanitizeWindowBounds(parsed, defaultBounds);
+        }
+      }
+    } catch (e) {}
+
+    if (!geo) {
+      if (id === 'tables' && _cachedTablesBounds) geo = _cachedTablesBounds;
+      else if (id === 'tracker' && _cachedTrackerBounds) geo = _cachedTrackerBounds;
+      else if (id === 'party' && _cachedPartyDisplayBounds) geo = _cachedPartyDisplayBounds;
+      else if (id === 'gm' && _cachedGMBounds) geo = _cachedGMBounds;
+    }
+
+    let width = (geo && geo.width) || defaultBounds.width;
+    let height = (geo && geo.height) || defaultBounds.height;
+    let left = (geo && typeof geo.left === 'number' && !isNaN(geo.left) && Math.abs(geo.left) < 30000) ? Math.round(geo.left) : null;
+    let top = (geo && typeof geo.top === 'number' && !isNaN(geo.top) && Math.abs(geo.top) < 30000) ? Math.round(geo.top) : null;
+
+    if (left === null || top === null) {
+      const screenLeft = (window.screenX !== undefined ? window.screenX : window.screenLeft || 0);
+      const screenTop = (window.screenY !== undefined ? window.screenY : window.screenTop || 0);
+      const outerW = window.outerWidth || window.innerWidth || 1200;
+      left = Math.max(20, screenLeft + Math.round((outerW - width) / 2));
+      top = Math.max(20, screenTop + 40);
+    }
+
+    return { width, height, left, top };
+  }
+
+  function saveGeometry() {
+    try {
+      if (isOpening) return;
+      if (!win || win.closed) return;
+      const x = win.screenX !== undefined ? win.screenX : win.screenLeft;
+      const y = win.screenY !== undefined ? win.screenY : win.screenTop;
+      const w = win.outerWidth || win.innerWidth;
+      const h = win.outerHeight || win.innerHeight;
+      if (typeof x === 'number' && typeof y === 'number' && typeof w === 'number' && typeof h === 'number' &&
+          !isNaN(x) && !isNaN(y) && !isNaN(w) && !isNaN(h) && Math.abs(x) < 40000 && Math.abs(y) < 40000 &&
+          w >= 250 && h >= 200) {
+        const geo = {
+          width: Math.round(w),
+          height: Math.round(h),
+          left: Math.round(x),
+          top: Math.round(y)
+        };
+        localStorage.setItem(storageKey, JSON.stringify(geo));
+        if (id === 'tables') _cachedTablesBounds = geo;
+        else if (id === 'tracker') _cachedTrackerBounds = geo;
+        else if (id === 'party') _cachedPartyDisplayBounds = geo;
+        else if (id === 'gm') _cachedGMBounds = geo;
+      }
+    } catch (e) {}
+  }
+
+  function isPoppedOut() {
+    return !!(win && !win.closed);
+  }
+
+  function updateDockMode(popped) {
+    const noticeEl = typeof getNoticeEl === 'function' ? getNoticeEl() : null;
+    const btnPop = typeof getPopoutButtonEl === 'function' ? getPopoutButtonEl() : null;
+    if (noticeEl) noticeEl.style.display = popped ? "flex" : "none";
+    if (btnPop) btnPop.style.display = popped ? "none" : "";
+  }
+
+  function open() {
+    const contentEl = typeof getContentEl === 'function' ? getContentEl() : null;
+    if (!contentEl) return false;
+
+    if (placeholder && placeholder.parentNode && !win) {
+      dock(false);
+    }
+
+    if (win && !win.closed) {
+      try { win.focus(); } catch (e) {}
+      updateDockMode(true);
+      return true;
+    }
+
+    const geo = getGeometry();
+    const { width, height, left, top } = geo;
+    const features = `popup=yes,width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+
+    isOpening = true;
+    try {
+      win = window.open('', '_blank', features);
+      if (win) {
+        try { win.name = "MM2CG_" + id; } catch (e) {}
+        try {
+          win.resizeTo(width, height);
+          win.moveTo(left, top);
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn('Pop-out window.open error:', err);
+    }
+
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+      isOpening = false;
+      if (typeof showStatusToast === 'function') {
+        showStatusToast('⚠️ Pop-out window blocked by browser. Please allow popups for this site.');
+      } else {
+        alert('Pop-out window was blocked by your browser. Please allow popups for this page.');
+      }
+      return false;
+    }
+
+    let popDoc = null;
+    try { popDoc = win.document; } catch (e) {}
+    if (!popDoc) {
+      isOpening = false;
+      try { win.close(); } catch (e) {}
+      return false;
+    }
+
+    if (poppedKey) {
+      try { localStorage.setItem(poppedKey, 'true'); } catch (e) {}
+    }
+
+    const baseHref = (typeof document !== 'undefined' && document.baseURI) || (typeof window !== 'undefined' && window.location && window.location.href) || '';
+    popDoc.open();
+    popDoc.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${title || 'Mutants & Masterminds 2E'}</title>
+  ${baseHref ? `<base href="${baseHref}">` : ''}
+</head>
+<body class="popout-window-body">
+  <div class="popout-window-shell" id="popout-window-shell">
+    <div class="popout-window-header" id="popout-window-header"></div>
+    <div class="popout-window-content" id="popout-window-content"></div>
+  </div>
+</body>
+</html>`);
+    popDoc.close();
+
+    // Copy stylesheet and style tags from parent
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach(node => {
+      try {
+        popDoc.head.appendChild(popDoc.importNode ? popDoc.importNode(node, true) : node.cloneNode(true));
+      } catch (e) {}
+    });
+
+    // Theme and font size inheritance
+    const curTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    popDoc.documentElement.setAttribute('data-theme', curTheme);
+    popDoc.body.setAttribute('data-theme', curTheme);
+    if (document.documentElement.style.cssText) {
+      popDoc.documentElement.style.cssText = document.documentElement.style.cssText;
+    }
+
+    // Expose window references and delegates to child window scope
+    try {
+      win.opener = window;
+      win.App = window;
+      const globalFns = [
+        'stepFadeValue', 'resetFadeValue', 'stepCustomPoint', 'deleteCustomTracker',
+        'updateCustomTrackerName', 'updateCustomTrackerCurrent', 'updateCustomTrackerMax',
+        'gmToggleCharMenu', 'gmCloseAllCharMenus', 'gmRollNpcInit', 'gmRollNpcToughness',
+        'gmRollEnemyInit', 'gmRollEnemyToughness', 'gmEditAdversary', 'gmDeleteAdversary',
+        'gmEditNpc', 'gmRemoveNpc', 'CharacterModel', 'CampaignManager', 'SessionNetwork'
+      ];
+      globalFns.forEach(fn => {
+        if (window[fn] !== undefined) {
+          try { win[fn] = window[fn]; } catch (e) {}
+        }
+      });
+    } catch (e) {}
+
+    // Popout shell base styling
+    const shellStyle = popDoc.createElement('style');
+    shellStyle.textContent = `
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg-app, #0f172a);
+        color: var(--text-main, #f1f5f9);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        box-sizing: border-box;
+      }
+      .popout-window-body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .popout-window-shell {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+        padding: 8px 12px;
+      }
+      .popout-window-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: var(--bg-panel, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 6px;
+        padding: 6px 12px;
+        margin-bottom: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        flex-wrap: wrap;
+      }
+      .popout-window-content {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: auto;
+      }
+    `;
+    popDoc.head.appendChild(shellStyle);
+
+    // Build header content
+    const headerEl = popDoc.getElementById('popout-window-header');
+    if (headerEl) {
+      headerEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <h2 style="margin: 0; font-size: calc(var(--font-size-labels, 15px) * 1.05); color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+            ${title || 'Pop-Out Window'}
+          </h2>
+        </div>
+        <div id="popout-custom-controls" style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; min-width: 0;"></div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+          <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.73 (b123)</span>
+          <button type="button" class="btn btn-secondary" id="btnPopoutRedock" style="font-weight: 600; font-size: var(--font-size-controls, 14px); height: 28px; padding: 0 12px; color: var(--accent-primary); cursor: pointer;" title="Dock back into main window (or press Esc)">
+            ⬅ Re-dock
+          </button>
+        </div>
+      `;
+
+      if (typeof buildHeaderControls === 'function') {
+        const customContainer = popDoc.getElementById('popout-custom-controls');
+        buildHeaderControls(customContainer, popDoc, win);
+      }
+    }
+
+    // Move content element to popout window
+    if (!placeholder) {
+      placeholder = document.createComment(`popout-placeholder-${id}`);
+    }
+    if (contentEl.parentNode) {
+      contentEl.parentNode.insertBefore(placeholder, contentEl);
+    }
+    const mount = popDoc.getElementById('popout-window-content');
+    if (mount) {
+      try {
+        if (popDoc.adoptNode) popDoc.adoptNode(contentEl);
+      } catch (e) {}
+      mount.appendChild(contentEl);
+      contentEl.style.display = "";
+    }
+
+    updateDockMode(true);
+
+    // Bind listeners in popDoc and win
+    win.addEventListener('resize', () => {
+      saveGeometry();
+    });
+
+    win.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        dock(true);
+      }
+    });
+
+    popDoc.addEventListener('click', (e) => {
+      const redockBtn = e.target.closest && e.target.closest('#btnPopoutRedock');
+      if (redockBtn) {
+        dock(true);
+        return;
+      }
+      if (!e.target.closest || (!e.target.closest('.gm-char-menu-wrapper') && !e.target.closest('.gm-char-dropdown-menu'))) {
+        popDoc.querySelectorAll('.gm-char-dropdown-menu').forEach(m => m.style.display = 'none');
+      }
+    });
+
+    win.addEventListener('scroll', () => {
+      popDoc.querySelectorAll('.gm-char-dropdown-menu').forEach(m => m.style.display = 'none');
+    }, true);
+
+    let returned = false;
+    function handleWindowClose() {
+      if (returned) return;
+      returned = true;
+      saveGeometry();
+      dock(false);
+    }
+
+    win.addEventListener('beforeunload', handleWindowClose);
+    win.addEventListener('unload', handleWindowClose);
+
+    if (checkInterval) clearInterval(checkInterval);
+    checkInterval = setInterval(() => {
+      if (!win || win.closed) {
+        clearInterval(checkInterval);
+        checkInterval = null;
+        handleWindowClose();
+      } else {
+        saveGeometry();
+      }
+    }, 400);
+
+    setTimeout(() => {
+      isOpening = false;
+      try { win.focus(); } catch (e) {}
+    }, 500);
+
+    if (typeof onPopout === 'function') {
+      try { onPopout(popDoc, win, contentEl); } catch (e) { console.warn(e); }
+    }
+
+    return true;
+  }
+
+  function dock(closeWin = true) {
+    if (checkInterval) {
+      clearInterval(checkInterval);
+      checkInterval = null;
+    }
+
+    saveGeometry();
+
+    const contentEl = typeof getContentEl === 'function' ? getContentEl() : null;
+    if (contentEl && placeholder && placeholder.parentNode) {
+      try {
+        if (document.adoptNode) document.adoptNode(contentEl);
+      } catch (e) {}
+      placeholder.parentNode.insertBefore(contentEl, placeholder);
+      placeholder.remove();
+      placeholder = null;
+    }
+
+    if (closeWin && win && !win.closed) {
+      try { win.close(); } catch (e) {}
+    }
+    win = null;
+
+    if (poppedKey) {
+      try { localStorage.setItem(poppedKey, 'false'); } catch (e) {}
+    }
+
+    updateDockMode(false);
+
+    if (typeof onDock === 'function') {
+      try { onDock(contentEl); } catch (e) { console.warn(e); }
+    }
+  }
+
+  const btnRedock = typeof getRedockButtonEl === 'function' ? getRedockButtonEl() : null;
+  if (btnRedock) {
+    btnRedock.addEventListener('click', () => dock(true));
+  }
+
+  return {
+    id,
+    open,
+    dock,
+    getGeometry,
+    saveGeometry,
+    isPoppedOut,
+    updateDockMode,
+    getWindow: () => win,
+    getChildDoc: () => (win && !win.closed ? win.document : null),
+    getContentEl: () => (typeof getContentEl === 'function' ? getContentEl() : null)
+  };
+}
+window.createPopoutManager = createPopoutManager;
+
 // ================= REFERENCE TABLES POPOUT CONTROLLER =================
 function setupTablesPopout() {
-  let _tablesOpening = false;
-
-  function getSavedTablesBounds() {
-    const fallback = { width: 920, height: 680, left: 160, top: 120 };
-    try {
-      const saved = localStorage.getItem("mm2e_tables_bounds");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const res = sanitizeWindowBounds(parsed, fallback);
-        _cachedTablesBounds = res;
-        return res;
-      }
-    } catch (e) {}
-    if (typeof _cachedTablesBounds !== 'undefined' && _cachedTablesBounds && typeof _cachedTablesBounds === 'object') {
-      return { ..._cachedTablesBounds };
-    }
-    return fallback;
-  }
-  window.getSavedTablesBounds = getSavedTablesBounds;
-
-  function saveTablesBoundsFromRef(win) {
-    if (_tablesOpening) return;
-    if (!win || win.closed) return;
-    try {
-      const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
-      const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
-      const width = win.outerWidth || win.innerWidth;
-      const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
-        saveTablesBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
-      }
-    } catch (e) {}
-  }
-  window.saveTablesBoundsFromRef = saveTablesBoundsFromRef;
-
-  function updateTablesDockMode(isPoppedOut) {
-    const boxNotice = document.getElementById("boxPoppedOutTablesNotice");
-    const dockBody = document.getElementById("tablesDockableBody");
-    const btnPop = document.getElementById("btnPopoutTables");
-
-    if (boxNotice) boxNotice.style.display = isPoppedOut ? "flex" : "none";
-    if (dockBody) dockBody.style.display = isPoppedOut ? "none" : "";
-    if (btnPop) btnPop.style.display = isPoppedOut ? "none" : "";
-  }
-  window.updateTablesDockMode = updateTablesDockMode;
-
-  function openTablesPopout() {
-    if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
-      try { poppedOutTablesWindow.focus(); } catch (e) {}
-      updateTablesDockMode(true);
-      return;
-    }
-    const geom = preparePopoutGeometry(getSavedTablesBounds(), { width: 920, height: 680, left: 160, top: 120 });
-    const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "_blank", geom.features);
-    if (poppedOutTablesWindow) {
-      try { poppedOutTablesWindow.name = "MM2CG_TablesWindow"; } catch (e) {}
-      try {
-        poppedOutTablesWindow.resizeTo(geom.width, geom.height);
-        poppedOutTablesWindow.moveTo(geom.left, geom.top);
-      } catch (e) {}
-      try {
-        poppedOutTablesWindow.addEventListener('resize', () => {
-          saveTablesBoundsFromRef(poppedOutTablesWindow);
-        });
-      } catch (e) {}
-    }
-    window.poppedOutTablesWindow = poppedOutTablesWindow;
-    updateTablesDockMode(true);
-
-    setTimeout(() => {
-      try {
-        if (poppedOutTablesWindow && !poppedOutTablesWindow.closed && poppedOutTablesWindow.document) {
-          poppedOutTablesWindow.document.documentElement.setAttribute("data-theme", currentTheme);
-          if (poppedOutTablesWindow.document.body) poppedOutTablesWindow.document.body.setAttribute("data-theme", currentTheme);
-          if (typeof poppedOutTablesWindow.__applySavedThemeAndFonts === 'function') {
-            poppedOutTablesWindow.__applySavedThemeAndFonts();
-          }
-        }
-      } catch (e) {}
-    }, 150);
-
-    setTimeout(() => {
-      _tablesOpening = false;
-    }, 800);
-  }
-  window.openTablesPopout = openTablesPopout;
-
-  function redockTables(closeRef = true) {
-    if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
-      saveTablesBoundsFromRef(poppedOutTablesWindow);
-      if (closeRef) {
-        try { poppedOutTablesWindow.close(); } catch (e) {}
-      }
-    }
-    poppedOutTablesWindow = null;
-    window.poppedOutTablesWindow = null;
-    updateTablesDockMode(false);
-  }
-  window.redockTables = redockTables;
-
   const btnPopoutTables = document.getElementById("btnPopoutTables");
   const btnRedockTablesBtn = document.getElementById("btnRedockTables");
+
+  tablesManager = createPopoutManager({
+    id: 'tables',
+    title: '📊 Reference Tables & Benchmarks',
+    storageKey: 'mm2e_tables_bounds',
+    poppedKey: 'mm2e_tables_popped_out',
+    defaultBounds: { width: 920, height: 680, left: 160, top: 120 },
+    getContentEl: () => document.getElementById("tablesDockableBody"),
+    getNoticeEl: () => document.getElementById("boxPoppedOutTablesNotice"),
+    getPopoutButtonEl: () => document.getElementById("btnPopoutTables"),
+    getRedockButtonEl: () => document.getElementById("btnRedockTables"),
+    buildHeaderControls: (container, popDoc) => {
+      container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 420px; margin: 0 8px;">
+          <input type="text" id="txtPopoutTableFilter" placeholder="🔍 Filter tables (e.g. carry, speed, dc)..." style="width: 100%; height: 28px; font-size: var(--font-size-minor-controls, 13px); padding: 2px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-main);">
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <button type="button" class="btn btn-secondary" id="btnPopoutExpandAll" style="height: 28px; padding: 0 8px; font-size: var(--font-size-controls, 13px);">Expand All</button>
+          <button type="button" class="btn btn-secondary" id="btnPopoutCollapseAll" style="height: 28px; padding: 0 8px; font-size: var(--font-size-controls, 13px);">Collapse All</button>
+        </div>
+      `;
+      const inp = popDoc.getElementById("txtPopoutTableFilter");
+      if (inp) {
+        inp.addEventListener("input", (e) => {
+          const q = (e.target.value || '').toLowerCase().trim();
+          const target = tablesManager.getContentEl();
+          if (!target) return;
+          target.querySelectorAll(".collapsible-panel").forEach(panel => {
+            if (!q) {
+              panel.style.display = "";
+              panel.querySelectorAll("tbody tr").forEach(tr => tr.style.display = "");
+              return;
+            }
+            const titleText = panel.querySelector(".panel-header span")?.textContent.toLowerCase() || "";
+            const rows = panel.querySelectorAll("tbody tr");
+            let hasMatch = titleText.includes(q);
+            rows.forEach(tr => {
+              const match = tr.textContent.toLowerCase().includes(q);
+              tr.style.display = match ? "" : "none";
+              if (match) hasMatch = true;
+            });
+            panel.style.display = hasMatch ? "" : "none";
+            if (hasMatch) {
+              panel.classList.remove("collapsed");
+              const ind = panel.querySelector(".indicator") || panel.querySelectorAll(".panel-header span")[1];
+              if (ind) ind.textContent = "▲";
+            }
+          });
+        });
+      }
+      popDoc.getElementById("btnPopoutExpandAll")?.addEventListener("click", () => {
+        const target = tablesManager.getContentEl();
+        if (!target) return;
+        target.querySelectorAll(".collapsible-panel").forEach(p => {
+          p.classList.remove("collapsed");
+          const ind = p.querySelector(".indicator") || p.querySelectorAll(".panel-header span")[1];
+          if (ind) ind.textContent = "▲";
+        });
+      });
+      popDoc.getElementById("btnPopoutCollapseAll")?.addEventListener("click", () => {
+        const target = tablesManager.getContentEl();
+        if (!target) return;
+        target.querySelectorAll(".collapsible-panel").forEach(p => {
+          p.classList.add("collapsed");
+          const ind = p.querySelector(".indicator") || p.querySelectorAll(".panel-header span")[1];
+          if (ind) ind.textContent = "▼";
+        });
+      });
+      // Delegate panel-header click toggles within popDoc
+      popDoc.addEventListener('click', (e) => {
+        const hdr = e.target.closest && e.target.closest('.panel-header');
+        if (hdr && hdr.parentElement && hdr.parentElement.classList.contains('collapsible-panel')) {
+          hdr.parentElement.classList.toggle('collapsed');
+          const ind = hdr.querySelector('.indicator') || hdr.querySelectorAll('span')[1];
+          if (ind) {
+            ind.textContent = hdr.parentElement.classList.contains('collapsed') ? '▼' : '▲';
+          }
+        }
+      });
+    },
+    onPopout: (popDoc, win, contentEl) => {
+      window.poppedOutTablesWindow = win;
+    },
+    onDock: (contentEl) => {
+      window.poppedOutTablesWindow = null;
+    }
+  });
+
+  function openTablesPopout() {
+    tablesManager.open();
+    window.poppedOutTablesWindow = tablesManager.getWindow();
+  }
+  function redockTables(closeRef = true) {
+    tablesManager.dock(closeRef);
+    window.poppedOutTablesWindow = null;
+  }
+
+  window.openTablesPopout = openTablesPopout;
+  window.redockTables = redockTables;
+  window.getSavedTablesBounds = () => tablesManager.getGeometry();
+  window.updateTablesDockMode = (isPopped) => tablesManager.updateDockMode(isPopped);
+  window.saveTablesBoundsFromRef = (win) => tablesManager.saveGeometry();
+
   if (btnPopoutTables) btnPopoutTables.addEventListener("click", openTablesPopout);
   if (btnRedockTablesBtn) btnRedockTablesBtn.addEventListener("click", () => redockTables(true));
 
   window.addEventListener('focus', () => {
-    if (poppedOutTablesWindow && poppedOutTablesWindow.closed) {
+    if (tablesManager && tablesManager.isPoppedOut() && tablesManager.getWindow().closed) {
       redockTables(false);
     }
   });
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'mm2e_tables_docked') {
-      redockTables(false);
-    } else if (e.key === 'mm2e_tables_bounds' && e.newValue) {
-      try {
-        const parsed = JSON.parse(e.newValue);
-        _cachedTablesBounds = sanitizeWindowBounds(parsed, { width: 920, height: 680, left: 160, top: 120 });
-      } catch (err) {}
-    }
-  });
-  setInterval(() => {
-    if (poppedOutTablesWindow) {
-      if (poppedOutTablesWindow.closed) {
-        redockTables(false);
-      } else {
-        saveTablesBoundsFromRef(poppedOutTablesWindow);
-      }
-    }
-  }, 400);
 }
 setupTablesPopout();
 
@@ -2854,13 +3264,14 @@ function setupInfoModalHandlers() {
   });
 }
 
-let poppedOutPartyWindow = null;
+// Popout window references initialized at top of file
+poppedOutPartyWindow = null;
 window.poppedOutPartyWindow = null;
-let poppedOutTrackerWindow = null;
+poppedOutTrackerWindow = null;
 window.poppedOutTrackerWindow = null;
-let poppedOutTablesWindow = null;
+poppedOutTablesWindow = null;
 window.poppedOutTablesWindow = null;
-let poppedOutGMWindow = null;
+poppedOutGMWindow = null;
 window.poppedOutGMWindow = null;
 
 // ================= POPOUT WINDOW BOUNDS & CROSS-ORIGIN BRIDGE =================
@@ -3023,6 +3434,24 @@ try {
   }
 } catch (e) {}
 
+// Main window unload handler to cleanly dock open popouts and persist bounds
+window.addEventListener('beforeunload', () => {
+  const managers = [
+    typeof tablesManager !== 'undefined' ? tablesManager : null,
+    typeof trackerManager !== 'undefined' ? trackerManager : null,
+    typeof partyManager !== 'undefined' ? partyManager : null,
+    typeof gmManager !== 'undefined' ? gmManager : null
+  ].filter(Boolean);
+
+  managers.forEach(mgr => {
+    if (mgr && mgr.isPoppedOut && mgr.isPoppedOut()) {
+      try {
+        mgr.dock(true);
+      } catch (e) {}
+    }
+  });
+});
+
 // Force App Update & Cache-Busting Reload
 async function forceAppUpdateAndClearCache() {
   const confirmed = confirm("Check for updates and reload the latest version from GitHub?\n\nThis will clear any cached offline files and reload the latest build.");
@@ -3095,176 +3524,72 @@ function setupStatusTracker() {
     const listFades = document.getElementById("listFadesTrackers");
     const btnAdvanceAll = document.getElementById("btnAdvanceAllFades");
 
-    // Popout & Docking Management
-    let _trackerOpening = false;
-
-    function getSavedTrackerBounds() {
-      const fallback = { width: 880, height: 660, left: 140, top: 140 };
-      try {
-        const saved = localStorage.getItem("mm2e_tracker_bounds");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const res = sanitizeWindowBounds(parsed, fallback);
-          _cachedTrackerBounds = res;
-          return res;
-        }
-      } catch (e) {}
-      if (typeof _cachedTrackerBounds !== 'undefined' && _cachedTrackerBounds && typeof _cachedTrackerBounds === 'object') {
-        return { ..._cachedTrackerBounds };
-      }
-      return fallback;
+    // Popout & Docking Management (DOM-Mounted about:blank Architecture)
+    const trackerDockBody = document.getElementById("trackerDockableBody");
+    function getTrackerEl(id) {
+      const box = (trackerManager && trackerManager.getContentEl()) || trackerDockBody;
+      return (box && box.querySelector('#' + id)) || document.getElementById(id);
     }
-    window.getSavedTrackerBounds = getSavedTrackerBounds;
 
-    function saveTrackerBoundsFromRef(win) {
-      if (_trackerOpening) return;
-      if (!win || win.closed) return;
-      try {
-        const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
-        const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
-        const width = win.outerWidth || win.innerWidth;
-        const height = win.outerHeight || win.innerHeight;
-        if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-            Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
-          saveTrackerBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
-        }
-      } catch (e) {}
-    }
-    window.saveTrackerBoundsFromRef = saveTrackerBoundsFromRef;
-
-    function updateTrackerDockMode(isPoppedOut) {
-      const boxNotice = document.getElementById("boxPoppedOutTrackerNotice");
-      const dockBody = document.getElementById("trackerDockableBody");
-      const btnPop = document.getElementById("btnPopoutTracker");
-
-      if (boxNotice) boxNotice.style.display = isPoppedOut ? "flex" : "none";
-      if (dockBody) dockBody.style.display = isPoppedOut ? "none" : "";
-      if (btnPop) btnPop.style.display = isPoppedOut ? "none" : "";
-
-      if (!isPoppedOut) {
+    trackerManager = createPopoutManager({
+      id: 'tracker',
+      title: '⚡ Status & Combat Tracker',
+      storageKey: 'mm2e_tracker_bounds',
+      poppedKey: 'mm2e_tracker_popped_out',
+      defaultBounds: { width: 880, height: 660, left: 140, top: 140 },
+      getContentEl: () => document.getElementById("trackerDockableBody"),
+      getNoticeEl: () => document.getElementById("boxPoppedOutTrackerNotice"),
+      getPopoutButtonEl: () => document.getElementById("btnPopoutTracker"),
+      getRedockButtonEl: () => document.getElementById("btnRedockTracker"),
+      buildHeaderControls: (container, popDoc) => {
+        const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
+        container.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: var(--font-size-secondary, 13px); color: var(--text-muted); font-weight: 600;">Hero:</span>
+            <span class="badge" id="lblTrackerHeroNamePopout" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-primary); border: 1px solid var(--accent-primary); font-weight: 700; font-size: 13px; padding: 2px 10px;">
+              ${activeHeroName}
+            </span>
+          </div>
+        `;
+      },
+      onPopout: (popDoc, win, contentEl) => {
+        window.poppedOutTrackerWindow = win;
+        syncStatusTrackerUI();
+      },
+      onDock: (contentEl) => {
+        window.poppedOutTrackerWindow = null;
         syncStatusTrackerUI();
       }
-    }
-    window.updateTrackerDockMode = updateTrackerDockMode;
+    });
 
     function openTrackerPopout() {
-      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-        try { poppedOutTrackerWindow.focus(); } catch (e) {}
-        updateTrackerDockMode(true);
-        return;
-      }
-      const geom = preparePopoutGeometry(getSavedTrackerBounds(), { width: 880, height: 660, left: 140, top: 140 });
-      const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-      const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
-      _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "_blank", geom.features);
-      if (poppedOutTrackerWindow) {
-        try { poppedOutTrackerWindow.name = "MM2CG_TrackerWindow"; } catch (e) {}
-        try {
-          poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
-          poppedOutTrackerWindow.moveTo(geom.left, geom.top);
-        } catch (e) {}
-        try {
-          poppedOutTrackerWindow.addEventListener('resize', () => {
-            saveTrackerBoundsFromRef(poppedOutTrackerWindow);
-          });
-        } catch (e) {}
-      }
-      window.poppedOutTrackerWindow = poppedOutTrackerWindow;
-      updateTrackerDockMode(true);
-
-      if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
-        SessionNetwork.initBroadcastChannel();
-      }
-
-      setTimeout(() => {
-        try {
-          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed && poppedOutTrackerWindow.document) {
-            poppedOutTrackerWindow.document.documentElement.setAttribute("data-theme", currentTheme);
-            if (poppedOutTrackerWindow.document.body) poppedOutTrackerWindow.document.body.setAttribute("data-theme", currentTheme);
-            if (typeof poppedOutTrackerWindow.__applySavedThemeAndFonts === 'function') {
-              poppedOutTrackerWindow.__applySavedThemeAndFonts();
-            }
-            if (poppedOutTrackerWindow.localTracker) {
-              poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
-            }
-            const lblPop = poppedOutTrackerWindow.document.getElementById('lblTrackerHeroName');
-            if (lblPop) lblPop.textContent = activeHeroName;
-            if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
-              poppedOutTrackerWindow.renderAllTrackerUI();
-            }
-          }
-        } catch (e) {}
-        syncStatusTrackerUI();
-      }, 150);
-      setTimeout(() => {
-        try {
-          if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed && poppedOutTrackerWindow.document) {
-            if (poppedOutTrackerWindow.localTracker) {
-              poppedOutTrackerWindow.localTracker.heroName = activeHeroName;
-            }
-            const lblPop = poppedOutTrackerWindow.document.getElementById('lblTrackerHeroName');
-            if (lblPop) lblPop.textContent = activeHeroName;
-            if (typeof poppedOutTrackerWindow.renderAllTrackerUI === 'function') {
-              poppedOutTrackerWindow.renderAllTrackerUI();
-            }
-          }
-        } catch (e) {}
-        syncStatusTrackerUI();
-      }, 350);
-
-      setTimeout(() => {
-        _trackerOpening = false;
-      }, 800);
+      trackerManager.open();
+      window.poppedOutTrackerWindow = trackerManager.getWindow();
     }
     window.openTrackerPopout = openTrackerPopout;
 
     function redockTracker(closeRef = true) {
-      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-        saveTrackerBoundsFromRef(poppedOutTrackerWindow);
-        if (closeRef) {
-          try { poppedOutTrackerWindow.close(); } catch (e) {}
-        }
-      }
-      poppedOutTrackerWindow = null;
+      trackerManager.dock(closeRef);
       window.poppedOutTrackerWindow = null;
-      updateTrackerDockMode(false);
     }
     window.redockTracker = redockTracker;
+
+    window.getSavedTrackerBounds = () => trackerManager.getGeometry();
+    window.updateTrackerDockMode = (isPopped) => trackerManager.updateDockMode(isPopped);
+    window.saveTrackerBoundsFromRef = (win) => trackerManager.saveGeometry();
 
     if (btnPopoutTracker) {
       btnPopoutTracker.addEventListener("click", openTrackerPopout);
     }
     if (btnRedockTrackerBtn) {
-      btnRedockTrackerBtn.addEventListener("click", redockTracker);
+      btnRedockTrackerBtn.addEventListener("click", () => redockTracker(true));
     }
 
     window.addEventListener('focus', () => {
-      if (poppedOutTrackerWindow && poppedOutTrackerWindow.closed) {
-        redockTracker();
+      if (trackerManager && trackerManager.isPoppedOut() && trackerManager.getWindow().closed) {
+        redockTracker(false);
       }
     });
-
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'mm2e_tracker_docked') {
-        redockTracker();
-      } else if (e.key === 'mm2e_tracker_bounds' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          _cachedTrackerBounds = sanitizeWindowBounds(parsed, { width: 880, height: 660, left: 140, top: 140 });
-        } catch (err) {}
-      }
-    });
-
-    setInterval(() => {
-      if (poppedOutTrackerWindow) {
-        if (poppedOutTrackerWindow.closed) {
-          redockTracker();
-        } else {
-          saveTrackerBoundsFromRef(poppedOutTrackerWindow);
-        }
-      }
-    }, 400);
 
     if (!modal || !btnOpen) return;
 
@@ -3330,10 +3655,10 @@ function setupStatusTracker() {
 
     function updateTrackerConditionsSummary() {
       ensureTrackerState();
-      const boxChips = document.getElementById("boxActiveConditionsChips");
+      const boxChips = getTrackerEl("boxActiveConditionsChips");
       if (!boxChips) return;
 
-      const conds = char.trackerState.conditions;
+      const conds = char.trackerState.conditions || {};
       const chips = [];
 
       const bruised = conds["Bruised"] || 0;
@@ -3345,9 +3670,9 @@ function setupStatusTracker() {
         chips.push(`<span class="badge" style="background: rgba(239, 68, 68, 0.18); color: #dc2626; border: 1px solid #dc2626; font-weight: bold;">🩸 Injured ×${injured} (-${injured} save)</span>`);
       }
 
-      const valBruisedEl = document.getElementById("valBruisedCount");
+      const valBruisedEl = getTrackerEl("valBruisedCount");
       if (valBruisedEl) valBruisedEl.textContent = bruised;
-      const valInjuredEl = document.getElementById("valInjuredCount");
+      const valInjuredEl = getTrackerEl("valInjuredCount");
       if (valInjuredEl) valInjuredEl.textContent = injured;
 
       for (const [cName, cVal] of Object.entries(conds)) {
@@ -3358,10 +3683,13 @@ function setupStatusTracker() {
       }
 
       // Sync checkboxes
-      document.querySelectorAll("#statusTrackerModal input[type='checkbox'][data-cond]").forEach(cb => {
-        const c = cb.dataset.cond;
-        cb.checked = !!conds[c];
-      });
+      const trackerScope = (trackerManager && trackerManager.getContentEl()) || document.getElementById("statusTrackerModal");
+      if (trackerScope) {
+        trackerScope.querySelectorAll("input[type='checkbox'][data-cond]").forEach(cb => {
+          const c = cb.dataset.cond;
+          cb.checked = !!conds[c];
+        });
+      }
 
       if (chips.length === 0) {
         boxChips.innerHTML = `
@@ -3667,8 +3995,16 @@ function setupStatusTracker() {
     // Open & Close Handlers (Special Tab Controller)
     function syncStatusTrackerUI() {
       ensureTrackerState();
-      const lblHero = document.getElementById("lblTrackerHeroName");
-      if (lblHero) lblHero.textContent = char.name || "Hero";
+      const heroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
+      const lblHero = getTrackerEl("lblTrackerHeroName");
+      if (lblHero) lblHero.textContent = heroName;
+      if (trackerManager && trackerManager.isPoppedOut()) {
+        const win = trackerManager.getWindow();
+        if (win && !win.closed && win.document) {
+          const lblPop = win.document.getElementById("lblTrackerHeroNamePopout");
+          if (lblPop) lblPop.textContent = heroName;
+        }
+      }
 
       syncInitiativeUI();
       syncGeneralD20UI();
@@ -5236,7 +5572,8 @@ function setupSessionAndGMHub() {
 
   // --- Party & Character Tracker UI (Top section of Session Tab) ---
   function syncPartyRosterUI() {
-    const tableRoster = document.getElementById("tbodySessionPartyRoster");
+    const partyContainer = (partyManager && partyManager.getContentEl()) || document.getElementById("sessionPartyTableContainer");
+    const tableRoster = (partyContainer && partyContainer.querySelector("#tbodySessionPartyRoster")) || document.getElementById("tbodySessionPartyRoster");
     if (!tableRoster || typeof CampaignManager === 'undefined') return;
     const camp = CampaignManager.getActiveCampaign();
     if (!camp) return;
@@ -6502,136 +6839,78 @@ function setupSessionAndGMHub() {
     });
   }
 
-  poppedOutPartyWindow = null;
-  let _partyOpening = false;
-
-  function getSavedPartyDisplayBounds() {
-    const fallback = { width: 840, height: 480, left: 120, top: 120 };
-    try {
-      const saved = localStorage.getItem("mm2e_party_display_bounds");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const res = sanitizeWindowBounds(parsed, fallback);
-        _cachedPartyDisplayBounds = res;
-        return res;
+  // Party Display Pop-out Controller (DOM-Mounted about:blank Architecture)
+  partyManager = createPopoutManager({
+    id: 'party',
+    title: '🛡️ Party Display',
+    storageKey: 'mm2e_party_display_bounds',
+    poppedKey: 'mm2e_party_popped_out',
+    defaultBounds: { width: 840, height: 480, left: 120, top: 120 },
+    getContentEl: () => document.getElementById("sessionPartyTableContainer"),
+    getNoticeEl: () => document.getElementById("boxPoppedOutPartyNotice"),
+    getPopoutButtonEl: () => document.getElementById("btnPopoutPartyDisplay"),
+    getRedockButtonEl: () => document.getElementById("btnRedockPartyDisplay"),
+    buildHeaderControls: (container, popDoc) => {
+      const camp = (typeof CampaignManager !== 'undefined' && CampaignManager.getActiveCampaign) ? CampaignManager.getActiveCampaign() : null;
+      const campName = (camp && camp.name) ? camp.name : 'Campaign';
+      const sessionNum = (camp && camp.sessionNumber) ? camp.sessionNumber : 1;
+      container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 700; font-size: 13px; color: var(--accent-primary);">🏰 ${campName}</span>
+          <span class="badge" style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 600; font-size: 11px;">Session #${sessionNum}</span>
+        </div>
+      `;
+    },
+    onPopout: (popDoc, win, contentEl) => {
+      window.poppedOutPartyWindow = win;
+      if (contentEl) {
+        contentEl.style.maxHeight = '100%';
+        contentEl.style.height = '100%';
       }
-    } catch (e) {}
-    if (typeof _cachedPartyDisplayBounds !== 'undefined' && _cachedPartyDisplayBounds && typeof _cachedPartyDisplayBounds === 'object') {
-      return { ..._cachedPartyDisplayBounds };
+      syncPartyRosterUI();
+    },
+    onDock: (contentEl) => {
+      window.poppedOutPartyWindow = null;
+      if (contentEl) {
+        contentEl.style.maxHeight = '480px';
+        contentEl.style.height = '';
+      }
+      syncPartyRosterUI();
     }
-    return fallback;
-  }
-  window.getSavedPartyDisplayBounds = getSavedPartyDisplayBounds;
-
-  function savePartyDisplayBoundsFromRef(win) {
-    if (_partyOpening) return;
-    if (!win || win.closed) return;
-    try {
-      const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
-      const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
-      const width = win.outerWidth || win.innerWidth;
-      const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
-        savePartyDisplayBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
-      }
-    } catch (e) {}
-  }
-  window.savePartyDisplayBoundsFromRef = savePartyDisplayBoundsFromRef;
+  });
 
   function openPartyDisplayPopout() {
-    if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
-      try { poppedOutPartyWindow.focus(); } catch (e) {}
-      updatePartyDisplayDockMode(true);
-      return;
-    }
-    // 1. Immediately sync and persist party roster to DOM and localStorage before opening window
-    syncPartyRosterUI();
-
-    const geom = preparePopoutGeometry(getSavedPartyDisplayBounds(), { width: 840, height: 480, left: 120, top: 120 });
-    const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "_blank", geom.features);
-    if (poppedOutPartyWindow) {
-      try { poppedOutPartyWindow.name = "MM2CG_PartyDisplay"; } catch (e) {}
-      try {
-        poppedOutPartyWindow.resizeTo(geom.width, geom.height);
-        poppedOutPartyWindow.moveTo(geom.left, geom.top);
-      } catch (e) {}
-      try {
-        poppedOutPartyWindow.addEventListener('resize', () => {
-          savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
-        });
-      } catch (e) {}
-    }
-    window.poppedOutPartyWindow = poppedOutPartyWindow;
-    updatePartyDisplayDockMode(true);
-
-    if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
-      SessionNetwork.initBroadcastChannel();
-    }
-    setTimeout(() => {
-      try {
-        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
-          poppedOutPartyWindow.document.documentElement.setAttribute("data-theme", currentTheme);
-          if (poppedOutPartyWindow.document.body) poppedOutPartyWindow.document.body.setAttribute("data-theme", currentTheme);
-          if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
-            poppedOutPartyWindow.__applySavedThemeAndFonts();
-          }
-          if (typeof poppedOutPartyWindow.syncPartyFromOpenerOrLocal === 'function') {
-            poppedOutPartyWindow.syncPartyFromOpenerOrLocal();
-          }
-        }
-      } catch (e) {}
-      syncPartyRosterUI();
-    }, 150);
-    setTimeout(() => {
-      try {
-        if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
-          if (typeof poppedOutPartyWindow.syncPartyFromOpenerOrLocal === 'function') {
-            poppedOutPartyWindow.syncPartyFromOpenerOrLocal();
-          }
-        }
-      } catch (e) {}
-      syncPartyRosterUI();
-    }, 350);
-
-    setTimeout(() => {
-      _partyOpening = false;
-    }, 800);
+    partyManager.open();
+    window.poppedOutPartyWindow = partyManager.getWindow();
   }
   window.openPartyDisplayPopout = openPartyDisplayPopout;
 
   function redockPartyDisplay(closeRef = true) {
-    if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
-      savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
-      if (closeRef) {
-        try { poppedOutPartyWindow.close(); } catch (e) {}
-      }
-    }
-    poppedOutPartyWindow = null;
+    partyManager.dock(closeRef);
     window.poppedOutPartyWindow = null;
-    updatePartyDisplayDockMode(false);
   }
   window.redockPartyDisplay = redockPartyDisplay;
+
+  window.getSavedPartyDisplayBounds = () => partyManager.getGeometry();
+  window.updatePartyDisplayDockMode = (isPopped) => partyManager.updateDockMode(isPopped);
+  window.savePartyDisplayBoundsFromRef = (win) => partyManager.saveGeometry();
 
   if (btnPopoutParty) {
     btnPopoutParty.addEventListener("click", openPartyDisplayPopout);
   }
-
   if (btnRedockParty) {
-    btnRedockParty.addEventListener("click", redockPartyDisplay);
+    btnRedockParty.addEventListener("click", () => redockPartyDisplay(true));
   }
 
   window.addEventListener('focus', () => {
-    if (poppedOutPartyWindow && poppedOutPartyWindow.closed) {
-      redockPartyDisplay();
+    if (partyManager && partyManager.isPoppedOut() && partyManager.getWindow().closed) {
+      redockPartyDisplay(false);
     }
   });
 
   window.addEventListener('storage', (e) => {
     if (e.key === 'mm2e_party_docked') {
-      redockPartyDisplay();
+      redockPartyDisplay(false);
     } else if (e.key === 'mm2e_party_display_bounds' && e.newValue) {
       try {
         const parsed = JSON.parse(e.newValue);
@@ -6648,16 +6927,6 @@ function setupSessionAndGMHub() {
       syncPartyRosterUI();
     }
   });
-
-  setInterval(() => {
-    if (poppedOutPartyWindow) {
-      if (poppedOutPartyWindow.closed) {
-        redockPartyDisplay();
-      } else {
-        savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
-      }
-    }
-  }, 400);
 
   if (txtSearch) {
     txtSearch.addEventListener("input", (e) => {
@@ -7594,119 +7863,47 @@ function setupSessionAndGMHub() {
   window.openGMTab = openGMTab;
 
   // ================= GM CAMPAIGN HUB POPOUT CONTROLLER =================
-  let _gmOpening = false;
-
-  function getSavedGMBounds() {
-    const fallback = { width: 1100, height: 750, left: 100, top: 100 };
-    try {
-      const saved = localStorage.getItem("mm2e_gm_bounds");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const res = sanitizeWindowBounds(parsed, fallback);
-        _cachedGMBounds = res;
-        return res;
-      }
-    } catch (e) {}
-    if (typeof _cachedGMBounds !== 'undefined' && _cachedGMBounds && typeof _cachedGMBounds === 'object') {
-      return { ..._cachedGMBounds };
-    }
-    return fallback;
+  const gmDockBody = document.getElementById("gmDockableBody");
+  function getGMEl(id) {
+    const box = (gmManager && gmManager.getContentEl()) || gmDockBody;
+    return (box && box.querySelector('#' + id)) || document.getElementById(id);
   }
-  window.getSavedGMBounds = getSavedGMBounds;
 
-  function saveGMBoundsFromRef(win) {
-    if (_gmOpening) return;
-    if (!win || win.closed) return;
-    try {
-      const left = (win.screenX !== undefined && !isNaN(win.screenX)) ? win.screenX : ((win.screenLeft !== undefined && !isNaN(win.screenLeft)) ? win.screenLeft : (win.mozInnerScreenX || 0));
-      const top = (win.screenY !== undefined && !isNaN(win.screenY)) ? win.screenY : ((win.screenTop !== undefined && !isNaN(win.screenTop)) ? win.screenTop : (win.mozInnerScreenY || 0));
-      const width = win.outerWidth || win.innerWidth;
-      const height = win.outerHeight || win.innerHeight;
-      if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 50000 && Math.abs(top) < 50000 && width >= 250 && height >= 200) {
-        saveGMBoundsDirect({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
-      }
-    } catch (e) {}
-  }
-  window.saveGMBoundsFromRef = saveGMBoundsFromRef;
-
-  function updateGMDockMode(isPoppedOut) {
-    const boxNotice = document.getElementById("boxPoppedOutGMNotice");
-    const dockBody = document.getElementById("gmDockableBody");
-    const btnPop = document.getElementById("btnPopoutGM");
-
-    if (boxNotice) boxNotice.style.display = isPoppedOut ? "flex" : "none";
-    if (dockBody) dockBody.style.display = isPoppedOut ? "none" : "flex";
-    if (btnPop) btnPop.style.display = isPoppedOut ? "none" : "";
-
-    if (!isPoppedOut) {
+  gmManager = createPopoutManager({
+    id: 'gm',
+    title: '👑 GM Campaign Hub',
+    storageKey: 'mm2e_gm_bounds',
+    poppedKey: 'mm2e_gm_popped_out',
+    defaultBounds: { width: 1100, height: 750, left: 100, top: 100 },
+    getContentEl: () => document.getElementById("gmDockableBody"),
+    getNoticeEl: () => document.getElementById("boxPoppedOutGMNotice"),
+    getPopoutButtonEl: () => document.getElementById("btnPopoutGM"),
+    getRedockButtonEl: () => document.getElementById("btnRedockGM"),
+    onPopout: (popDoc, win, contentEl) => {
+      window.poppedOutGMWindow = win;
+      syncGMUI();
+    },
+    onDock: (contentEl) => {
+      window.poppedOutGMWindow = null;
       syncGMUI();
     }
-  }
-  window.updateGMDockMode = updateGMDockMode;
+  });
 
   function openGMPopout() {
-    if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
-      try { poppedOutGMWindow.focus(); } catch (e) {}
-      updateGMDockMode(true);
-      return;
-    }
-    const geom = preparePopoutGeometry(getSavedGMBounds(), { width: 1100, height: 750, left: 100, top: 100 });
-    const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
-    _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=172&ts=${Date.now()}&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "_blank", geom.features);
-    if (poppedOutGMWindow) {
-      try { poppedOutGMWindow.name = "MM2CG_GMWindow"; } catch (e) {}
-      try {
-        poppedOutGMWindow.resizeTo(geom.width, geom.height);
-        poppedOutGMWindow.moveTo(geom.left, geom.top);
-      } catch (e) {}
-      try {
-        poppedOutGMWindow.addEventListener('resize', () => {
-          saveGMBoundsFromRef(poppedOutGMWindow);
-        });
-      } catch (e) {}
-    }
-    window.poppedOutGMWindow = poppedOutGMWindow;
-    updateGMDockMode(true);
-
-    if (typeof SessionNetwork !== 'undefined' && typeof SessionNetwork.initBroadcastChannel === 'function') {
-      SessionNetwork.initBroadcastChannel();
-    }
-
-    setTimeout(() => {
-      try {
-        if (poppedOutGMWindow && !poppedOutGMWindow.closed && poppedOutGMWindow.document) {
-          poppedOutGMWindow.document.documentElement.setAttribute("data-theme", currentTheme);
-          if (poppedOutGMWindow.document.body) poppedOutGMWindow.document.body.setAttribute("data-theme", currentTheme);
-          if (typeof poppedOutGMWindow.__applySavedThemeAndFonts === 'function') {
-            poppedOutGMWindow.__applySavedThemeAndFonts();
-          }
-          if (typeof poppedOutGMWindow.syncAllGMData === 'function') {
-            poppedOutGMWindow.syncAllGMData();
-          }
-        }
-      } catch (e) {}
-    }, 150);
-
-    setTimeout(() => {
-      _gmOpening = false;
-    }, 800);
+    gmManager.open();
+    window.poppedOutGMWindow = gmManager.getWindow();
   }
   window.openGMPopout = openGMPopout;
 
   function redockGM(closeRef = true) {
-    if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
-      saveGMBoundsFromRef(poppedOutGMWindow);
-      if (closeRef) {
-        try { poppedOutGMWindow.close(); } catch (e) {}
-      }
-    }
-    poppedOutGMWindow = null;
+    gmManager.dock(closeRef);
     window.poppedOutGMWindow = null;
-    updateGMDockMode(false);
   }
   window.redockGM = redockGM;
+
+  window.getSavedGMBounds = () => gmManager.getGeometry();
+  window.updateGMDockMode = (isPopped) => gmManager.updateDockMode(isPopped);
+  window.saveGMBoundsFromRef = (win) => gmManager.saveGeometry();
 
   const btnPopoutGM = document.getElementById("btnPopoutGM");
   const btnRedockGMBtn = document.getElementById("btnRedockGM");
@@ -7714,10 +7911,11 @@ function setupSessionAndGMHub() {
   if (btnRedockGMBtn) btnRedockGMBtn.addEventListener("click", () => redockGM(true));
 
   window.addEventListener('focus', () => {
-    if (poppedOutGMWindow && poppedOutGMWindow.closed) {
+    if (gmManager && gmManager.isPoppedOut() && gmManager.getWindow().closed) {
       redockGM(false);
     }
   });
+
   window.addEventListener('storage', (e) => {
     if (e.key === 'mm2e_gm_docked') {
       redockGM(false);
@@ -7728,15 +7926,6 @@ function setupSessionAndGMHub() {
       } catch (err) {}
     }
   });
-  setInterval(() => {
-    if (poppedOutGMWindow) {
-      if (poppedOutGMWindow.closed) {
-        redockGM(false);
-      } else {
-        saveGMBoundsFromRef(poppedOutGMWindow);
-      }
-    }
-  }, 400);
 
   if (btnOpenGM) {
     btnOpenGM.addEventListener("click", openGMTab);
@@ -7896,8 +8085,8 @@ function setupSessionAndGMHub() {
 
   // --- Save Point Timeline Operations ---
   function renderGMTimeline() {
-    const container = document.getElementById("gmTimelineContainer");
-    const chkAuto = document.getElementById("chkGMAutoBackupChars");
+    const container = getGMEl("gmTimelineContainer");
+    const chkAuto = getGMEl("chkGMAutoBackupChars");
     if (!container || typeof CampaignManager === 'undefined') return;
 
     if (chkAuto) {
@@ -8088,7 +8277,7 @@ function setupSessionAndGMHub() {
 
   // --- Campaign Characters & Party Membership in GM Tab ---
   function renderGMCampaignCharacters() {
-    const list = document.getElementById("gmCampaignCharactersList");
+    const list = getGMEl("gmCampaignCharactersList");
     if (!list || typeof CampaignManager === 'undefined') return;
     const camp = CampaignManager.getActiveCampaign();
     if (!camp) return;
@@ -8221,7 +8410,7 @@ function setupSessionAndGMHub() {
   // --- Party NPCs & Encounter Adversaries in GM Tab ---
   // --- Party NPCs & Encounter Adversaries in GM Tab ---
   function renderGMPartyNpcList() {
-    const list = document.getElementById("gmPartyNpcList");
+    const list = getGMEl("gmPartyNpcList");
     if (!list || typeof CampaignManager === 'undefined') return;
     const camp = CampaignManager.getActiveCampaign();
     const npcs = camp?.npcs || [];
@@ -8287,7 +8476,7 @@ function setupSessionAndGMHub() {
   }
 
   function renderGMEncounterEnemyList() {
-    const list = document.getElementById("gmEncounterEnemyList");
+    const list = getGMEl("gmEncounterEnemyList");
     if (!list || typeof CampaignManager === 'undefined') return;
     const enemies = CampaignManager.getEncounterEnemies();
 
@@ -9214,13 +9403,15 @@ function setupSessionAndGMHub() {
   // --- GM Character Operations & Menu Logic ---
   window.gmToggleCharMenu = function(event, charId) {
     if (event) event.stopPropagation();
+    const doc = (event && event.target && event.target.ownerDocument) || document;
+    const win = (doc && doc.defaultView) || window;
     const menuId = `gmCharMenu_${charId}`;
-    const allMenus = document.querySelectorAll(".gm-char-dropdown-menu");
+    const allMenus = doc.querySelectorAll(".gm-char-dropdown-menu");
     allMenus.forEach(m => {
       if (m.id !== menuId) m.style.display = "none";
     });
 
-    const targetMenu = document.getElementById(menuId);
+    const targetMenu = doc.getElementById(menuId);
     if (targetMenu) {
       const willOpen = targetMenu.style.display === "none" || !targetMenu.style.display;
       if (willOpen) {
@@ -9233,17 +9424,17 @@ function setupSessionAndGMHub() {
 
         if (btnRect) {
           let left = btnRect.left;
-          if (left + menuWidth > window.innerWidth - 12) {
-            left = Math.max(10, window.innerWidth - menuWidth - 12);
+          if (left + menuWidth > win.innerWidth - 12) {
+            left = Math.max(10, win.innerWidth - menuWidth - 12);
           }
           targetMenu.style.left = `${left}px`;
 
-          const spaceBelow = window.innerHeight - btnRect.bottom;
-          const openUpward = spaceBelow < (menuHeight + 16) || btnRect.bottom > (window.innerHeight - 150);
+          const spaceBelow = win.innerHeight - btnRect.bottom;
+          const openUpward = spaceBelow < (menuHeight + 16) || btnRect.bottom > (win.innerHeight - 150);
 
           if (openUpward) {
             targetMenu.style.top = "auto";
-            targetMenu.style.bottom = `${Math.max(10, window.innerHeight - btnRect.top + 4)}px`;
+            targetMenu.style.bottom = `${Math.max(10, win.innerHeight - btnRect.top + 4)}px`;
           } else {
             targetMenu.style.bottom = "auto";
             targetMenu.style.top = `${btnRect.bottom + 4}px`;
@@ -9267,6 +9458,14 @@ function setupSessionAndGMHub() {
 
   window.gmCloseAllCharMenus = function() {
     document.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
+    if (typeof partyManager !== 'undefined' && partyManager && partyManager.getChildDoc) {
+      const pDoc = partyManager.getChildDoc();
+      if (pDoc) pDoc.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
+    }
+    if (typeof gmManager !== 'undefined' && gmManager && gmManager.getChildDoc) {
+      const gDoc = gmManager.getChildDoc();
+      if (gDoc) gDoc.querySelectorAll(".gm-char-dropdown-menu").forEach(m => m.style.display = "none");
+    }
   };
 
   window.gmCloseLocalHero = function() {
@@ -9925,6 +10124,42 @@ function setupThemeAndFontControls() {
     if (valFinePrint) valFinePrint.textContent = savedFinePrintFont + "px";
   }
 
+  function syncThemeAndFontsToPopouts() {
+    const activeTheme = root.getAttribute("data-theme") || "light";
+    const cssText = root.style.cssText;
+    const managers = [
+      typeof tablesManager !== 'undefined' ? tablesManager : null,
+      typeof trackerManager !== 'undefined' ? trackerManager : null,
+      typeof partyManager !== 'undefined' ? partyManager : null,
+      typeof gmManager !== 'undefined' ? gmManager : null
+    ].filter(Boolean);
+
+    managers.forEach(mgr => {
+      const childDoc = mgr && mgr.getChildDoc && mgr.getChildDoc();
+      if (childDoc) {
+        try {
+          childDoc.documentElement.setAttribute("data-theme", activeTheme);
+          if (childDoc.body) childDoc.body.setAttribute("data-theme", activeTheme);
+          if (cssText) childDoc.documentElement.style.cssText = cssText;
+        } catch (e) {}
+      }
+    });
+
+    [poppedOutPartyWindow, poppedOutTrackerWindow, poppedOutTablesWindow, poppedOutGMWindow].forEach(w => {
+      if (w && !w.closed && w.document) {
+        try {
+          w.document.documentElement.setAttribute("data-theme", activeTheme);
+          if (w.document.body) w.document.body.setAttribute("data-theme", activeTheme);
+          if (cssText) w.document.documentElement.style.cssText = cssText;
+          if (typeof w.__applySavedThemeAndFonts === 'function') {
+            w.__applySavedThemeAndFonts();
+          }
+        } catch (e) {}
+      }
+    });
+  }
+  window.syncThemeAndFontsToPopouts = syncThemeAndFontsToPopouts;
+
   btnTheme.addEventListener("click", (e) => {
     e.stopPropagation();
     const currentTheme = root.getAttribute("data-theme");
@@ -9934,49 +10169,7 @@ function setupThemeAndFontControls() {
     updateThemeBtnUI(nextTheme);
     try { localStorage.setItem("mm2e_theme", nextTheme); } catch (e) {}
 
-    // Direct synchronization to popped out party window if open
-    try {
-      if (poppedOutPartyWindow && !poppedOutPartyWindow.closed && poppedOutPartyWindow.document) {
-        poppedOutPartyWindow.document.documentElement.setAttribute("data-theme", nextTheme);
-        if (poppedOutPartyWindow.document.body) poppedOutPartyWindow.document.body.setAttribute("data-theme", nextTheme);
-        if (typeof poppedOutPartyWindow.__applySavedThemeAndFonts === 'function') {
-          poppedOutPartyWindow.__applySavedThemeAndFonts();
-        }
-      }
-    } catch (e) {}
-
-    // Direct synchronization to popped out tracker window if open
-    try {
-      if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed && poppedOutTrackerWindow.document) {
-        poppedOutTrackerWindow.document.documentElement.setAttribute("data-theme", nextTheme);
-        if (poppedOutTrackerWindow.document.body) poppedOutTrackerWindow.document.body.setAttribute("data-theme", nextTheme);
-        if (typeof poppedOutTrackerWindow.__applySavedThemeAndFonts === 'function') {
-          poppedOutTrackerWindow.__applySavedThemeAndFonts();
-        }
-      }
-    } catch (e) {}
-
-    // Direct synchronization to popped out tables window if open
-    try {
-      if (poppedOutTablesWindow && !poppedOutTablesWindow.closed && poppedOutTablesWindow.document) {
-        poppedOutTablesWindow.document.documentElement.setAttribute("data-theme", nextTheme);
-        if (poppedOutTablesWindow.document.body) poppedOutTablesWindow.document.body.setAttribute("data-theme", nextTheme);
-        if (typeof poppedOutTablesWindow.__applySavedThemeAndFonts === 'function') {
-          poppedOutTablesWindow.__applySavedThemeAndFonts();
-        }
-      }
-    } catch (e) {}
-
-    // Direct synchronization to popped out GM window if open
-    try {
-      if (poppedOutGMWindow && !poppedOutGMWindow.closed && poppedOutGMWindow.document) {
-        poppedOutGMWindow.document.documentElement.setAttribute("data-theme", nextTheme);
-        if (poppedOutGMWindow.document.body) poppedOutGMWindow.document.body.setAttribute("data-theme", nextTheme);
-        if (typeof poppedOutGMWindow.__applySavedThemeAndFonts === 'function') {
-          poppedOutGMWindow.__applySavedThemeAndFonts();
-        }
-      }
-    } catch (e) {}
+    syncThemeAndFontsToPopouts();
 
     // Direct broadcast over mm2e_session_channel
     try {
@@ -9997,6 +10190,7 @@ function setupThemeAndFontControls() {
       const valEl = document.getElementById("valLabelFont");
       if (valEl) valEl.textContent = e.target.value + "px";
       localStorage.setItem("mm2e_font_labels", e.target.value);
+      syncThemeAndFontsToPopouts();
     });
   }
   if (sliderControl) {
@@ -10005,6 +10199,7 @@ function setupThemeAndFontControls() {
       const valEl = document.getElementById("valControlFont");
       if (valEl) valEl.textContent = e.target.value + "px";
       localStorage.setItem("mm2e_font_controls", e.target.value);
+      syncThemeAndFontsToPopouts();
     });
   }
   if (sliderTag) {
@@ -10015,6 +10210,7 @@ function setupThemeAndFontControls() {
       if (valEl) valEl.textContent = e.target.value + "px";
       localStorage.setItem("mm2e_font_tags", e.target.value);
       localStorage.setItem("mm2e_font_links", e.target.value);
+      syncThemeAndFontsToPopouts();
     });
   }
   if (sliderSecondary) {
@@ -10023,6 +10219,7 @@ function setupThemeAndFontControls() {
       const valEl = document.getElementById("valSecondaryFont");
       if (valEl) valEl.textContent = e.target.value + "px";
       localStorage.setItem("mm2e_font_secondary", e.target.value);
+      syncThemeAndFontsToPopouts();
     });
   }
   if (sliderMinorControl) {
@@ -10031,6 +10228,7 @@ function setupThemeAndFontControls() {
       const valEl = document.getElementById("valMinorControlFont");
       if (valEl) valEl.textContent = e.target.value + "px";
       localStorage.setItem("mm2e_font_minor_controls", e.target.value);
+      syncThemeAndFontsToPopouts();
     });
   }
   if (sliderFinePrint) {
@@ -10039,6 +10237,7 @@ function setupThemeAndFontControls() {
       const valFinePrint = document.getElementById("valFinePrintFont");
       if (valFinePrint) valFinePrint.textContent = e.target.value + "px";
       localStorage.setItem("mm2e_font_fine_print", e.target.value);
+      syncThemeAndFontsToPopouts();
     });
   }
 

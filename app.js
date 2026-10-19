@@ -2077,6 +2077,85 @@ function setupTabs() {
 }
 window.setupTabs = setupTabs;
 
+// In-memory bounds cache for high-fidelity cross-origin / file:/// resilience
+let _cachedTrackerBounds = null;
+let _cachedPartyDisplayBounds = null;
+let _cachedTablesBounds = null;
+let _cachedGMBounds = null;
+
+// Multi-monitor and browser-chrome aware bounds sanitization
+function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120, top: 120 }) {
+  if (!b || typeof b !== 'object') return { ...fallback };
+  const width = Math.round(Number(b.width) || fallback.width);
+  const height = Math.round(Number(b.height) || fallback.height);
+  const rawLeft = Number(b.left);
+  const rawTop = Number(b.top);
+  const isLeftValid = typeof rawLeft === 'number' && !isNaN(rawLeft) && Math.abs(rawLeft) < 30000;
+  const isTopValid = typeof rawTop === 'number' && !isNaN(rawTop) && Math.abs(rawTop) < 30000;
+  const left = isLeftValid ? Math.round(rawLeft) : fallback.left;
+  const top = isTopValid ? Math.round(rawTop) : fallback.top;
+
+  return {
+    width: Math.max(300, Math.min(width, 5000)),
+    height: Math.max(200, Math.min(height, 5000)),
+    left: left,
+    top: top
+  };
+}
+window.sanitizeWindowBounds = sanitizeWindowBounds;
+
+// Browser-chrome compensated geometry calculation for window.open and child positioning
+function preparePopoutGeometry(bounds, defaultBounds) {
+  const sanitized = sanitizeWindowBounds(bounds, defaultBounds);
+  let { width, height, left, top } = sanitized;
+
+  // Single-monitor clamping guard:
+  // If the window is on the primary display (left >= 0 and left < screen.availWidth),
+  // clamp it so it cannot extend off the right or bottom edge, preventing Firefox auto-reset.
+  if (typeof window.screen !== 'undefined') {
+    const availW = window.screen.availWidth || window.screen.width || 1920;
+    const availH = window.screen.availHeight || window.screen.height || 1080;
+
+    if (left >= 0 && left < availW) {
+      if (width > availW) width = Math.max(300, availW - 30);
+      if (left + width > availW) left = Math.max(0, availW - width);
+    }
+    if (top >= 0 && top < availH) {
+      if (height > availH) height = Math.max(200, availH - 40);
+      if (top + height > availH) top = Math.max(0, availH - height);
+    }
+  }
+
+  // Firefox window.open feature string compensation:
+  // Firefox treats 'width=W,height=H' in window.open feature string as INNER (viewport) dimensions,
+  // whereas outer dimensions include OS window borders (~16px) and titlebar (~40-80px).
+  // Passing uncompensated outer dimensions creates an inflated window on every open in Firefox.
+  const isFirefox = (typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent));
+  let featureW = width;
+  let featureH = height;
+
+  if (isFirefox) {
+    const chromeW = (window.outerWidth && window.innerWidth) ? Math.max(0, window.outerWidth - window.innerWidth) : 16;
+    const chromeH = (window.outerHeight && window.innerHeight) ? Math.max(30, window.outerHeight - window.innerHeight) : 75;
+    featureW = Math.max(300, width - chromeW);
+    featureH = Math.max(200, height - chromeH);
+  }
+
+  const featureLeft = Math.round(left);
+  const featureTop = Math.round(top);
+  const features = `width=${featureW},height=${featureH},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+
+  return {
+    width,
+    height,
+    left: featureLeft,
+    top: featureTop,
+    features,
+    urlParams: `w=${width}&h=${height}&x=${featureLeft}&y=${featureTop}`
+  };
+}
+window.preparePopoutGeometry = preparePopoutGeometry;
+
 // ================= REFERENCE TABLES POPOUT CONTROLLER =================
 function setupTablesPopout() {
   let _tablesOpening = false;
@@ -2108,7 +2187,7 @@ function setupTablesPopout() {
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
+          Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
         saveTablesBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
@@ -2132,35 +2211,25 @@ function setupTablesPopout() {
       updateTablesDockMode(true);
       return;
     }
-    const bounds = getSavedTablesBounds();
-    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 160;
-    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 120;
-    const openWidth = Math.max(350, Math.min(bounds.width || 920, 5000));
-    let openHeight = Math.max(250, Math.min(bounds.height || 680, 5000));
-    if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
-      openHeight = Math.max(250, window.screen.availHeight - 40);
-    }
-    const featureLeft = Math.round(openLeft);
-    const featureTop = Math.round(openTop);
-    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+    const geom = preparePopoutGeometry(getSavedTablesBounds(), { width: 920, height: 680, left: 160, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _tablesOpening = true;
-    poppedOutTablesWindow = window.open(`tables_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TablesWindow", features);
+    poppedOutTablesWindow = window.open(`tables_window.html?v=167&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_TablesWindow", geom.features);
     window.poppedOutTablesWindow = poppedOutTablesWindow;
     updateTablesDockMode(true);
 
     try {
       if (poppedOutTablesWindow) {
-        poppedOutTablesWindow.moveTo(openLeft, openTop);
-        poppedOutTablesWindow.resizeTo(openWidth, openHeight);
+        poppedOutTablesWindow.moveTo(geom.left, geom.top);
+        poppedOutTablesWindow.resizeTo(geom.width, geom.height);
       }
     } catch (e) {}
 
     setTimeout(() => {
       try {
         if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
-          poppedOutTablesWindow.moveTo(openLeft, openTop);
-          poppedOutTablesWindow.resizeTo(openWidth, openHeight);
+          poppedOutTablesWindow.moveTo(geom.left, geom.top);
+          poppedOutTablesWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
     }, 50);
@@ -2168,8 +2237,8 @@ function setupTablesPopout() {
     setTimeout(() => {
       try {
         if (poppedOutTablesWindow && !poppedOutTablesWindow.closed) {
-          poppedOutTablesWindow.moveTo(openLeft, openTop);
-          poppedOutTablesWindow.resizeTo(openWidth, openHeight);
+          poppedOutTablesWindow.moveTo(geom.left, geom.top);
+          poppedOutTablesWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
     }, 200);
@@ -2227,9 +2296,7 @@ function setupTablesPopout() {
   });
   setInterval(() => {
     if (poppedOutTablesWindow) {
-      if (!poppedOutTablesWindow.closed) {
-        saveTablesBoundsFromRef(poppedOutTablesWindow);
-      } else {
+      if (poppedOutTablesWindow.closed) {
         redockTables(false);
       }
     }
@@ -2842,32 +2909,7 @@ window.poppedOutTablesWindow = null;
 let poppedOutGMWindow = null;
 window.poppedOutGMWindow = null;
 
-// In-memory bounds cache for high-fidelity cross-origin / file:/// resilience
-let _cachedTrackerBounds = null;
-let _cachedPartyDisplayBounds = null;
-let _cachedTablesBounds = null;
-let _cachedGMBounds = null;
-
 // ================= POPOUT WINDOW BOUNDS & CROSS-ORIGIN BRIDGE =================
-function sanitizeWindowBounds(b, fallback = { width: 840, height: 480, left: 120, top: 120 }) {
-  if (!b || typeof b !== 'object') return { ...fallback };
-  const width = Math.round(Number(b.width) || fallback.width);
-  const height = Math.round(Number(b.height) || fallback.height);
-  const rawLeft = Number(b.left);
-  const rawTop = Number(b.top);
-  const isLeftValid = typeof rawLeft === 'number' && !isNaN(rawLeft) && Math.abs(rawLeft) < 10000;
-  const isTopValid = typeof rawTop === 'number' && !isNaN(rawTop) && Math.abs(rawTop) < 10000;
-  const left = isLeftValid ? Math.round(rawLeft) : fallback.left;
-  const top = isTopValid ? Math.round(rawTop) : fallback.top;
-
-  return {
-    width: Math.max(350, Math.min(width, 5000)),
-    height: Math.max(250, Math.min(height, 5000)),
-    left: left,
-    top: top
-  };
-}
-window.sanitizeWindowBounds = sanitizeWindowBounds;
 
 try {
   const _initTrk = localStorage.getItem("mm2e_tracker_bounds");
@@ -3129,7 +3171,7 @@ function setupStatusTracker() {
         const width = win.outerWidth || win.innerWidth;
         const height = win.outerHeight || win.innerHeight;
         if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-            Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
+            Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
           saveTrackerBoundsDirect({ left, top, width, height });
         }
       } catch (e) {}
@@ -3157,36 +3199,26 @@ function setupStatusTracker() {
         updateTrackerDockMode(true);
         return;
       }
-      const bounds = getSavedTrackerBounds();
-      const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 140;
-      const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 140;
-      const openWidth = Math.max(350, Math.min(bounds.width || 880, 5000));
-      let openHeight = Math.max(250, Math.min(bounds.height || 660, 5000));
-      if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
-        openHeight = Math.max(250, window.screen.availHeight - 40);
-      }
-      const featureLeft = Math.round(openLeft);
-      const featureTop = Math.round(openTop);
-      const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+      const geom = preparePopoutGeometry(getSavedTrackerBounds(), { width: 880, height: 660, left: 140, top: 140 });
       const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
       const activeHeroName = (char && char.name && char.name.trim()) ? char.name.trim() : "Hero";
       _trackerOpening = true;
-      poppedOutTrackerWindow = window.open(`tracker_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_TrackerWindow", features);
+      poppedOutTrackerWindow = window.open(`tracker_window.html?v=167&theme=${encodeURIComponent(currentTheme)}&heroName=${encodeURIComponent(activeHeroName)}&${geom.urlParams}`, "MM2CG_TrackerWindow", geom.features);
       window.poppedOutTrackerWindow = poppedOutTrackerWindow;
       updateTrackerDockMode(true);
 
       try {
         if (poppedOutTrackerWindow) {
-          poppedOutTrackerWindow.moveTo(openLeft, openTop);
-          poppedOutTrackerWindow.resizeTo(openWidth, openHeight);
+          poppedOutTrackerWindow.moveTo(geom.left, geom.top);
+          poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
 
       setTimeout(() => {
         try {
           if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-            poppedOutTrackerWindow.moveTo(openLeft, openTop);
-            poppedOutTrackerWindow.resizeTo(openWidth, openHeight);
+            poppedOutTrackerWindow.moveTo(geom.left, geom.top);
+            poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
           }
         } catch (e) {}
       }, 50);
@@ -3194,8 +3226,8 @@ function setupStatusTracker() {
       setTimeout(() => {
         try {
           if (poppedOutTrackerWindow && !poppedOutTrackerWindow.closed) {
-            poppedOutTrackerWindow.moveTo(openLeft, openTop);
-            poppedOutTrackerWindow.resizeTo(openWidth, openHeight);
+            poppedOutTrackerWindow.moveTo(geom.left, geom.top);
+            poppedOutTrackerWindow.resizeTo(geom.width, geom.height);
           }
         } catch (e) {}
       }, 200);
@@ -3285,9 +3317,7 @@ function setupStatusTracker() {
 
     setInterval(() => {
       if (poppedOutTrackerWindow) {
-        if (!poppedOutTrackerWindow.closed) {
-          saveTrackerBoundsFromRef(poppedOutTrackerWindow);
-        } else {
+        if (poppedOutTrackerWindow.closed) {
           redockTracker();
         }
       }
@@ -6559,7 +6589,7 @@ function setupSessionAndGMHub() {
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
+          Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
         savePartyDisplayBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
@@ -6575,35 +6605,25 @@ function setupSessionAndGMHub() {
     // 1. Immediately sync and persist party roster to DOM and localStorage before opening window
     syncPartyRosterUI();
 
-    const bounds = getSavedPartyDisplayBounds();
-    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 120;
-    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 120;
-    const openWidth = Math.max(350, Math.min(bounds.width || 840, 5000));
-    let openHeight = Math.max(250, Math.min(bounds.height || 480, 5000));
-    if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
-      openHeight = Math.max(250, window.screen.availHeight - 40);
-    }
-    const featureLeft = Math.round(openLeft);
-    const featureTop = Math.round(openTop);
-    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+    const geom = preparePopoutGeometry(getSavedPartyDisplayBounds(), { width: 840, height: 480, left: 120, top: 120 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _partyOpening = true;
-    poppedOutPartyWindow = window.open(`party_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_PartyDisplay", features);
+    poppedOutPartyWindow = window.open(`party_window.html?v=167&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_PartyDisplay", geom.features);
     window.poppedOutPartyWindow = poppedOutPartyWindow;
     updatePartyDisplayDockMode(true);
 
     try {
       if (poppedOutPartyWindow) {
-        poppedOutPartyWindow.moveTo(openLeft, openTop);
-        poppedOutPartyWindow.resizeTo(openWidth, openHeight);
+        poppedOutPartyWindow.moveTo(geom.left, geom.top);
+        poppedOutPartyWindow.resizeTo(geom.width, geom.height);
       }
     } catch (e) {}
 
     setTimeout(() => {
       try {
         if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
-          poppedOutPartyWindow.moveTo(openLeft, openTop);
-          poppedOutPartyWindow.resizeTo(openWidth, openHeight);
+          poppedOutPartyWindow.moveTo(geom.left, geom.top);
+          poppedOutPartyWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
     }, 50);
@@ -6611,8 +6631,8 @@ function setupSessionAndGMHub() {
     setTimeout(() => {
       try {
         if (poppedOutPartyWindow && !poppedOutPartyWindow.closed) {
-          poppedOutPartyWindow.moveTo(openLeft, openTop);
-          poppedOutPartyWindow.resizeTo(openWidth, openHeight);
+          poppedOutPartyWindow.moveTo(geom.left, geom.top);
+          poppedOutPartyWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
     }, 200);
@@ -6701,9 +6721,7 @@ function setupSessionAndGMHub() {
 
   setInterval(() => {
     if (poppedOutPartyWindow) {
-      if (!poppedOutPartyWindow.closed) {
-        savePartyDisplayBoundsFromRef(poppedOutPartyWindow);
-      } else {
+      if (poppedOutPartyWindow.closed) {
         redockPartyDisplay();
       }
     }
@@ -7673,7 +7691,7 @@ function setupSessionAndGMHub() {
       const width = win.outerWidth || win.innerWidth;
       const height = win.outerHeight || win.innerHeight;
       if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-          Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
+          Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 300 && height >= 200) {
         saveGMBoundsDirect({ left, top, width, height });
       }
     } catch (e) {}
@@ -7701,35 +7719,25 @@ function setupSessionAndGMHub() {
       updateGMDockMode(true);
       return;
     }
-    const bounds = getSavedGMBounds();
-    const openLeft = (typeof bounds.left === 'number' && !isNaN(bounds.left) && Math.abs(bounds.left) < 10000) ? bounds.left : 100;
-    const openTop = (typeof bounds.top === 'number' && !isNaN(bounds.top) && Math.abs(bounds.top) < 10000) ? bounds.top : 100;
-    const openWidth = Math.max(350, Math.min(bounds.width || 1100, 5000));
-    let openHeight = Math.max(250, Math.min(bounds.height || 750, 5000));
-    if (window.screen && window.screen.availHeight && openHeight > (window.screen.availHeight - 30)) {
-      openHeight = Math.max(250, window.screen.availHeight - 40);
-    }
-    const featureLeft = Math.round(openLeft);
-    const featureTop = Math.round(openTop);
-    const features = `width=${openWidth},height=${openHeight},left=${featureLeft},top=${featureTop},screenX=${featureLeft},screenY=${featureTop},popup=yes,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+    const geom = preparePopoutGeometry(getSavedGMBounds(), { width: 1100, height: 750, left: 100, top: 100 });
     const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("mm2e_theme") || "light";
     _gmOpening = true;
-    poppedOutGMWindow = window.open(`gm_window.html?v=166&theme=${encodeURIComponent(currentTheme)}&w=${openWidth}&h=${openHeight}&x=${openLeft}&y=${openTop}`, "MM2CG_GMWindow", features);
+    poppedOutGMWindow = window.open(`gm_window.html?v=167&theme=${encodeURIComponent(currentTheme)}&${geom.urlParams}`, "MM2CG_GMWindow", geom.features);
     window.poppedOutGMWindow = poppedOutGMWindow;
     updateGMDockMode(true);
 
     try {
       if (poppedOutGMWindow) {
-        poppedOutGMWindow.moveTo(openLeft, openTop);
-        poppedOutGMWindow.resizeTo(openWidth, openHeight);
+        poppedOutGMWindow.moveTo(geom.left, geom.top);
+        poppedOutGMWindow.resizeTo(geom.width, geom.height);
       }
     } catch (e) {}
 
     setTimeout(() => {
       try {
         if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
-          poppedOutGMWindow.moveTo(openLeft, openTop);
-          poppedOutGMWindow.resizeTo(openWidth, openHeight);
+          poppedOutGMWindow.moveTo(geom.left, geom.top);
+          poppedOutGMWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
     }, 50);
@@ -7737,8 +7745,8 @@ function setupSessionAndGMHub() {
     setTimeout(() => {
       try {
         if (poppedOutGMWindow && !poppedOutGMWindow.closed) {
-          poppedOutGMWindow.moveTo(openLeft, openTop);
-          poppedOutGMWindow.resizeTo(openWidth, openHeight);
+          poppedOutGMWindow.moveTo(geom.left, geom.top);
+          poppedOutGMWindow.resizeTo(geom.width, geom.height);
         }
       } catch (e) {}
     }, 200);
@@ -7803,9 +7811,7 @@ function setupSessionAndGMHub() {
   });
   setInterval(() => {
     if (poppedOutGMWindow) {
-      if (!poppedOutGMWindow.closed) {
-        saveGMBoundsFromRef(poppedOutGMWindow);
-      } else {
+      if (poppedOutGMWindow.closed) {
         redockGM(false);
       }
     }

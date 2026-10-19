@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>MM2CG — Campaigns &amp; GM Management Center</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css?v=73">
+  <link rel="stylesheet" href="styles.css?v=74">
   <script>
     (function() {
       function getActiveTheme() {
@@ -95,6 +95,7 @@
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
       <button type="button" class="btn btn-secondary" id="btnGMRefreshPopout" style="height: 28px; padding: 0 10px; font-size: var(--font-size-controls);" title="Refresh GM state">🔄 Refresh</button>
+      <span id="lblWindowBoundsBadge" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-muted); font-family: monospace; user-select: none;" title="Current window size and screen coordinates">📍 Ready</span>
       <button type="button" class="btn btn-secondary" id="btnRedockGMWindow" style="font-weight: 600; font-size: var(--font-size-controls); height: 28px; padding: 0 12px; color: var(--accent-primary);">
         ⬅ Re-dock
       </button>
@@ -238,6 +239,14 @@
 
     const FALLBACK_BOUNDS = { width: 1100, height: 750, left: 100, top: 100 };
 
+    function updateBoundsBadge(b) {
+      const badge = document.getElementById('lblWindowBoundsBadge');
+      if (badge && b && typeof b.width === 'number' && typeof b.height === 'number') {
+        badge.textContent = `📍 ${Math.round(b.width)}×${Math.round(b.height)} at (${Math.round(b.left)}, ${Math.round(b.top)})`;
+        badge.title = `Screen position: X=${Math.round(b.left)}, Y=${Math.round(b.top)} | Dimensions: ${Math.round(b.width)}px wide, ${Math.round(b.height)}px high`;
+      }
+    }
+
     function getInitialBounds() {
       // 1. Authoritative URL query parameters passed directly from opener on launch
       try {
@@ -246,7 +255,7 @@
         const urlH = parseInt(p.get('h'), 10);
         const urlX = parseInt(p.get('x'), 10);
         const urlY = parseInt(p.get('y'), 10);
-        if (urlW >= 250 && urlH >= 200 && !isNaN(urlX) && !isNaN(urlY) && Math.abs(urlX) < 10000 && Math.abs(urlY) < 10000) {
+        if (urlW >= 250 && urlH >= 200 && !isNaN(urlX) && !isNaN(urlY) && Math.abs(urlX) < 30000 && Math.abs(urlY) < 30000) {
           return {
             width: urlW,
             height: urlH,
@@ -262,8 +271,8 @@
         if (saved) {
           const b = JSON.parse(saved);
           if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 &&
-              typeof b.left === 'number' && !isNaN(b.left) && Math.abs(b.left) < 10000 &&
-              typeof b.top === 'number' && !isNaN(b.top) && Math.abs(b.top) < 10000) {
+              typeof b.left === 'number' && !isNaN(b.left) && Math.abs(b.left) < 30000 &&
+              typeof b.top === 'number' && !isNaN(b.top) && Math.abs(b.top) < 30000) {
             return {
               width: Math.round(b.width),
               height: Math.round(b.height),
@@ -278,7 +287,7 @@
       try {
         if (window.opener && !window.opener.closed && typeof window.opener[OPENER_GET_BOUNDS_FN] === 'function') {
           const ob = window.opener[OPENER_GET_BOUNDS_FN]();
-          if (ob && typeof ob === 'object' && ob.width >= 250 && ob.height >= 200 && Math.abs(ob.left) < 10000 && Math.abs(ob.top) < 10000) {
+          if (ob && typeof ob === 'object' && ob.width >= 250 && ob.height >= 200 && Math.abs(ob.left) < 30000 && Math.abs(ob.top) < 30000) {
             return {
               width: Math.round(ob.width),
               height: Math.round(ob.height),
@@ -294,6 +303,7 @@
 
     let _isRestoringBounds = false;
     window._lastBounds = getInitialBounds();
+    updateBoundsBadge(window._lastBounds);
 
     function redockGMWindow() {
       saveWindowBounds();
@@ -338,9 +348,10 @@
         const height = Math.round(window.outerHeight || window.innerHeight);
 
         if (typeof left === 'number' && !isNaN(left) && typeof top === 'number' && !isNaN(top) &&
-            Math.abs(left) < 10000 && Math.abs(top) < 10000 && width >= 250 && height >= 200) {
+            Math.abs(left) < 30000 && Math.abs(top) < 30000 && width >= 250 && height >= 200) {
           const bounds = { left, top, width, height };
           window._lastBounds = bounds;
+          updateBoundsBadge(bounds);
 
           // 1. Save in popout's local storage
           try { localStorage.setItem(STORAGE_KEY_BOUNDS, JSON.stringify(bounds)); } catch (e) {}
@@ -384,7 +395,7 @@
         if (!b) return;
         _isRestoringBounds = true;
         try {
-          if (typeof b.left === 'number' && typeof b.top === 'number' && Math.abs(b.left) < 10000 && Math.abs(b.top) < 10000) {
+          if (typeof b.left === 'number' && typeof b.top === 'number' && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
             window.moveTo(b.left, b.top);
           }
           if (typeof b.width === 'number' && typeof b.height === 'number' && b.width >= 250 && b.height >= 200) {
@@ -392,9 +403,10 @@
           }
         } catch (e) {}
         window._lastBounds = b;
+        updateBoundsBadge(b);
         setTimeout(() => {
           _isRestoringBounds = false;
-        }, 500);
+        }, 600);
       } catch (e) {
         _isRestoringBounds = false;
       }
@@ -416,8 +428,9 @@
       if (!event.data || typeof event.data !== 'object') return;
       if (event.data.type === 'MM2E_RESP_BOUNDS' && event.data.key === STORAGE_KEY_BOUNDS && event.data.bounds) {
         const b = event.data.bounds;
-        if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 && Math.abs(b.left) < 10000 && Math.abs(b.top) < 10000) {
+        if (b && typeof b === 'object' && b.width >= 250 && b.height >= 200 && Math.abs(b.left) < 30000 && Math.abs(b.top) < 30000) {
           window._lastBounds = b;
+          updateBoundsBadge(b);
           try {
             window.moveTo(b.left, b.top);
             window.resizeTo(b.width, b.height);
@@ -441,7 +454,7 @@
       const width = Math.round(window.outerWidth || window.innerWidth);
       const height = Math.round(window.outerHeight || window.innerHeight);
 
-      if (width < 250 || height < 200 || Math.abs(left) >= 10000 || Math.abs(top) >= 10000) return;
+      if (width < 250 || height < 200 || Math.abs(left) >= 30000 || Math.abs(top) >= 30000) return;
 
       if (!window._lastBounds ||
           Math.abs(window._lastBounds.left - left) > 4 ||

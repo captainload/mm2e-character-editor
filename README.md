@@ -277,7 +277,7 @@ The Session tab combines the best tabletop capabilities found on platforms like 
 - **Sound Effects & Cues**:
   - Audible alerts for dice rolls, critical hits, and condition alerts.
 - **🏰 Campaigns Button & Synced Logs**:
-  - Direct access from the top control row on the Session tab.
+  - Direct access from the top control row on the Session tab, positioned directly to the left of the active campaign name.
   - **Browse Synced Campaigns**: Switch between campaigns you've participated in and inspect metadata.
   - **Most Recently Synced Session Log**: Inspect past rolls and chat messages from any campaign, complete with timestamps, author badges, roll breakdowns, and outcomes.
   - **Real-Time Log Search & Filter**: Filter history entries by keyword, hero name, or roll type.

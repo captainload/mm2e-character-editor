@@ -85,7 +85,7 @@
         <span class="title-primary">Mutants &amp; Masterminds</span>
         <span class="title-secondary">
           2nd Ed. Hero Builder
-          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 131). Click to check for updates &amp; clear cache.">v1.73 (b131)</span>
+          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 132). Click to check for updates &amp; clear cache.">v1.73 (b132)</span>
         </span>
       </h1>
       
@@ -387,7 +387,7 @@
         <div class="options-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <h3 style="margin: 0;">🔄 Version &amp; Updates</h3>
-            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b131)</span>
+            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b132)</span>
           </div>
           <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
             If GitHub was recently updated and your browser is serving an older cached version, click below to unregister stale Service Workers, clear cache, and reload the latest build.
@@ -1751,8 +1751,22 @@
           <input type="file" id="fileGMImportCampaign" accept=".json" style="display: none;">
           <button type="button" class="btn btn-secondary" id="btnGMCampDiscord" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Configure Discord Webhooks for this Campaign">💬 Discord Webhooks</button>
           <button type="button" class="btn btn-secondary" id="btnGMFileLog" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="View Campaign File Operations Log">📋 Operations Log</button>
-          <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); color: #ef4444;" title="Delete current campaign">🗑</button>
+          <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); color: #ef4444; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Delete current campaign">🗑 Delete Campaign</button>
         </div>
+      </div>
+
+      <!-- Campaign Description & Setting Notes Card -->
+      <div id="gmCampaignDescriptionCard" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <label for="txtGMCampaignDescription" style="font-weight: 600; font-size: var(--font-size-controls, 13px); color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span>📝</span> Campaign Description &amp; Setting Notes:
+          </label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="lblGMCampaignDescSaved" style="font-size: 11px; color: #10b981; font-weight: 600; opacity: 0; transition: opacity 0.3s ease;">✓ Saved</span>
+            <button type="button" class="btn btn-secondary" id="btnGMSaveCampaignDesc" style="height: 24px; padding: 0 10px; font-size: 12px; font-weight: 600;" title="Save campaign description">💾 Save</button>
+          </div>
+        </div>
+        <textarea id="txtGMCampaignDescription" placeholder="Enter campaign premise, setting synopsis, house rules, or GM notes..." rows="2" style="width: 100%; box-sizing: border-box; resize: vertical; min-height: 48px; max-height: 200px; font-family: inherit; font-size: var(--font-size-secondary, 13px); padding: 6px 10px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; line-height: 1.45;"></textarea>
       </div>
 
       <!-- Pending Join Requests Banner -->
@@ -2493,6 +2507,25 @@
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           <span class="badge" id="lblSessionCampMetaStatus" style="font-size: 11px; padding: 3px 8px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">Active Campaign</span>
           <button type="button" class="btn btn-secondary" id="btnSessionCampSetActive" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls); display: none;">Switch to this Campaign</button>
+          <button type="button" class="btn btn-secondary" id="btnSessionCampDelete" style="height: 30px; padding: 0 10px; font-size: var(--font-size-minor-controls); color: #ef4444; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Delete this campaign">🗑 Delete Campaign</button>
+        </div>
+      </div>
+
+      <!-- Campaign Description Preview & Edit in Session Modal -->
+      <div id="boxSessionCampDescRow" style="padding: 8px 16px; background: var(--bg-panel); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 600; font-size: var(--font-size-fine-print); color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+            <span>📝</span> Campaign Description:
+          </span>
+          <button type="button" class="btn btn-secondary" id="btnSessionCampEditDesc" style="height: 20px; padding: 0 6px; font-size: 11px;">✏️ Edit</button>
+        </div>
+        <div id="lblSessionCampDescription" style="font-size: var(--font-size-secondary); color: var(--text-main); white-space: pre-wrap; line-height: 1.4; max-height: 80px; overflow-y: auto; font-style: italic;">No description provided.</div>
+        <div id="boxSessionCampEditDesc" style="display: none; flex-direction: column; gap: 6px; margin-top: 4px;">
+          <textarea id="txtSessionCampDescription" rows="2" style="width: 100%; box-sizing: border-box; resize: vertical; font-size: var(--font-size-secondary); padding: 6px 8px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; line-height: 1.4;"></textarea>
+          <div style="display: flex; justify-content: flex-end; gap: 6px;">
+            <button type="button" class="btn btn-secondary" id="btnCancelSessionCampDesc" style="height: 24px; padding: 0 8px; font-size: 11px;">Cancel</button>
+            <button type="button" class="btn btn-primary" id="btnSaveSessionCampDesc" style="height: 24px; padding: 0 10px; font-size: 11px; font-weight: 600;">💾 Save</button>
+          </div>
         </div>
       </div>
 

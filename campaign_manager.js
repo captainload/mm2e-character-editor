@@ -72,6 +72,7 @@
       if (!Array.isArray(camp.encounterEnemies)) camp.encounterEnemies = [];
       if (!Array.isArray(camp.partyCharacterIds)) camp.partyCharacterIds = [];
       if (!Array.isArray(camp.savedCharacters)) camp.savedCharacters = [];
+      if (typeof camp.description !== 'string') camp.description = '';
       if (camp.discordRollsWebhookId === undefined) camp.discordRollsWebhookId = null;
       if (camp.discordChatWebhookId === undefined) camp.discordChatWebhookId = null;
       if (camp.webhookRollsUrl === undefined) camp.webhookRollsUrl = null;
@@ -106,10 +107,11 @@
     return false;
   }
 
-  function createCampaign(name, customCode = null, creatorPlayerId = 'local_player', gmUserName = 'GM') {
+  function createCampaign(name, customCode = null, creatorPlayerId = 'local_player', gmUserName = 'GM', description = '') {
     const data = getStorageData();
     const campName = (name && name.trim()) ? name.trim() : 'New Campaign';
     const code = customCode ? customCode.trim().toLowerCase() : generateSlug(campName);
+    const campDesc = (description && typeof description === 'string') ? description.trim() : '';
 
     try {
       if (typeof localStorage !== 'undefined') {
@@ -136,6 +138,7 @@
     const newCamp = {
       id: 'camp_' + Math.random().toString(36).substring(2, 9),
       name: campName,
+      description: campDesc,
       code: code,
       createdAt: new Date().toISOString(),
       gmPlayerId: creatorPlayerId || 'local_player',
@@ -185,9 +188,10 @@
     return newCamp;
   }
 
-  function updateActiveCampaign(patch) {
+  function updateCampaign(id, patch) {
+    if (!id || !patch) return null;
     const data = getStorageData();
-    const camp = data.campaigns.find(c => c.id === data.activeCampaignId);
+    const camp = data.campaigns.find(c => c.id === id);
     if (!camp) return null;
 
     Object.assign(camp, patch);
@@ -196,13 +200,46 @@
     return camp;
   }
 
+  function updateActiveCampaign(patch) {
+    const data = getStorageData();
+    return updateCampaign(data.activeCampaignId, patch);
+  }
+
   function deleteCampaign(id) {
     const data = getStorageData();
     data.campaigns = data.campaigns.filter(c => c.id !== id);
-    if (data.activeCampaignId === id) {
-      data.activeCampaignId = data.campaigns.length > 0 ? data.campaigns[0].id : null;
+    if (data.campaigns.length === 0) {
+      const defaultCamp = {
+        id: 'camp_' + Math.random().toString(36).substring(2, 9),
+        name: 'Default Campaign',
+        description: '',
+        code: 'campaign-1',
+        createdAt: new Date().toISOString(),
+        gmPlayerId: 'local_player',
+        gmUserName: 'GM',
+        npcs: [],
+        encounterEnemies: [],
+        acceptedPlayers: [],
+        authorizedUsers: [],
+        partyCharacterIds: [],
+        savedCharacters: [],
+        pendingRequests: [],
+        timeline: [],
+        autoBackupCharacters: true,
+        includeGmCharInParty: false,
+        sessionState: { status: 'ended', sessionNumber: 1, startedAt: null, pausedAt: null, totalElapsedMs: 0, sessionHistory: [] },
+        forcedModes: { forceSilentParty: false, forceSilentPlayers: {} },
+        sessionLog: [],
+        fileOperationsLog: [{ id: 'flog_init', timestamp: new Date().toISOString(), message: 'Default campaign initialized.', type: 'info' }],
+        combatState: { round: 1, activeTurnId: null, initiativeOrder: [] }
+      };
+      data.campaigns.push(defaultCamp);
+      data.activeCampaignId = defaultCamp.id;
+    } else if (data.activeCampaignId === id) {
+      data.activeCampaignId = data.campaigns[0].id;
     }
     saveStorageData(data);
+    saveAutoBackup(false);
   }
 
   // --- NPC Management ---
@@ -1720,6 +1757,7 @@
     getCampaignDiscordWebhooks,
     setCampaignDiscordWebhooks,
     createCampaign,
+    updateCampaign,
     updateActiveCampaign,
     deleteCampaign,
     attachNPC,

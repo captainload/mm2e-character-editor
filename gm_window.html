@@ -147,7 +147,22 @@
         <button type="button" class="btn btn-secondary" id="btnGMExportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Export campaign as JSON backup">📥 Backup JSON</button>
         <button type="button" class="btn btn-secondary" id="btnGMImportCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px);" title="Restore campaign from JSON">📤 Restore JSON</button>
         <input type="file" id="fileGMImportCampaign" accept=".json" style="display: none;">
+        <button type="button" class="btn btn-secondary" id="btnGMDeleteCampaign" style="height: 30px; padding: 0 10px; font-size: var(--font-size-controls, 13px); color: #ef4444; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Delete current campaign">🗑 Delete Campaign</button>
       </div>
+    </div>
+
+    <!-- Campaign Description & Setting Notes Card -->
+    <div id="gmCampaignDescriptionCard" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label for="txtGMCampaignDescription" style="font-weight: 600; font-size: var(--font-size-controls, 13px); color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+          <span>📝</span> Campaign Description &amp; Setting Notes:
+        </label>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="lblGMCampaignDescSaved" style="font-size: 11px; color: #10b981; font-weight: 600; opacity: 0; transition: opacity 0.3s ease;">✓ Saved</span>
+          <button type="button" class="btn btn-secondary" id="btnGMSaveCampaignDesc" style="height: 24px; padding: 0 10px; font-size: 12px; font-weight: 600;" title="Save campaign description">💾 Save</button>
+        </div>
+      </div>
+      <textarea id="txtGMCampaignDescription" placeholder="Enter campaign premise, setting synopsis, house rules, or GM notes..." rows="2" style="width: 100%; box-sizing: border-box; resize: vertical; min-height: 48px; max-height: 200px; font-family: inherit; font-size: var(--font-size-secondary, 13px); padding: 6px 10px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; line-height: 1.45;"></textarea>
     </div>
 
     <!-- Pending Join Requests Banner -->
@@ -456,6 +471,11 @@
       const lblUserCount = document.getElementById("lblGMUserCount");
       if (lblUserCount) lblUserCount.textContent = (CampaignManager.getAuthorizedUsers() || []).length;
 
+      const txtDesc = document.getElementById("txtGMCampaignDescription");
+      if (txtDesc && document.activeElement !== txtDesc) {
+        txtDesc.value = activeCamp.description || '';
+      }
+
       // Render Campaign Characters
       const listChars = document.getElementById("gmCampaignCharactersList");
       if (listChars) {
@@ -556,6 +576,21 @@
     });
     document.getElementById("btnGMNewCampaign")?.addEventListener("click", () => {
       callOpenerOrLocal('promptCreateNewCampaign');
+    });
+    document.getElementById("btnGMDeleteCampaign")?.addEventListener("click", () => {
+      callOpenerOrLocal('handleGMDeleteCampaignClick');
+    });
+    document.getElementById("btnGMSaveCampaignDesc")?.addEventListener("click", () => {
+      const val = document.getElementById("txtGMCampaignDescription")?.value || '';
+      callOpenerOrLocal('updateActiveCampaignDescription', val);
+      const lbl = document.getElementById("lblGMCampaignDescSaved");
+      if (lbl) {
+        lbl.style.opacity = '1';
+        setTimeout(() => { if (lbl) lbl.style.opacity = '0'; }, 2000);
+      }
+    });
+    document.getElementById("txtGMCampaignDescription")?.addEventListener("change", (e) => {
+      callOpenerOrLocal('updateActiveCampaignDescription', e.target.value);
     });
     document.getElementById("btnGMCreateSavePoint")?.addEventListener("click", () => {
       callOpenerOrLocal('promptCreateSavePoint');

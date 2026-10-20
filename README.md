@@ -363,8 +363,11 @@ Each campaign can configure **TWO separate webhooks**:
 - **Pop-Out Support**: Click `↗ Pop Out` for a permanent rules reference window at your game table.
 
 ### 👑 GM Campaign Hub
-- **Active Campaign Selector**:
+- **Active Campaign Selector & Deletion Controls**:
   - Switch active campaigns directly from the GM Hub header dropdown with instant synchronization across docked tabs, detached pop-outs, session monitors, and network peers.
+  - Dedicated `🗑 Delete Campaign` button with explicit confirmation modal safeguard prevents accidental campaign loss while cleanly managing multi-campaign rosters.
+- **Campaign Description & Setting Notes**:
+  - Dedicated description and setting synopsis field for each campaign with auto-save and manual save controls, viewable and editable across both docked and detached pop-out GM dashboards.
 - **Campaign Characters & Party Roster Controls**:
   - Quickly manage party composition with dedicated `+ Add to Party` and `🚫 Remove from Party` actions for both the GM's active hero and submitted player characters.
   - Responsive character card grids and enlarged controls guarantee labels remain crystal-clear and never clip or overflow across all display resolutions and font scales.

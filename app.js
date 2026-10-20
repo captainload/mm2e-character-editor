@@ -2556,7 +2556,7 @@ function createPopoutManager(config) {
         </div>
         <div id="popout-custom-controls" style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; min-width: 0;"></div>
         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-          <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.73 (b132)</span>
+          <span class="badge" style="font-size: 11px; padding: 2px 6px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--accent-primary); font-weight: 600; user-select: none;">v1.74 (b133)</span>
           <button type="button" class="btn btn-secondary" id="btnPopoutRedock" style="font-weight: 600; font-size: var(--font-size-controls, 14px); height: 28px; padding: 0 12px; color: var(--accent-primary); cursor: pointer;" title="Dock back into main window (or press Esc)">
             ⬅ Re-dock
           </button>
@@ -3372,6 +3372,11 @@ function postRollToDiscordWebhook(roll) {
     }
   }
 
+  // Forward to Two-Way Discord Bot Relay if active
+  if (window.DiscordBotBridge && typeof window.DiscordBotBridge.sendRoll === 'function') {
+    window.DiscordBotBridge.sendRoll(roll);
+  }
+
   const activeWh = getActiveDiscordRollsWebhook();
   if (!activeWh || !activeWh.url) return;
 
@@ -3451,6 +3456,11 @@ function postChatToDiscordWebhook(chatPacket) {
     }
   }
 
+  // Forward to Two-Way Discord Bot Relay if active
+  if (window.DiscordBotBridge && typeof window.DiscordBotBridge.sendChat === 'function') {
+    window.DiscordBotBridge.sendChat(chatPacket);
+  }
+
   const activeWh = getActiveDiscordChatWebhook();
   if (!activeWh || !activeWh.url) return;
 
@@ -3497,6 +3507,376 @@ function sendTestWebhookPing(url, type = 'roll') {
   });
 }
 window.sendTestWebhookPing = sendTestWebhookPing;
+
+// ============================================================================
+// TWO-WAY DISCORD BOT BRIDGE
+// ============================================================================
+
+const DiscordBotBridge = {
+  socket: null,
+  reconnectTimer: null,
+  isConnecting: false,
+  isConnected: false,
+  botInfo: {
+    ready: false,
+    tag: null,
+    channelId: null
+  },
+  
+  getPort() {
+    const input = document.getElementById("numDiscordBotPort");
+    if (input && input.value) {
+      const p = parseInt(input.value, 10);
+      if (!isNaN(p) && p > 0 && p <= 65535) return p;
+    }
+    const stored = localStorage.getItem("mm2e_discord_bot_port");
+    if (stored) {
+      const p = parseInt(stored, 10);
+      if (!isNaN(p) && p > 0 && p <= 65535) return p;
+    }
+    return 18820;
+  },
+
+  setPort(port) {
+    const p = parseInt(port, 10) || 18820;
+    localStorage.setItem("mm2e_discord_bot_port", String(p));
+    const input = document.getElementById("numDiscordBotPort");
+    if (input) input.value = p;
+  },
+
+  connect(force = false) {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.socket) {
+      if (force || this.socket.readyState === WebSocket.CLOSING || this.socket.readyState === WebSocket.CLOSED) {
+        try { this.socket.close(); } catch (e) {}
+        this.socket = null;
+      } else if (this.socket.readyState === WebSocket.OPEN) {
+        this.sendHandshake();
+        this.updateUI();
+        return;
+      } else if (this.socket.readyState === WebSocket.CONNECTING) {
+        return;
+      }
+    }
+
+    const port = this.getPort();
+    const wsUrl = `ws://localhost:${port}`;
+    this.isConnecting = true;
+    this.updateUI();
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      this.socket = ws;
+
+      ws.onopen = () => {
+        this.isConnecting = false;
+        this.isConnected = true;
+        this.sendHandshake();
+        this.sendStatusUpdate();
+        this.updateUI();
+        console.log(`[DiscordBotBridge] Connected to Discord bot relay on ${wsUrl}`);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const packet = JSON.parse(event.data);
+          this.handleIncomingPacket(packet);
+        } catch (e) {
+          console.warn("[DiscordBotBridge] Failed to parse incoming packet:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        this.isConnecting = false;
+        this.isConnected = false;
+        this.botInfo.ready = false;
+        this.socket = null;
+        this.updateUI();
+        this.scheduleReconnect(6000);
+      };
+
+      ws.onerror = () => {
+        this.isConnecting = false;
+        this.isConnected = false;
+        this.botInfo.ready = false;
+        this.updateUI();
+      };
+    } catch (e) {
+      this.isConnecting = false;
+      this.isConnected = false;
+      this.updateUI();
+      this.scheduleReconnect(10000);
+    }
+  },
+
+  scheduleReconnect(delay = 6000) {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
+  },
+
+  sendHandshake() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    const activeCamp = (typeof CampaignManager !== 'undefined') ? CampaignManager.getActiveCampaign() : null;
+    const payload = {
+      type: 'HANDSHAKE',
+      campaignCode: activeCamp ? (activeCamp.customCode || activeCamp.code || activeCamp.id) : 'default',
+      campaignName: activeCamp ? activeCamp.name : 'Active Campaign',
+      timestamp: new Date().toISOString()
+    };
+    try {
+      this.socket.send(JSON.stringify(payload));
+    } catch (e) {}
+  },
+
+  sendStatusUpdate() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    if (typeof CampaignManager === 'undefined') return;
+    const camp = CampaignManager.getActiveCampaign();
+    if (!camp) return;
+
+    const heroes = [];
+    if (Array.isArray(camp.acceptedPlayers)) {
+      camp.acceptedPlayers.forEach(p => {
+        heroes.push({
+          name: p.characterName || p.name || 'Hero',
+          player: p.name || p.username || 'Player',
+          heroPoints: p.heroPoints || 0,
+          bruises: p.currentBruises || 0
+        });
+      });
+    }
+
+    const payload = {
+      type: 'STATUS_UPDATE',
+      campaignName: camp.name || 'Campaign',
+      campaignCode: camp.customCode || camp.code || camp.id,
+      gmName: CampaignManager.getGMUserName() || 'GM',
+      activeHeroes: heroes,
+      sessionActive: Boolean(camp.sessionState && camp.sessionState.isActive),
+      sessionNumber: (camp.sessionState && camp.sessionState.sessionNumber) || 1,
+      timestamp: new Date().toISOString()
+    };
+    try {
+      this.socket.send(JSON.stringify(payload));
+    } catch (e) {}
+  },
+
+  sendRoll(roll) {
+    if (!roll || roll.isSilent || roll.source === 'discord') return false;
+    const port = this.getPort();
+
+    const heroName = (roll.characterName || 'Hero').trim();
+    const cleanRollType = (roll.rollType || roll.title || 'Check')
+      .replace(/^🎲\s*/, '')
+      .replace(/\s*\(\s*✨?\s*\+?\d*\s*HP\s*\)/gi, '')
+      .replace(/\s*\(\s*✨?\s*HP\s*Reroll\s*\)/gi, '')
+      .trim() || 'Check';
+
+    const payload = {
+      type: 'ROLL',
+      id: roll.id || ('vtt_roll_' + Date.now()),
+      characterName: heroName,
+      playerName: (roll.playerName || heroName).trim(),
+      rollType: cleanRollType,
+      title: cleanRollType,
+      breakdown: roll.breakdown || '',
+      total: roll.total,
+      d20: roll.d20 || (roll.rolls && roll.rolls[0]) || null,
+      modifier: roll.modifier || roll.mod || 0,
+      dc: roll.dc || null,
+      result: roll.result || '',
+      isCrit: Boolean(roll.isNat20 || roll.isCrit),
+      isNat1: Boolean(roll.isNat1),
+      heroPointSpent: Boolean(roll.isHPRerolled || (roll.hpBonus && roll.hpBonus > 0)),
+      hpEffect: roll.hpAnnouncement || (roll.isHPRerolled ? 'HP Reroll' : (roll.hpBonus ? `+${roll.hpBonus} HP` : '')),
+      timestamp: roll.timestamp || new Date().toISOString(),
+      source: 'vtt'
+    };
+
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      try {
+        this.socket.send(JSON.stringify(payload));
+        return true;
+      } catch (e) {}
+    }
+
+    // Fallback: POST /api/roll
+    fetch(`http://localhost:${port}/api/roll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+    return false;
+  },
+
+  sendChat(chatPacket) {
+    if (!chatPacket || chatPacket.isPrivate || chatPacket.recipient || chatPacket.source === 'discord') return false;
+    const text = (chatPacket.text || '').trim();
+    if (!text) return false;
+    const port = this.getPort();
+
+    const heroName = (chatPacket.authorCharacter || '').trim();
+    const playerName = (chatPacket.authorPlayer || chatPacket.author || 'Player').trim();
+
+    const payload = {
+      type: 'CHAT',
+      id: chatPacket.id || ('vtt_chat_' + Date.now()),
+      author: playerName,
+      authorPlayer: playerName,
+      authorCharacter: heroName || playerName,
+      text: text,
+      timestamp: chatPacket.timestamp || new Date().toISOString(),
+      source: 'vtt'
+    };
+
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      try {
+        this.socket.send(JSON.stringify(payload));
+        return true;
+      } catch (e) {}
+    }
+
+    // Fallback: POST /api/chat
+    fetch(`http://localhost:${port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+    return false;
+  },
+
+  handleIncomingPacket(packet) {
+    if (!packet || !packet.type) return;
+
+    if (packet.type === 'BRIDGE_CONNECTED') {
+      this.botInfo.ready = Boolean(packet.botReady);
+      this.botInfo.tag = packet.botTag || null;
+      this.botInfo.channelId = packet.channelId || null;
+      this.updateUI();
+      return;
+    }
+
+    if (packet.type === 'CHAT') {
+      const author = packet.authorCharacter || packet.authorPlayer || packet.author || 'Discord User';
+      const text = (packet.text || '').trim();
+      if (!text) return;
+
+      const chatEntry = {
+        type: 'CHAT',
+        id: packet.id || ('disc_chat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+        author: author,
+        authorCharacter: author,
+        authorPlayer: packet.authorPlayer || author,
+        text: text,
+        timestamp: packet.timestamp || new Date().toISOString(),
+        source: 'discord',
+        discordUser: packet.discordUser || null
+      };
+
+      if (typeof window.appendSessionFeedEntry === 'function') {
+        window.appendSessionFeedEntry(chatEntry);
+      }
+      if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+        CampaignManager.addLogEntry(chatEntry);
+      }
+      if (typeof window.refreshCampaignLogView === 'function') {
+        window.refreshCampaignLogView();
+      }
+      return;
+    }
+
+    if (packet.type === 'ROLL') {
+      const author = packet.characterName || packet.playerName || 'Discord User';
+      const rollType = packet.rollType || packet.title || 'Check';
+      const formula = packet.formula || '1d20';
+      const breakdown = packet.breakdown || (packet.d20 !== null && packet.d20 !== undefined
+        ? `d20 (${packet.d20}) + ${packet.modifier || 0} = ${packet.total}`
+        : `${formula} = ${packet.total}`);
+
+      const rollEntry = {
+        type: 'ROLL',
+        id: packet.id || ('disc_roll_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+        rollType: rollType,
+        title: rollType,
+        characterName: author,
+        playerName: packet.playerName || author,
+        formula: formula,
+        breakdown: breakdown,
+        total: packet.total,
+        isNat20: Boolean(packet.isCrit || packet.d20 === 20),
+        isNat1: Boolean(packet.isNat1 || packet.d20 === 1),
+        timestamp: packet.timestamp || new Date().toISOString(),
+        source: 'discord'
+      };
+
+      if (typeof window.appendSessionFeedEntry === 'function') {
+        window.appendSessionFeedEntry(rollEntry);
+      }
+      if (typeof CampaignManager !== 'undefined' && typeof CampaignManager.addLogEntry === 'function') {
+        CampaignManager.addLogEntry(rollEntry);
+      }
+      if (typeof window.updateSidebarLastRoll === 'function') {
+        window.updateSidebarLastRoll(rollEntry);
+      }
+      if (typeof window.refreshCampaignLogView === 'function') {
+        window.refreshCampaignLogView();
+      }
+      return;
+    }
+  },
+
+  updateUI() {
+    const badge = document.getElementById("lblDiscordBotStatusBadge");
+    const details = document.getElementById("lblDiscordBotDetails");
+    const port = this.getPort();
+
+    if (badge) {
+      if (this.isConnected) {
+        if (this.botInfo.ready && this.botInfo.tag) {
+          badge.textContent = `🟢 Online (@${this.botInfo.tag})`;
+          badge.style.background = 'rgba(16, 185, 129, 0.15)';
+          badge.style.color = '#10b981';
+          badge.style.borderColor = '#10b981';
+        } else {
+          badge.textContent = `🟡 Bridge Connected (Bot Logging In...)`;
+          badge.style.background = 'rgba(245, 158, 11, 0.15)';
+          badge.style.color = '#f59e0b';
+          badge.style.borderColor = '#f59e0b';
+        }
+      } else if (this.isConnecting) {
+        badge.textContent = `⏳ Connecting (Port ${port})...`;
+        badge.style.background = 'rgba(14, 165, 233, 0.15)';
+        badge.style.color = '#0284c7';
+        badge.style.borderColor = 'rgba(14, 165, 233, 0.4)';
+      } else {
+        badge.textContent = `⚪ Bot Disconnected / Offline`;
+        badge.style.background = 'rgba(107, 114, 128, 0.15)';
+        badge.style.color = 'var(--text-muted)';
+        badge.style.borderColor = 'var(--border-color)';
+      }
+    }
+
+    if (details) {
+      if (this.isConnected) {
+        const tagText = this.botInfo.tag ? ` • Bot: <strong>@${escapeHtml(this.botInfo.tag)}</strong>` : '';
+        const chText = this.botInfo.channelId ? ` • Channel ID: <code>${escapeHtml(this.botInfo.channelId)}</code>` : '';
+        details.innerHTML = `🟢 Live relay active on port ${port}${tagText}${chText}`;
+        details.style.color = 'var(--text-main)';
+      } else {
+        details.innerHTML = `Bridge WebSocket: <code>ws://localhost:${port}</code> • HTTP: <code>http://localhost:${port}/status</code>`;
+        details.style.color = 'var(--text-muted)';
+      }
+    }
+  }
+};
+window.DiscordBotBridge = DiscordBotBridge;
 
 function setupGMCampaignDiscordModal() {
   const btnOpen = document.getElementById("btnGMCampDiscord");
@@ -3578,8 +3958,13 @@ function setupSessionCampaignsModal() {
 
   const tabLogs = document.getElementById("tabBtnSessionCampLogs");
   const tabWebhooks = document.getElementById("tabBtnSessionCampWebhooks");
+  const tabDiscordBot = document.getElementById("tabBtnSessionCampDiscordBot");
   const contentLogs = document.getElementById("tabContentSessionCampLogs");
   const contentWebhooks = document.getElementById("tabContentSessionCampWebhooks");
+  const contentDiscordBot = document.getElementById("tabContentSessionCampDiscordBot");
+  const numDiscordBotPort = document.getElementById("numDiscordBotPort");
+  const btnTestDiscordBotConn = document.getElementById("btnTestDiscordBotConnection");
+  const btnSendDiscordBotTest = document.getElementById("btnSendDiscordBotTestMsg");
 
   const txtLogSearch = document.getElementById("txtSessionCampLogSearch");
   const btnLogClear = document.getElementById("btnSessionCampLogClearSearch");
@@ -3597,41 +3982,42 @@ function setupSessionCampaignsModal() {
   const lblWebhooksStatus = document.getElementById("lblCampWebhooksStatus");
 
   function switchTab(target) {
-    if (target === 'webhooks') {
-      if (tabLogs) {
-        tabLogs.classList.remove('active');
-        tabLogs.style.background = 'transparent';
-        tabLogs.style.color = 'var(--text-muted)';
-        tabLogs.style.borderBottomColor = 'transparent';
+    const isLogs = (target === 'logs');
+    const isWebhooks = (target === 'webhooks');
+    const isDiscordBot = (target === 'discord_bot' || target === 'bot');
+
+    const updateTabBtn = (btn, active) => {
+      if (!btn) return;
+      if (active) {
+        btn.classList.add('active');
+        btn.style.background = 'var(--bg-card)';
+        btn.style.color = 'var(--text-main)';
+        btn.style.borderBottomColor = 'var(--accent-primary)';
+      } else {
+        btn.classList.remove('active');
+        btn.style.background = 'transparent';
+        btn.style.color = 'var(--text-muted)';
+        btn.style.borderBottomColor = 'transparent';
       }
-      if (tabWebhooks) {
-        tabWebhooks.classList.add('active');
-        tabWebhooks.style.background = 'var(--bg-card)';
-        tabWebhooks.style.color = 'var(--text-main)';
-        tabWebhooks.style.borderBottomColor = 'var(--accent-primary)';
-      }
-      if (contentLogs) contentLogs.style.display = 'none';
-      if (contentWebhooks) contentWebhooks.style.display = 'flex';
-    } else {
-      if (tabWebhooks) {
-        tabWebhooks.classList.remove('active');
-        tabWebhooks.style.background = 'transparent';
-        tabWebhooks.style.color = 'var(--text-muted)';
-        tabWebhooks.style.borderBottomColor = 'transparent';
-      }
-      if (tabLogs) {
-        tabLogs.classList.add('active');
-        tabLogs.style.background = 'var(--bg-card)';
-        tabLogs.style.color = 'var(--text-main)';
-        tabLogs.style.borderBottomColor = 'var(--accent-primary)';
-      }
-      if (contentWebhooks) contentWebhooks.style.display = 'none';
-      if (contentLogs) contentLogs.style.display = 'flex';
+    };
+
+    updateTabBtn(tabLogs, isLogs);
+    updateTabBtn(tabWebhooks, isWebhooks);
+    updateTabBtn(tabDiscordBot, isDiscordBot);
+
+    if (contentLogs) contentLogs.style.display = isLogs ? 'flex' : 'none';
+    if (contentWebhooks) contentWebhooks.style.display = isWebhooks ? 'flex' : 'none';
+    if (contentDiscordBot) contentDiscordBot.style.display = isDiscordBot ? 'flex' : 'none';
+
+    if (isDiscordBot && window.DiscordBotBridge) {
+      if (numDiscordBotPort) numDiscordBotPort.value = window.DiscordBotBridge.getPort();
+      window.DiscordBotBridge.updateUI();
     }
   }
 
   if (tabLogs) tabLogs.addEventListener("click", () => switchTab('logs'));
   if (tabWebhooks) tabWebhooks.addEventListener("click", () => switchTab('webhooks'));
+  if (tabDiscordBot) tabDiscordBot.addEventListener("click", () => switchTab('discord_bot'));
 
   function getSelectedCampaign() {
     if (typeof CampaignManager === 'undefined') return null;
@@ -3827,7 +4213,9 @@ function setupSessionCampaignsModal() {
       const author = entry.authorCharacter || entry.characterName || entry.author || 'User';
       
       let badgeHtml = '';
-      if (isRoll) {
+      if (entry.source === 'discord') {
+        badgeHtml = '<span class="badge" style="font-size: 10px; padding: 1px 5px; background: rgba(88, 101, 242, 0.2); color: #5865F2; border: 1px solid #5865F2;">🤖 Discord</span>';
+      } else if (isRoll) {
         badgeHtml = '<span class="badge" style="font-size: 10px; padding: 1px 5px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid #3b82f6;">🎲 Roll</span>';
       } else if (isGm) {
         badgeHtml = '<span class="badge" style="font-size: 10px; padding: 1px 5px; background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid #a855f7;">👑 GM</span>';
@@ -4017,6 +4405,53 @@ function setupSessionCampaignsModal() {
 
   if (btnTestRolls) btnTestRolls.addEventListener("click", () => testPing('roll'));
   if (btnTestChat) btnTestChat.addEventListener("click", () => testPing('chat'));
+
+  if (btnTestDiscordBotConn) {
+    btnTestDiscordBotConn.addEventListener("click", () => {
+      if (window.DiscordBotBridge) {
+        const port = numDiscordBotPort ? parseInt(numDiscordBotPort.value, 10) : 18820;
+        window.DiscordBotBridge.setPort(port);
+        window.DiscordBotBridge.connect(true);
+        if (typeof showToast === 'function') {
+          showToast(`Connecting to Discord bot relay on port ${port}...`, "info");
+        }
+      }
+    });
+  }
+
+  if (btnSendDiscordBotTest) {
+    btnSendDiscordBotTest.addEventListener("click", () => {
+      if (window.DiscordBotBridge) {
+        window.DiscordBotBridge.sendChat({
+          id: 'test_chat_' + Date.now(),
+          authorPlayer: 'Hero Builder',
+          authorCharacter: 'Tabletop Session',
+          text: '🤖 Test ping from M&M 2E Tabletop Session to Discord channel!'
+        });
+        if (typeof showToast === 'function') {
+          showToast("Sent test ping message to Discord relay!", "success");
+        }
+      }
+    });
+  }
+
+  if (numDiscordBotPort) {
+    numDiscordBotPort.addEventListener("change", (e) => {
+      if (window.DiscordBotBridge) {
+        window.DiscordBotBridge.setPort(e.target.value);
+        window.DiscordBotBridge.connect(true);
+      }
+    });
+  }
+
+  window.refreshCampaignLogView = renderCampaignLogs;
+
+  // Auto-connect to Discord bot bridge on startup
+  if (window.DiscordBotBridge && typeof window.DiscordBotBridge.connect === 'function') {
+    setTimeout(() => {
+      window.DiscordBotBridge.connect();
+    }, 1200);
+  }
 
   window.openSessionCampaignsModal = function(initialTab = 'logs') {
     if (window.focus) window.focus();
@@ -4384,7 +4819,7 @@ function openUpdateModal(config) {
   const footer = document.getElementById("appUpdateModalFooter");
   if (!modal || !body || !footer) return;
 
-  const currentVersion = config.currentVersion || (document.getElementById("lblAppVersion")?.textContent || "").trim() || "v1.73 (b132)";
+  const currentVersion = config.currentVersion || (document.getElementById("lblAppVersion")?.textContent || "").trim() || "v1.74 (b133)";
 
   if (config.state === 'checking') {
     body.innerHTML = `
@@ -4528,7 +4963,7 @@ async function performAppUpdateReload() {
 window.performAppUpdateReload = performAppUpdateReload;
 
 async function checkForAppUpdates(options = {}) {
-  const currentVersion = (document.getElementById("lblAppVersion")?.textContent || "").trim() || "v1.73 (b132)";
+  const currentVersion = (document.getElementById("lblAppVersion")?.textContent || "").trim() || "v1.74 (b133)";
 
   openUpdateModal({
     state: 'checking',
@@ -6330,10 +6765,13 @@ function setupSessionAndGMHub() {
         `;
       }
 
+      const isDiscord = item.source === 'discord';
+      const discordBadge = isDiscord ? `<span class="badge" style="background: rgba(88, 101, 242, 0.2); color: #5865F2; font-size: var(--font-size-fine-print, 12px); font-weight: 600; padding: 1px 5px; border: 1px solid #5865F2;">🤖 Discord</span> ` : '';
+
       return `
         <div class="session-log-line">
           <span class="log-time">[${time}]</span>
-          <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${escapeHtml(author)}:</span>
+          ${discordBadge}<span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${escapeHtml(author)}:</span>
           <span class="log-content">${escapeHtml(item.text)}</span>
         </div>
       `;
@@ -6343,6 +6781,8 @@ function setupSessionAndGMHub() {
     const author = item.characterName || 'Hero';
     const cleanSubPlayer = item.playerName ? item.playerName.replace(/\s*\(\s*PL\s*#?\d*\s*\)\*?/gi, '').trim() : '';
     const subPlayer = cleanSubPlayer ? ` (${cleanSubPlayer})` : '';
+    const isDiscord = item.source === 'discord';
+    const discordBadge = isDiscord ? `<span class="badge" style="background: rgba(88, 101, 242, 0.2); color: #5865F2; font-size: var(--font-size-fine-print, 12px); font-weight: 600; padding: 1px 5px; border: 1px solid #5865F2;">🤖 Discord</span> ` : '';
     const natClass = item.isNat20 ? 'log-nat20' : (item.isNat1 ? 'log-nat1' : '');
     const natBadge = item.isNat20 ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: bold; font-size: var(--font-size-fine-print, 12px);">★ Nat 20</span>` : (item.isNat1 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold; font-size: var(--font-size-fine-print, 12px);">⚠️ Nat 1</span>` : '');
     const silentBadge = item.isSilent ? `<span class="badge log-silent-badge">🔇 Silent</span>` : '';
@@ -6412,7 +6852,7 @@ function setupSessionAndGMHub() {
     return `
       <div class="session-log-line ${natClass} ${hpClass}">
         <span class="log-time">[${time}]</span>
-        ${silentBadge}
+        ${discordBadge}${silentBadge}
         ${natBadge}
         ${hpBadge}
         <span class="log-author" onclick="window.sessionInsertMention('${escapeHtml(author)}')">${escapeHtml(author)}${escapeHtml(subPlayer)}:</span>
@@ -6468,6 +6908,13 @@ function setupSessionAndGMHub() {
     // Auto-scroll to bottom of continuous feed
     logFeed.scrollTop = logFeed.scrollHeight;
   }
+  window.renderSessionFeed = renderSessionFeed;
+  window.appendSessionFeedEntry = function(entry) {
+    if (!entry) return;
+    if (entry.id && sessionLocalLog.some(x => x.id === entry.id)) return;
+    sessionLocalLog.push(entry);
+    renderSessionFeed();
+  };
 
   // --- Spend Hero Point Handling ---
   window.sessionSpendHeroPoint = function(charId, details = '') {
@@ -21690,7 +22137,7 @@ window.FileManager = FileManager;
    ABOUT / README MODAL CONTROLLER
    ========================================================================== */
 
-const DEFAULT_README_TEXT = "# Mutants & Masterminds 2nd Edition Hero Builder & VTT Manager\n\nThe complete, responsive, and non-disruptive character builder, rules reference, and virtual tabletop companion for the **Mutants & Masterminds 2nd Edition** tabletop roleplaying game.\n\n🌐 **Live Web Application:** [https://captainload.github.io/mm2e-character-editor/](https://captainload.github.io/mm2e-character-editor/)\n\n---\n\n## 🌟 Architecture & Workflow: Non-Disruptive Multi-Tasking\n\n> **Core Design Principle: Never Lose Your Place!**\n> Opening any modal pop-up (such as the **Status & Combat Tracker**, **Reference Tables**, **GM Campaign Hub**, or **Power Points Breakdown**) **NEVER changes, resets, or disrupts your current active tab**. If you are deep in building a complex Dynamic Array on the **Powers** tab, calibrating skills on the **Skills** tab, or checking feats on the **Feats** tab, you can freely summon any floating tool, roll dice, reference benchmark tables, or manage campaign logs, and close the dialog to instantly resume right where you were without interruption.\n\n### ↗ Detachable Pop-Out Windows (Multi-Monitor Workflow)\n- **Detachable Floating Windows**: The **Status & Combat Tracker** (`⏱ Tracker`), **Reference Tables** (`📊 Tables`), **GM Campaign Hub** (`👑 GM`), and **Party Display** (`🛡️ Party`) feature a dedicated top-right `↗ Pop Out` button.\n- **Dedicated Desktop Windows**: Clicking `↗ Pop Out` detaches the tool into a standalone native browser window. This is ideal for dual-monitor or multi-monitor GM and player setups, allowing you to keep reference tables, dice rollers, party vitals, or combat counters visible on a second screen while editing your hero on the main screen.\n- **Bi-Directional Live Synchronization**: State changes made in a detached pop-out (such as rolling dice, advancing damage tracks, or toggling conditions) synchronize instantaneously with the parent editor window and all connected peers.\n- **Persistent Geometry & Coordinate Memory**: When you resize or move a pop-out window, its dimensions and screen coordinates are preserved across sessions and re-dock cycles.\n- **Seamless Re-docking**: Clicking `⬅ Re-dock` in the pop-out window smoothly returns the tool back into the main editor modal without any page reload, state loss, or disruption to your active tab.\n\n---\n\n## 🧭 Header & Persistent Quick Access Bar\n\nThe top navigation header remains pinned at the top of the screen (or can scroll with the page if Sticky Header is toggled off in Options):\n\n- **Active Form & Character Switcher with Deletion Controls**:\n  - Instantly switch the active workspace between your primary hero (`🦸 Main Hero`), campaign NPCs, saved campaign heroes, alternate forms (`🔄 Metamorph / Alternate Forms`), vehicular units (`🤖 Mecha`), trusted allies (`🤝 Sidekicks`), summonable creatures, and minion hordes (`👥 Minions`).\n  - Switching forms loads that entity's dedicated sheet while keeping all parent links intact.\n  - **Inline Delete Buttons (`🗑`)**: Every character, campaign NPC, saved roster hero, and attached alternate form features a dedicated inline `🗑` delete button directly inside the dropdown menu.\n  - **Active Form Banner Delete**: When editing any alternate form or companion, a prominent `🗑 Delete This Form` button appears in the persistent top banner.\n  - **Deletion Warning & Confirmation Safeguards**: Deleting any hero, NPC, or alternate form triggers a dedicated confirmation modal with color-coded badges, character names, and consequence warnings. No character or form is ever deleted accidentally without an explicit confirmation.\n- **Hero Name & Identity**: Quick-edit field for the active hero's codename or true identity.\n- **Power Level (PL) Badge & Cap Indicator**:\n  - Displays current campaign Power Level (e.g., PL 10) and automatically enforces standard 2E trade-off limits: Attack + Damage <= 2 x PL, Defense + Toughness <= 2 x PL, and Save Caps.\n- **Power Points Counter**:\n  - Real-time indicator displaying **Points Spent** / **Points Allowed** / **Points Remaining** (e.g., `150 / 150 PP (0 Remaining)`).\n  - Turns warning red if you exceed your allocated Power Point budget.\n- **⚡ PP Breakdown Button**:\n  - One-click floating audit modal displaying exact point expenditures across all six core categories: **Abilities**, **Combat**, **Saves / Defenses**, **Skills**, **Feats**, and **Powers**.\n- **Quick Action Buttons**:\n  - `⏱ Tracker`: Opens the live Status & Combat Tracker.\n  - `📊 Tables`: Opens the Reference Tables and Measurements Benchmark catalog.\n  - `👑 GM`: Opens the GM Campaign Hub and Encounter Manager.\n  - `⚙ Options`: Opens application settings, display themes, and house rule toggles.\n  - `❓ Help`: Opens this comprehensive Help & User Guide manual.\n  - `📁 Main ▾`: Access file management, imports, printing, and user whitelisting.\n\n---\n\n## ⚙ Options & House Rules\n\nClicking `⚙ Options` in the top header opens the preferences and house rules configuration panel:\n\n### House Rules\n- **Enhanced Trait Boost**: When enabled, allows Enhanced Trait powers to boost power effect ranks beyond natural ability score limits.\n- **Boost Alters Ranks**: Adjusts the Boost power mechanism to directly alter base power ranks rather than applying temporary floating modifiers.\n- **Variable Power Level**: Decouples character Power Level caps from the standard 15 PP per PL rule, allowing high-point street-level heroes or low-point cosmic beings.\n- **Perception Range Disabled**: Disables automatic Perception range cap exemptions for games enforcing strict attack/defense limits across all attack types.\n\n### Legacy Modifiers (Core 2E vs. Ultimate Power)\n- Toggles whether modifiers strictly follow the original 2005 Core Rulebook definitions or the expanded, balanced standards from *Ultimate Power*.\n\n### Appearance, Layout & Typography\n- **Theme Selector**: Choose between 4 distinct visual themes:\n  - **Light**: High-clarity, crisp daytime theme with clean borders and sharp daytime contrast.\n  - **Dark**: Low-eyestrain dark modern slate theme designed for extended evening sessions.\n  - **Kitty**: Playful pastel theme featuring delightful rose-pink accents, soft violet cards, and cat-themed styling.\n  - **Parchment**: Classic tabletop warm parchment styling evoking golden-age superhero sourcebooks and weathered paper character folios.\n- **Menus on Left UI Option**: Traditional UX placement option that moves the action buttons (`📁 Main ▾`, `⚙ Options`, `❓ Help`) to the left side of the top header and reverses their order for standard desktop operating system familiarity.\n- **Sticky Header**: Keep the top status bar pinned while scrolling long sheets, or toggle off for maximum vertical space on small displays.\n- **Font Size Scaling**: Live slider to scale overall application typography across headers, body, fine print, controls, sub-controls, and badges.\n- **Freeze Options Dialog Size**: Keeps the options dropdown at a readable standard size while testing typography sliders.\n- **Widened & Centered Options Pop-Up**: The Options dialog spans 75% of browser width (`75vw`) and is centered horizontally on the screen, with options organized into balanced responsive cards and sub-grids to significantly reduce vertical scrolling.\n\n### Workspace, Storage & Integrations\n- **Custom Save/Load Folder**: Utilizing the Chromium File System Access API, you can bind a default local folder on your computer for instantaneous one-click saving and loading without standard browser download prompts.\n- **Autosave Timer**: Configurable background autosave intervals (e.g., every 60 seconds) with an unobtrusive dirty-state badge (`● Unsaved Changes`).\n- **Sound Effects & Audio Cues**: Audible feedback for rolling d20s, critical hits, and condition status alerts.\n- **Per-Campaign Webhooks**: Dedicated broadcast pipelines for dice rolls and session chat supporting Discord, Slack, Guilded, and Mattermost (detailed below).\n\n---\n\n## 📁 Main Menu Operations\n\nClicking `📁 Main ▾` in the top header reveals file, print, and administrative tools:\n\n- **📄 New Hero**: Resets the workspace to a blank character sheet with confirmation safeguards to prevent accidental data loss.\n- **📂 Load Hero...**: Opens `.mm2e` JSON character saves or legacy Hero Lab portfolio files (`.por`).\n- **💾 Save / Save As...**: Saves the current character file with all powers, devices, complications, and companion sheets bundled into a clean, portable `.mm2e` JSON file.\n- **🖨️ Print & PDF Preview...**: Opens the WYSIWYG Print Preview modal with custom toggles to hide or display specific sections, format printer-friendly tables, and produce clean multi-page PDFs (`Ctrl + P`).\n- **👤 Users & Whitelist...**: Configure peer-to-peer VTT permissions, host tokens, player handles, and authorized character IDs for multi-user sessions.\n- **🔄 Check for Updates...**: Queries GitHub Pages in real time to detect new builds. If a newer version is deployed, the update modal displays the current build, latest build, and a one-click `🔄 Reload & Update` button that flushes browser caches and loads the fresh build immediately.\n- **❓ Help & User Guide...**: Opens this complete user guide.\n\n---\n\n## 📑 Comprehensive Tab-by-Tab Feature Guide\n\nThe character builder organizes hero creation and tabletop gameplay into 9 focused tabs:\n\n### 1. Main Stats Tab (Abilities, Saves & Combat)\n- **Ability Scores**:\n  - Full support for Strength (STR), Dexterity (DEX), Constitution (CON), Intelligence (INT), Wisdom (WIS), and Charisma (CHA).\n  - Automatically calculates ability modifiers, derived carrying capacity, and Power Point costs (2 PP per ability point above 10).\n  - Handles non-standard scores (e.g., Absent/Inanimate Constitution for constructs, undead, and robots).\n- **Saving Throws / Defenses**:\n  - Tracks Toughness, Fortitude, Reflex, and Will saves.\n  - Automatically factors in base ability modifiers, feat bonuses (e.g., *Defensive Roll*, *Great Fortitude*, *Iron Will*, *Lightning Reflexes*), and active power bonuses (e.g., *Protection*, *Force Field*).\n  - Highlights trade-off compliance: Defense + Toughness cannot exceed 2 x PL.\n- **Combat Totals**:\n  - **Base Attack Bonus (BAB)** & **Base Defense Bonus (BDB)** with accurate 2 PP per rank cost calculation.\n  - Derived Melee and Ranged Attack totals including *Attack Focus* and *Attack Specialization* feats.\n  - **Total Defense** and **Flat-Footed Defense**: Accurately handles *Dodge Focus* and *Uncanny Dodge* (retaining dodge bonuses while flat-footed).\n  - **Flat-Footed Toughness**: Distinguishes natural Toughness from *Defensive Roll*, automatically stripping defensive roll bonuses when caught flat-footed unless protected by *Uncanny Dodge*.\n- **Derived Statistics**:\n  - **Knockback Modifier**: Calculated automatically from total Toughness, Impervious Protection, and Size modifiers.\n  - **Initiative**: DEX modifier plus *Improved Initiative* feats.\n  - **Carrying Capacity**: Calculates Light, Medium, Heavy, Maximum, Push/Drag, and Overhead lift limits in pounds and tons according to M&M 2E carrying tables and *Super-Strength* ranks.\n  - **Hero Points**: Base pool tracking with quick-increment buttons.\n\n### 2. Skills Tab\n- **Standard 2E Skills Catalog**:\n  - Acrobatics, Bluff, Climb, Computers, Concentration, Craft, Diplomacy, Disable Device, Disguise, Drive, Escape Artist, Gather Information, Handle Animal, Intimidate, Investigate, Knowledge, Notice, Perform, Pilot, Profession, Ride, Search, Sense Motive, Sleight of Hand, Stealth, Survival, and Swim.\n- **Untrained Rules Enforcement**:\n  - Clearly flags skills that cannot be used untrained according to 2E rules (e.g., Disable Device, Sleight of Hand).\n- **Point-Buy Calculation**:\n  - Automatically applies the standard 4 skill ranks per 1 Power Point cost ratio.\n- **Interactive d20 Roller**:\n  - Each skill row includes a `🎲` roll button that rolls 1d20 + Total Modifier and displays the result with breakdown in the chat/dice log.\n- **Custom Skills**:\n  - Add user-defined skills with custom names and selectable key abilities (STR, DEX, CON, INT, WIS, CHA).\n\n### 3. Feats Tab\n- **Comprehensive Feats Catalog**:\n  - Contains all standard feats from the M&M 2nd Edition core rules and master sourcebooks.\n- **Ranked Feats & Steppers**:\n  - Feats with multiple ranks (such as *Attack Focus*, *Attack Specialization*, *Dodge Focus*, *Defensive Roll*, *Equipment*, *Minions*, *Sidekick*, *Super-Strength*, *Tough*) feature intuitive `+` / `-` rank steppers.\n- **Prerequisite Validation**:\n  - Warns when selecting feats whose ability, base attack, or prerequisite feat requirements are not yet met.\n- **Detailed Rules Tooltips**:\n  - Hover over or tap any feat name to review its exact book description, mechanics, and usage restrictions.\n\n### 4. Powers Construction Engine Tab\nThe heart of the editor is a robust, modular power creation engine:\n\n- **Complete 2E Effect Library**:\n  - Browse dozens of standard effects: *Blast*, *Damage*, *Protection*, *Force Field*, *Flight*, *Super-Speed*, *Teleport*, *Super-Senses*, *Mind Control*, *Illusion*, *Healing*, *Morph*, *Nullify*, *Regeneration*, *Strike*, and more.\n- **Power Containers & Structures**:\n  - **Regular Containers**: Group multiple thematic powers under a single parent power.\n  - **Devices**: Build *Hard to Lose* (4 PP per 5 PP of effects) or *Easy to Lose* (3 PP per 5 PP of effects) technological or mystical gadgets.\n  - **Alternate Forms**: Construct Solid, Liquid, Gaseous, Energy, or Shadow forms with bundled innate traits.\n  - **Dynamic Arrays & Alternate Effects**: Create main power slots with Alternate Powers (AP, +1 flat PP) or Dynamic Alternate Powers (DAP, +2 flat PP) with live point-pool budget enforcement.\n- **Dynamic Profile Inspectors**:\n  - **Super-Senses**: Dedicated interactive selector for Visual, Auditory, Olfactory, Tactile, Radio, Mental, and Exotic sense groups with precise enhancements (Accurate, Acute, Analytical, Extended, Microscopic, Penetrates Concealment, Radius, Rapid, Tracking, Time Sense, Counters Concealment/Illusion).\n  - **Movement Modes**: Specialized controls for Flight, Swimming, Burrowing, Super-Speed, Permeate, Wall-Crawling, Water-Walking, Space Travel, and Dimensional Movement.\n  - **Enhanced Traits**: Selectively enhance Ability scores, Feats, Skills, or Defenses with full point-cost reconciliation.\n- **Modifiers Engine (Extras, Flaws & Power Feats)**:\n  - Add Extras (increases cost per rank), Flaws (decreases cost per rank), and flat Power Feats (e.g., *Affects Insubstantial*, *Homing*, *Indirect*, *Split Attack*, *Reversible*, *Subtle*, *Triggered*).\n  - Full support for **Progression** steppers across all variants (*Area*, *Duration*, *Mass*, *Range*, *Targets*) scaling up to 20 ranks.\n- **100-State Undo & Redo**:\n  - Master `↶ Undo` and `↷ Redo` buttons.\n  - Rapid adjustments are debounced into single logical undo states.\n  - History is preserved in browser storage across sessions.\n\n### 5. Equipment & Headquarters Tab\n- **Equipment Points (EP) Pool**:\n  - Derived directly from ranks in the *Equipment* feat (5 EP per rank). Tracks spent vs. remaining EP with over-budget alerts.\n- **Weapons & Tactical Gear**:\n  - Melee, ranged, and thrown weaponry with damage bonuses, critical hit ranges, and range increments.\n- **Protective Gear & Armor**:\n  - Body armor, undercover vests, and shields with Toughness and Defense bonuses.\n- **Vehicles Catalog**:\n  - Pre-built and custom vehicles (Motorcycle, Sports Car, Armored Car, Jet, Helicopter, Submarine, Starship) with Size, Strength, Speed, Defense, and Toughness stats.\n- **Headquarters Builder**:\n  - Configure secret hideouts, superhero bases, and orbital stations.\n  - Select size categories, toughness ratings, and specialized facilities (Computer, Defense System, Infirmary, Holding Cells, Laboratory, Workshop, Teleport, Living Space, Power System).\n\n### 6. Background, Complications & Drawbacks Tab\n- **Identity & Biography**:\n  - Real Name, Hero Codename, Secret/Public Identity, Age, Gender, Height, Weight, Eyes, Hair, and rich text fields for Appearance, Personality, and Origin Story.\n- **Complications**:\n  - Document motivations, personal liabilities, nemeses, phobias, honor codes, secret identities, and prejudices that reward Hero Points during play.\n- **Drawbacks Rebate Engine**:\n  - Add mechanical drawbacks (e.g., Vulnerability, Weakness, Action Loss, Disability).\n  - Automatically calculates Power Point rebates based on frequency (Uncommon, Common, Very Common) and severity (Minor, Moderate, Major), adding refunded points back to your available budget.\n\n### 7. Plans Tab (Inventions, Blueprints & Rituals)\n- **Invention Crafting Engine**:\n  - Design temporary gadgets and one-off devices according to official 2E Inventing rules.\n  - Calculates Design Check DC (10 + PP), Design Time, Construction Check DC (10 + PP), and Construction Time based on Knowledge and Craft skills.\n- **Arcane Rituals & Blueprints**:\n  - Create occult rituals, mystical wards, or experimental alchemical formulas with required skill checks and activation rituals.\n\n### 8. Companions & Alternate Forms Tab\n- **Sidekicks**:\n  - Allocate points from the *Sidekick* feat (5 PP per rank).\n  - Grants a complete, independent character sheet with standard 15 PP per PL progression.\n- **Minions & Fanatics**:\n  - Build hordes of loyal followers and minions (15 PP per rank from the *Minions* feat).\n- **Summons & Duplicates**:\n  - Configure summonable creatures and clones.\n- **Alternate Forms / Metamorph**:\n  - Create radically different character sheets (e.g., Dr. Jekyll & Mr. Hyde, shapeshifters, alien transformations) that switch instantaneously.\n- **Form Management & Safe Deletion**:\n  - Each companion entry features controls to edit the sheet, export as a standalone `.mm2e` file, or delete. Deletion always prompts a confirmation modal to safeguard your build data.\n\n---\n\n## 🎲 The Session Tab: Virtual Tabletop (VTT) & Party Command Center\n\nThe **Session** tab transforms the editor into a complete, real-time Virtual Tabletop companion that links the Game Master and all players together seamlessly.\n\n### 🌐 How the Session Tab Connects Players & GM Together\n- **Serverless Peer-to-Peer WebRTC (PeerJS)**:\n  - MM2CG does NOT require external hosting accounts, third-party server signups, or subscription fees.\n  - All communication occurs directly between browsers over encrypted WebRTC data channels.\n  - The GM acts as the Host by starting a campaign session. A unique **Campaign Code** and invite URL (`📋 Copy Link`) are generated.\n  - Players enter the campaign link or code to connect directly to the GM's session in milliseconds.\n- **Access Control & Whitelisting**:\n  - The GM retains full administrative control via the **Users & Whitelist** panel.\n  - When new players attempt to join, the GM receives a clear banner notification with options to approve or decline access.\n  - Approved players can be granted trusted tokens so they can reconnect across sessions automatically.\n- **1-Click Sheet Submission (`📤 Submit Sheet to GM`)**:\n  - Connected players can send their complete, live character sheet directly to the GM's campaign file with one click.\n  - The GM can inspect, backup, or roll back player sheets at any point during the campaign.\n\n### 🛡️ How to Monitor the Whole Party in Real Time\nThe top section of the Session tab features the **Party Roster Table**, designed as a live tactical command center for both players and GMs:\n\n- **Vitals & Damage Counters**:\n  - Continuously synchronizes **Bruised** and **Injured** counters across every connected hero.\n  - Automatically computes the cumulative Toughness save penalty (-1 per Bruise/Injury) so players and GM always know exact defensive values.\n- **Combat Totals & Hero Points**:\n  - Displays Total Defense, Flat-Footed Defense, Toughness, Flat-Footed Toughness, and Knockback modifiers.\n  - Tracks each hero's available **Hero Points** pool in real time, broadcasting instant updates when points are expended or rerolls are triggered.\n- **Active Conditions Manager**:\n  - Real-time condition badges for *Bruised*, *Injured*, *Dazed*, *Staggered*, *Disabled*, *Unconscious*, *Dying*, *Entangled*, *Exhausted*, *Fatigued*, *Helpless*, *Prone*, and *Stunned*.\n  - When a hero suffers a condition, it appears on the party table instantly for everyone.\n- **Initiative Order**:\n  - Lists characters sorted by combat initiative to streamline turns.\n- **GM Status Overrides**:\n  - The GM can click into any player row to directly adjust wounds, toggle conditions, or award Hero Points.\n- **Detachable Party Display (`↗ Pop Out`)**:\n  - Click `↗ Pop Out` on the Party Tracker to detach the entire roster into a dedicated floating HUD.\n  - Perfect for multi-monitor GM screens or projecting onto a living-room TV display while keeping your main screen free for character editing.\n\n### ⚔️ Roll20 & Discord Features Included\n\nThe Session tab combines the best tabletop capabilities found on platforms like **Roll20** and **Discord**:\n\n#### Roll20-Style Tabletop Mechanics:\n- **Party HUD & Health Monitoring**: Live roster of all player characters and party NPCs with synchronized wound and condition states.\n- **Interactive d20 Dice Engine**:\n  - Roll directly from character sheets (Abilities, Skills, Feats, Attacks, Saving Throws) or use the interactive sidebar roller.\n  - Full support for standard dice notation (`1d20+12`, `+5`, `-2`, `+1d4`).\n  - Quick adjustment chips (`+1`, `+2`, `+5`, `+10`, `-1`, `-2`, `-5`).\n  - Automatic failure grade calculations (Pass, Bruised, Staggered, Unconscious).\n  - Built-in Hero Point reroll handling (rolls 1-10 receive a +10 bonus).\n- **GM Broadcast & Silent Mode (`📡 Broadcast Output`)**:\n  - GMs can toggle silent rolling mode on or off. In silent mode, rolls remain strictly private to the GM's screen and do not broadcast to players.\n- **Tabletop Slash Commands**:\n  - `/r 1d20+X` or `/roll 1d20+X [Label]`: Execute arbitrary dice rolls.\n  - `/hp` or `✨`: Spend a Hero Point and announce rerolls.\n  - `/w [Player] [Message]` or `/whisper [Character] [Message]`: Secret private messages.\n  - `/ooc [Message]` or `(( Message ))`: Out-of-character table chat.\n  - `/desc [Text]` or `/gm [Text]`: Narrative descriptions and scene framing.\n\n#### Discord-Style Communication Features:\n- **Continuous Single-Line Chat Feed**: Fast, auto-scrolling activity stream presenting dice rolls, combat saves, and player dialogue in clean chronological order.\n- **Responsive Feed Filter Chips**:\n  - Instantly isolate feed entries by clicking `All`, `Atk` (Attacks), `Save` (Saving Throws), `Check` (Skill/Ability checks), `HP` (Hero Point rolls), `Chat` (Public messages), or `Whisper` (Private communications).\n- **Full-Text Feed Search**:\n  - Search entire session histories with phrase matching (`\"exact phrase\"`), term exclusion (`-miss`), and type filters (`type:check`).\n- **@Mention Autocomplete Popover**:\n  - Typing `@` inside the chat bar opens an instant popover listing all connected players and the GM, allowing rapid secret whispers without memorizing handles.\n- **Sound Effects & Cues**:\n  - Audible alerts for dice rolls, critical hits, and condition alerts.\n- **🏰 Campaigns Button & Synced Logs**:\n  - Direct access from the top control row on the Session tab, positioned directly to the left of the active campaign name.\n  - **Browse Synced Campaigns**: Switch between campaigns you've participated in and inspect metadata.\n  - **Most Recently Synced Session Log**: Inspect past rolls and chat messages from any campaign, complete with timestamps, author badges, roll breakdowns, and outcomes.\n  - **Real-Time Log Search & Filter**: Filter history entries by keyword, hero name, or roll type.\n  - **Export Session Log**: Download the complete campaign log as a formatted `.txt` file with one click.\n  - **Per-Campaign Webhooks**: Configure independent Dice Rolls and Session Chat webhooks for that specific campaign.\n- **Dual Webhooks Mirroring**:\n  - Stream session activity out to external channels in real time.\n\n---\n\n## 💬 Multi-Service Webhook Integration (Discord, Slack, Guilded & Mattermost)\n\nMM2CG features deep, automated webhook integration, allowing tabletop sessions to bridge in-game action directly into your group's community chat servers.\n\n### 🌐 Universal Service Compatibility: Discord, Slack, Guilded & Mattermost\nMM2CG webhook payloads are transmitted with multi-service compatibility attributes:\n- `content`: Read by **Discord** and **Guilded** (standard Markdown text formatting).\n- `text`: Read by **Slack**, **Mattermost**, **Google Chat**, and custom HTTP webhooks.\n- `username`: Displays the character and player name as the webhook sender.\nBecause both fields are transmitted simultaneously in the JSON payload, you can paste webhook URLs from Discord, Slack, Guilded, or Mattermost directly into MM2CG without requiring third-party bot proxies!\n\n### 📡 Outbound Webhook Architecture & Why It Is One-Way\n- **How Webhooks Work**:\n  - Incoming webhooks are secure HTTP POST endpoints generated by your chat platform (e.g., `https://discord.com/api/webhooks/...` or `https://hooks.slack.com/services/...`) that accept push messages into a channel.\n  - **Why Webhooks Do Not Read Messages**: Standard incoming webhooks are strictly **one-way (outbound only)**. They allow applications to publish messages into a chat channel, but web browsers cannot read incoming chat messages from that channel through a webhook endpoint without running a privileged bot application with gateway intents.\n  - **The MM2CG Tabletop Solution**: MM2CG uses its built-in, encrypted **Peer-to-Peer VTT** for real-time two-way synchronization between players and GM, while using webhooks as an external broadcast mirror to publish public rolls and table chatter directly into your community servers!\n\n### 🎲 Two Webhooks per Game: Dice Rolls & Session Chat\nEach campaign can configure **TWO separate webhooks**:\n1. **Dice Rolls Webhook (`🎲 Rolls`)**:\n   - Dedicated channel for all attack checks, damage saves, skill checks, initiative, and hero point rerolls.\n   - Formats clean summaries: Character name, roll type, formula breakdown with bold totals, and outcome tags (e.g., `Superman — Toughness Save: 1d20+15 = **28** (Pass)`).\n2. **Session Chat Webhook (`💬 Chat`)**:\n   - Dedicated channel for in-character dialogue, table talk, and GM scene descriptions.\n   - Formats messages with the character and player name as the message author.\n3. **Same Webhook for Both (`🔗 Both`)**:\n   - Check the **\"Use same webhook for both Rolls and Chat\"** box if your group prefers routing all table activity into a single channel (e.g., `#game-table`).\n\n### 🏰 Configured Per Campaign\n- **Independent Routing**: Webhooks are configured individually per campaign in the **🏰 Campaigns** hub on the **Session** tab (or in the GM Hub). GMs and groups running multiple campaigns (e.g., *Freedom League* vs. *Doom City*) can route each game to its own dedicated server channels without cross-contamination.\n\n### 🔒 Confidentiality & Whisper Protection\n- **Zero Leakage**: Secret GM-to-player whispers (`/w`, `/whisper`, `@recipient`) and GM silent rolls are **STRICTLY EXCLUDED** from webhook broadcasts. Only public rolls and public chat are ever transmitted to external webhooks, safeguarding GM secrets and tactical maneuvers.\n\n### 📋 Step-by-Step Webhook Setup Guide\n1. **In Discord, Slack, Guilded, or Mattermost**:\n   - **Discord**: Channel Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.\n   - **Slack**: Apps -> Incoming WebHooks -> Add to Slack -> Choose Channel -> Copy Webhook URL.\n   - **Guilded**: Server Settings -> Integrations -> Webhooks -> Create Webhook -> Copy URL.\n   - **Mattermost**: Integrations -> Incoming Webhooks -> Add Incoming Webhook -> Copy URL.\n2. **In MM2CG**:\n   - Go to the **Session** tab and click **🏰 Campaigns** (or click `⚙ Options > 🏰 Configure Campaign Webhooks...`).\n   - Switch to the **💬 Webhook Integrations** tab.\n   - Paste the URLs into the **🎲 Dice Rolls Webhook** and/or **💬 Session Chat Webhook** fields (or check \"Use same webhook for both\").\n   - Click `🎲 Test Roll Ping` or `💬 Test Chat Ping` to confirm receipt!\n   - Click **💾 Save Campaign Webhooks**.\n\n---\n\n## 🪟 Pop-Up & Pop-Out Windows Detailed Guide\n\n> **Remember:** Opening any of these windows—or detaching them to a second monitor with `↗ Pop Out`—**does not disrupt, reset, or switch your active tab** in the character editor!\n\n### ⏱ Status & Combat Tracker\n- **Damage & Wound Tracking**:\n  - Increment Bruise and Injury counters.\n  - Automatically computes the cumulative -1 penalty to subsequent Toughness saves.\n- **Conditions Manager**:\n  - One-click toggles for standard 2E conditions: *Bruised*, *Injured*, *Dazed*, *Staggered*, *Disabled*, *Unconscious*, *Dying*, *Entangled*, *Exhausted*, *Fatigued*, *Helpless*, *Prone*, *Stunned*.\n- **Fade Counter**:\n  - Manage rounds remaining for sustained powers, Boost effects, and fading traits.\n- **Integrated Combat Roller**:\n  - Quick-roll Toughness saves against incoming damage DCs with automatic failure grade calculation (Pass, Bruised, Staggered, Unconscious).\n- **Pop-Out Support**: Click `↗ Pop Out` to park your combat status on an auxiliary screen.\n\n### 📊 Reference Tables & Benchmarks\n- **Measurements Table**:\n  - Complete 2E progression table mapping ranks (-5 to 30+) to exact values for **Time**, **Distance**, **Mass / Weight**, **Volume**, and **Carrying Capacity**.\n- **Difficulty Classes (DCs) Guide**:\n  - Standard benchmarks for skill checks: Routine (DC 10), Moderate (DC 15), Hard (DC 20), Superhuman (DC 30), and Cosmic (DC 40+).\n- **Combat Maneuvers Cheat Sheet**:\n  - Immediate rules lookup for All-Out Attack, Power Attack, Accurate Attack, Defensive Attack, Charge, Flanking, Grappling, Feint, Trip, Disarm, Cover, and Concealment.\n- **Pop-Out Support**: Click `↗ Pop Out` for a permanent rules reference window at your game table.\n\n### 👑 GM Campaign Hub\n- **Active Campaign Selector & Deletion Controls**:\n  - Switch active campaigns directly from the GM Hub header dropdown with instant synchronization across docked tabs, detached pop-outs, session monitors, and network peers.\n  - Dedicated `🗑 Delete Campaign` button with explicit confirmation modal safeguard prevents accidental campaign loss while cleanly managing multi-campaign rosters.\n- **Campaign Description & Setting Notes**:\n  - Dedicated description and setting synopsis field for each campaign with auto-save and manual save controls, viewable and editable across both docked and detached pop-out GM dashboards.\n- **Campaign Characters & Party Roster Controls**:\n  - Quickly manage party composition with dedicated `+ Add to Party` and `🚫 Remove from Party` actions for both the GM's active hero and submitted player characters.\n  - Responsive character card grids and enlarged controls guarantee labels remain crystal-clear and never clip or overflow across all display resolutions and font scales.\n- **Campaign Timeline & Session Notes**:\n  - Chronicle game sessions, track in-game dates, and record key plot milestones.\n- **NPC Roster & Quick Switcher**:\n  - Attach full NPC villain and ally sheets directly to your campaign file.\n  - Switch between viewing/editing NPCs and your player character without overwriting either file.\n- **Encounter Combat Roster**:\n  - Track initiative order, player/NPC wounds, and active conditions across entire combat scenes.\n- **Save Points & Instant Rollback**:\n  - Create full campaign state snapshots and roll back to previous save points at any time.\n- **Pop-Out Support**: Click `↗ Pop Out` to run your entire game from a dedicated GM dashboard.\n\n### 🛡️ Party Display Pop-Out\n- **Dedicated HUD**:\n  - Displays a clean, high-contrast dashboard of all player heroes, their Toughness, Defense, conditions, and wounds.\n  - Perfect for projecting on a TV screen or positioning on a secondary GM monitor.\n\n### ⚡ Power Points Breakdown Modal\n- **Transparent Audit**:\n  - Breaks down your character's total budget into Abilities, Combat, Saves, Skills, Feats, and Powers.\n  - Highlights trade-offs and flags any over-budget discrepancies.\n\n### 🗑️ Character & Form Deletion Confirmation Modal\n- **Accidental Deletion Protection**:\n  - Displays the exact target type (Primary Hero, Alternate Form, Mecha, Sidekick, Minion, Summon, Duplicate, Campaign NPC, or Campaign Character) and name.\n  - Explains the specific consequences of deletion (e.g., clearing the active sheet, resetting to a fresh hero, discarding companion forms, or unlinking from campaign roster).\n  - Requires explicit confirmation via a prominent `🗑 Yes, Delete` action before any changes are committed.\n\n### 🔄 Application Update Check Modal\n- **Real-Time Remote Build Detection**:\n  - Live query to GitHub Pages to check for newly published versions.\n  - Displays current running version vs. latest available version.\n  - One-click `🔄 Reload & Update` button automatically flushes browser caches and unregisters Service Workers to load the latest build immediately.\n\n### 🏰 Campaign Hub & Synced Logs Modal\n- **Campaign Archive & Log Viewer**:\n  - View all campaigns you have created or joined, including active status, GM handle, and session counts.\n  - Browse complete session logs with timestamps, roll formulas, and dialogue entries.\n  - Real-time text search and filter across campaign logs.\n  - Download complete logs to formatted `.txt` files with one click.\n  - Configure per-campaign Dice Rolls and Session Chat webhooks.\n\n### ❓ Help & User Guide Modal\n- **Comprehensive Offline Manual**:\n  - Full tab-by-tab documentation of every editor control, house rule, and tabletop feature.\n  - **Live Search Bar**: Search topics in real time with keyword highlighting (`<mark>`) and `Enter`/`Shift+Enter` result cycling.\n  - Accessible at any time via `❓ Help` without disrupting your active character sheet.\n\n### 📋 Hero Lab Import Audit Report\n- **Portfolio Reconciliation**:\n  - When importing a Hero Lab `.por` file, this audit dialog automatically generates a line-by-line report detailing converted traits, recognized modifiers, and any proprietary Hero Lab tags flagged for user review.\n\n### 🖨️ Print & PDF Preview Modal\n- **WYSIWYG Sheet Preview**:\n  - Full preview of your printable character sheet with responsive column formatting.\n  - Checkbox controls to toggle Background, Inventions, Equipment, or Full Power Descriptors.\n  - One-click trigger for system print dialog or Save to PDF (`Ctrl + P`).\n\n---\n\n## 🚀 Getting Started & Local Offline Use\n\n### Run in Any Modern Web Browser\nVisit the live hosted web app: [https://captainload.github.io/mm2e-character-editor/](https://captainload.github.io/mm2e-character-editor/)\n\n### Run Locally (100% Offline & Private)\nThe application is built with standard HTML5, Vanilla JavaScript, and modern CSS—**zero Node.js dependencies, zero build steps, and zero internet connection required**:\n1. Clone or download the repository:\n   ```bash\n   git clone https://github.com/captainload/mm2e-character-editor.git\n   ```\n2. Double-click `Launch Hero Builder.bat` on Windows, or simply open `index.html` in Chrome, Edge, Firefox, or Safari.\n\n---\n\n## 📄 License & Disclaimer\n\nThis is an unofficial, fan-made open source utility created for personal and tabletop gaming use. *Mutants & Masterminds*, the *Mutants & Masterminds* logo, and Green Ronin are trademarks or registered trademarks of Green Ronin Publishing, LLC. All original mechanics and game systems are copyright Green Ronin Publishing.\n";
+const DEFAULT_README_TEXT = "# Mutants & Masterminds 2nd Edition Hero Builder & VTT Manager\n\nThe complete, responsive, and non-disruptive character builder, rules reference, and virtual tabletop companion for the **Mutants & Masterminds 2nd Edition** tabletop roleplaying game.\n\n🌐 **Live Web Application:** [https://captainload.github.io/mm2e-character-editor/](https://captainload.github.io/mm2e-character-editor/)\n\n---\n\n## 🌟 Architecture & Workflow: Non-Disruptive Multi-Tasking\n\n> **Core Design Principle: Never Lose Your Place!**\n> Opening any modal pop-up (such as the **Status & Combat Tracker**, **Reference Tables**, **GM Campaign Hub**, or **Power Points Breakdown**) **NEVER changes, resets, or disrupts your current active tab**. If you are deep in building a complex Dynamic Array on the **Powers** tab, calibrating skills on the **Skills** tab, or checking feats on the **Feats** tab, you can freely summon any floating tool, roll dice, reference benchmark tables, or manage campaign logs, and close the dialog to instantly resume right where you were without interruption.\n\n### ↗ Detachable Pop-Out Windows (Multi-Monitor Workflow)\n- **Detachable Floating Windows**: The **Status & Combat Tracker** (`⏱ Tracker`), **Reference Tables** (`📊 Tables`), **GM Campaign Hub** (`👑 GM`), and **Party Display** (`🛡️ Party`) feature a dedicated top-right `↗ Pop Out` button.\n- **Dedicated Desktop Windows**: Clicking `↗ Pop Out` detaches the tool into a standalone native browser window. This is ideal for dual-monitor or multi-monitor GM and player setups, allowing you to keep reference tables, dice rollers, party vitals, or combat counters visible on a second screen while editing your hero on the main screen.\n- **Bi-Directional Live Synchronization**: State changes made in a detached pop-out (such as rolling dice, advancing damage tracks, or toggling conditions) synchronize instantaneously with the parent editor window and all connected peers.\n- **Persistent Geometry & Coordinate Memory**: When you resize or move a pop-out window, its dimensions and screen coordinates are preserved across sessions and re-dock cycles.\n- **Seamless Re-docking**: Clicking `⬅ Re-dock` in the pop-out window smoothly returns the tool back into the main editor modal without any page reload, state loss, or disruption to your active tab.\n\n---\n\n## 🧭 Header & Persistent Quick Access Bar\n\nThe top navigation header remains pinned at the top of the screen (or can scroll with the page if Sticky Header is toggled off in Options):\n\n- **Active Form & Character Switcher with Deletion Controls**:\n  - Instantly switch the active workspace between your primary hero (`🦸 Main Hero`), campaign NPCs, saved campaign heroes, alternate forms (`🔄 Metamorph / Alternate Forms`), vehicular units (`🤖 Mecha`), trusted allies (`🤝 Sidekicks`), summonable creatures, and minion hordes (`👥 Minions`).\n  - Switching forms loads that entity's dedicated sheet while keeping all parent links intact.\n  - **Inline Delete Buttons (`🗑`)**: Every character, campaign NPC, saved roster hero, and attached alternate form features a dedicated inline `🗑` delete button directly inside the dropdown menu.\n  - **Active Form Banner Delete**: When editing any alternate form or companion, a prominent `🗑 Delete This Form` button appears in the persistent top banner.\n  - **Deletion Warning & Confirmation Safeguards**: Deleting any hero, NPC, or alternate form triggers a dedicated confirmation modal with color-coded badges, character names, and consequence warnings. No character or form is ever deleted accidentally without an explicit confirmation.\n- **Hero Name & Identity**: Quick-edit field for the active hero's codename or true identity.\n- **Power Level (PL) Badge & Cap Indicator**:\n  - Displays current campaign Power Level (e.g., PL 10) and automatically enforces standard 2E trade-off limits: Attack + Damage <= 2 x PL, Defense + Toughness <= 2 x PL, and Save Caps.\n- **Power Points Counter**:\n  - Real-time indicator displaying **Points Spent** / **Points Allowed** / **Points Remaining** (e.g., `150 / 150 PP (0 Remaining)`).\n  - Turns warning red if you exceed your allocated Power Point budget.\n- **⚡ PP Breakdown Button**:\n  - One-click floating audit modal displaying exact point expenditures across all six core categories: **Abilities**, **Combat**, **Saves / Defenses**, **Skills**, **Feats**, and **Powers**.\n- **Quick Action Buttons**:\n  - `⏱ Tracker`: Opens the live Status & Combat Tracker.\n  - `📊 Tables`: Opens the Reference Tables and Measurements Benchmark catalog.\n  - `👑 GM`: Opens the GM Campaign Hub and Encounter Manager.\n  - `⚙ Options`: Opens application settings, display themes, and house rule toggles.\n  - `❓ Help`: Opens this comprehensive Help & User Guide manual.\n  - `📁 Main ▾`: Access file management, imports, printing, and user whitelisting.\n\n---\n\n## ⚙ Options & House Rules\n\nClicking `⚙ Options` in the top header opens the preferences and house rules configuration panel:\n\n### House Rules\n- **Enhanced Trait Boost**: When enabled, allows Enhanced Trait powers to boost power effect ranks beyond natural ability score limits.\n- **Boost Alters Ranks**: Adjusts the Boost power mechanism to directly alter base power ranks rather than applying temporary floating modifiers.\n- **Variable Power Level**: Decouples character Power Level caps from the standard 15 PP per PL rule, allowing high-point street-level heroes or low-point cosmic beings.\n- **Perception Range Disabled**: Disables automatic Perception range cap exemptions for games enforcing strict attack/defense limits across all attack types.\n\n### Legacy Modifiers (Core 2E vs. Ultimate Power)\n- Toggles whether modifiers strictly follow the original 2005 Core Rulebook definitions or the expanded, balanced standards from *Ultimate Power*.\n\n### Appearance, Layout & Typography\n- **Theme Selector**: Choose between 4 distinct visual themes:\n  - **Light**: High-clarity, crisp daytime theme with clean borders and sharp daytime contrast.\n  - **Dark**: Low-eyestrain dark modern slate theme designed for extended evening sessions.\n  - **Kitty**: Playful pastel theme featuring delightful rose-pink accents, soft violet cards, and cat-themed styling.\n  - **Parchment**: Classic tabletop warm parchment styling evoking golden-age superhero sourcebooks and weathered paper character folios.\n- **Menus on Left UI Option**: Traditional UX placement option that moves the action buttons (`📁 Main ▾`, `⚙ Options`, `❓ Help`) to the left side of the top header and reverses their order for standard desktop operating system familiarity.\n- **Sticky Header**: Keep the top status bar pinned while scrolling long sheets, or toggle off for maximum vertical space on small displays.\n- **Font Size Scaling**: Live slider to scale overall application typography across headers, body, fine print, controls, sub-controls, and badges.\n- **Freeze Options Dialog Size**: Keeps the options dropdown at a readable standard size while testing typography sliders.\n- **Widened & Centered Options Pop-Up**: The Options dialog spans 75% of browser width (`75vw`) and is centered horizontally on the screen, with options organized into balanced responsive cards and sub-grids to significantly reduce vertical scrolling.\n\n### Workspace, Storage & Integrations\n- **Custom Save/Load Folder**: Utilizing the Chromium File System Access API, you can bind a default local folder on your computer for instantaneous one-click saving and loading without standard browser download prompts.\n- **Autosave Timer**: Configurable background autosave intervals (e.g., every 60 seconds) with an unobtrusive dirty-state badge (`● Unsaved Changes`).\n- **Sound Effects & Audio Cues**: Audible feedback for rolling d20s, critical hits, and condition status alerts.\n- **Per-Campaign Webhooks**: Dedicated broadcast pipelines for dice rolls and session chat supporting Discord, Slack, Guilded, and Mattermost (detailed below).\n\n---\n\n## 📁 Main Menu Operations\n\nClicking `📁 Main ▾` in the top header reveals file, print, and administrative tools:\n\n- **📄 New Hero**: Resets the workspace to a blank character sheet with confirmation safeguards to prevent accidental data loss.\n- **📂 Load Hero...**: Opens `.mm2e` JSON character saves or legacy Hero Lab portfolio files (`.por`).\n- **💾 Save / Save As...**: Saves the current character file with all powers, devices, complications, and companion sheets bundled into a clean, portable `.mm2e` JSON file.\n- **🖨️ Print & PDF Preview...**: Opens the WYSIWYG Print Preview modal with custom toggles to hide or display specific sections, format printer-friendly tables, and produce clean multi-page PDFs (`Ctrl + P`).\n- **👤 Users & Whitelist...**: Configure peer-to-peer VTT permissions, host tokens, player handles, and authorized character IDs for multi-user sessions.\n- **🔄 Check for Updates...**: Queries GitHub Pages in real time to detect new builds. If a newer version is deployed, the update modal displays the current build, latest build, and a one-click `🔄 Reload & Update` button that flushes browser caches and loads the fresh build immediately.\n- **❓ Help & User Guide...**: Opens this complete user guide.\n\n---\n\n## 📑 Comprehensive Tab-by-Tab Feature Guide\n\nThe character builder organizes hero creation and tabletop gameplay into 9 focused tabs:\n\n### 1. Main Stats Tab (Abilities, Saves & Combat)\n- **Ability Scores**:\n  - Full support for Strength (STR), Dexterity (DEX), Constitution (CON), Intelligence (INT), Wisdom (WIS), and Charisma (CHA).\n  - Automatically calculates ability modifiers, derived carrying capacity, and Power Point costs (2 PP per ability point above 10).\n  - Handles non-standard scores (e.g., Absent/Inanimate Constitution for constructs, undead, and robots).\n- **Saving Throws / Defenses**:\n  - Tracks Toughness, Fortitude, Reflex, and Will saves.\n  - Automatically factors in base ability modifiers, feat bonuses (e.g., *Defensive Roll*, *Great Fortitude*, *Iron Will*, *Lightning Reflexes*), and active power bonuses (e.g., *Protection*, *Force Field*).\n  - Highlights trade-off compliance: Defense + Toughness cannot exceed 2 x PL.\n- **Combat Totals**:\n  - **Base Attack Bonus (BAB)** & **Base Defense Bonus (BDB)** with accurate 2 PP per rank cost calculation.\n  - Derived Melee and Ranged Attack totals including *Attack Focus* and *Attack Specialization* feats.\n  - **Total Defense** and **Flat-Footed Defense**: Accurately handles *Dodge Focus* and *Uncanny Dodge* (retaining dodge bonuses while flat-footed).\n  - **Flat-Footed Toughness**: Distinguishes natural Toughness from *Defensive Roll*, automatically stripping defensive roll bonuses when caught flat-footed unless protected by *Uncanny Dodge*.\n- **Derived Statistics**:\n  - **Knockback Modifier**: Calculated automatically from total Toughness, Impervious Protection, and Size modifiers.\n  - **Initiative**: DEX modifier plus *Improved Initiative* feats.\n  - **Carrying Capacity**: Calculates Light, Medium, Heavy, Maximum, Push/Drag, and Overhead lift limits in pounds and tons according to M&M 2E carrying tables and *Super-Strength* ranks.\n  - **Hero Points**: Base pool tracking with quick-increment buttons.\n\n### 2. Skills Tab\n- **Standard 2E Skills Catalog**:\n  - Acrobatics, Bluff, Climb, Computers, Concentration, Craft, Diplomacy, Disable Device, Disguise, Drive, Escape Artist, Gather Information, Handle Animal, Intimidate, Investigate, Knowledge, Notice, Perform, Pilot, Profession, Ride, Search, Sense Motive, Sleight of Hand, Stealth, Survival, and Swim.\n- **Untrained Rules Enforcement**:\n  - Clearly flags skills that cannot be used untrained according to 2E rules (e.g., Disable Device, Sleight of Hand).\n- **Point-Buy Calculation**:\n  - Automatically applies the standard 4 skill ranks per 1 Power Point cost ratio.\n- **Interactive d20 Roller**:\n  - Each skill row includes a `🎲` roll button that rolls 1d20 + Total Modifier and displays the result with breakdown in the chat/dice log.\n- **Custom Skills**:\n  - Add user-defined skills with custom names and selectable key abilities (STR, DEX, CON, INT, WIS, CHA).\n\n### 3. Feats Tab\n- **Comprehensive Feats Catalog**:\n  - Contains all standard feats from the M&M 2nd Edition core rules and master sourcebooks.\n- **Ranked Feats & Steppers**:\n  - Feats with multiple ranks (such as *Attack Focus*, *Attack Specialization*, *Dodge Focus*, *Defensive Roll*, *Equipment*, *Minions*, *Sidekick*, *Super-Strength*, *Tough*) feature intuitive `+` / `-` rank steppers.\n- **Prerequisite Validation**:\n  - Warns when selecting feats whose ability, base attack, or prerequisite feat requirements are not yet met.\n- **Detailed Rules Tooltips**:\n  - Hover over or tap any feat name to review its exact book description, mechanics, and usage restrictions.\n\n### 4. Powers Construction Engine Tab\nThe heart of the editor is a robust, modular power creation engine:\n\n- **Complete 2E Effect Library**:\n  - Browse dozens of standard effects: *Blast*, *Damage*, *Protection*, *Force Field*, *Flight*, *Super-Speed*, *Teleport*, *Super-Senses*, *Mind Control*, *Illusion*, *Healing*, *Morph*, *Nullify*, *Regeneration*, *Strike*, and more.\n- **Power Containers & Structures**:\n  - **Regular Containers**: Group multiple thematic powers under a single parent power.\n  - **Devices**: Build *Hard to Lose* (4 PP per 5 PP of effects) or *Easy to Lose* (3 PP per 5 PP of effects) technological or mystical gadgets.\n  - **Alternate Forms**: Construct Solid, Liquid, Gaseous, Energy, or Shadow forms with bundled innate traits.\n  - **Dynamic Arrays & Alternate Effects**: Create main power slots with Alternate Powers (AP, +1 flat PP) or Dynamic Alternate Powers (DAP, +2 flat PP) with live point-pool budget enforcement.\n- **Dynamic Profile Inspectors**:\n  - **Super-Senses**: Dedicated interactive selector for Visual, Auditory, Olfactory, Tactile, Radio, Mental, and Exotic sense groups with precise enhancements (Accurate, Acute, Analytical, Extended, Microscopic, Penetrates Concealment, Radius, Rapid, Tracking, Time Sense, Counters Concealment/Illusion).\n  - **Movement Modes**: Specialized controls for Flight, Swimming, Burrowing, Super-Speed, Permeate, Wall-Crawling, Water-Walking, Space Travel, and Dimensional Movement.\n  - **Enhanced Traits**: Selectively enhance Ability scores, Feats, Skills, or Defenses with full point-cost reconciliation.\n- **Modifiers Engine (Extras, Flaws & Power Feats)**:\n  - Add Extras (increases cost per rank), Flaws (decreases cost per rank), and flat Power Feats (e.g., *Affects Insubstantial*, *Homing*, *Indirect*, *Split Attack*, *Reversible*, *Subtle*, *Triggered*).\n  - Full support for **Progression** steppers across all variants (*Area*, *Duration*, *Mass*, *Range*, *Targets*) scaling up to 20 ranks.\n- **100-State Undo & Redo**:\n  - Master `↶ Undo` and `↷ Redo` buttons.\n  - Rapid adjustments are debounced into single logical undo states.\n  - History is preserved in browser storage across sessions.\n\n### 5. Equipment & Headquarters Tab\n- **Equipment Points (EP) Pool**:\n  - Derived directly from ranks in the *Equipment* feat (5 EP per rank). Tracks spent vs. remaining EP with over-budget alerts.\n- **Weapons & Tactical Gear**:\n  - Melee, ranged, and thrown weaponry with damage bonuses, critical hit ranges, and range increments.\n- **Protective Gear & Armor**:\n  - Body armor, undercover vests, and shields with Toughness and Defense bonuses.\n- **Vehicles Catalog**:\n  - Pre-built and custom vehicles (Motorcycle, Sports Car, Armored Car, Jet, Helicopter, Submarine, Starship) with Size, Strength, Speed, Defense, and Toughness stats.\n- **Headquarters Builder**:\n  - Configure secret hideouts, superhero bases, and orbital stations.\n  - Select size categories, toughness ratings, and specialized facilities (Computer, Defense System, Infirmary, Holding Cells, Laboratory, Workshop, Teleport, Living Space, Power System).\n\n### 6. Background, Complications & Drawbacks Tab\n- **Identity & Biography**:\n  - Real Name, Hero Codename, Secret/Public Identity, Age, Gender, Height, Weight, Eyes, Hair, and rich text fields for Appearance, Personality, and Origin Story.\n- **Complications**:\n  - Document motivations, personal liabilities, nemeses, phobias, honor codes, secret identities, and prejudices that reward Hero Points during play.\n- **Drawbacks Rebate Engine**:\n  - Add mechanical drawbacks (e.g., Vulnerability, Weakness, Action Loss, Disability).\n  - Automatically calculates Power Point rebates based on frequency (Uncommon, Common, Very Common) and severity (Minor, Moderate, Major), adding refunded points back to your available budget.\n\n### 7. Plans Tab (Inventions, Blueprints & Rituals)\n- **Invention Crafting Engine**:\n  - Design temporary gadgets and one-off devices according to official 2E Inventing rules.\n  - Calculates Design Check DC (10 + PP), Design Time, Construction Check DC (10 + PP), and Construction Time based on Knowledge and Craft skills.\n- **Arcane Rituals & Blueprints**:\n  - Create occult rituals, mystical wards, or experimental alchemical formulas with required skill checks and activation rituals.\n\n### 8. Companions & Alternate Forms Tab\n- **Sidekicks**:\n  - Allocate points from the *Sidekick* feat (5 PP per rank).\n  - Grants a complete, independent character sheet with standard 15 PP per PL progression.\n- **Minions & Fanatics**:\n  - Build hordes of loyal followers and minions (15 PP per rank from the *Minions* feat).\n- **Summons & Duplicates**:\n  - Configure summonable creatures and clones.\n- **Alternate Forms / Metamorph**:\n  - Create radically different character sheets (e.g., Dr. Jekyll & Mr. Hyde, shapeshifters, alien transformations) that switch instantaneously.\n- **Form Management & Safe Deletion**:\n  - Each companion entry features controls to edit the sheet, export as a standalone `.mm2e` file, or delete. Deletion always prompts a confirmation modal to safeguard your build data.\n\n---\n\n## 🎲 The Session Tab: Virtual Tabletop (VTT) & Party Command Center\n\nThe **Session** tab transforms the editor into a complete, real-time Virtual Tabletop companion that links the Game Master and all players together seamlessly.\n\n### 🌐 How the Session Tab Connects Players & GM Together\n- **Serverless Peer-to-Peer WebRTC (PeerJS)**:\n  - MM2CG does NOT require external hosting accounts, third-party server signups, or subscription fees.\n  - All communication occurs directly between browsers over encrypted WebRTC data channels.\n  - The GM acts as the Host by starting a campaign session. A unique **Campaign Code** and invite URL (`📋 Copy Link`) are generated.\n  - Players enter the campaign link or code to connect directly to the GM's session in milliseconds.\n- **Access Control & Whitelisting**:\n  - The GM retains full administrative control via the **Users & Whitelist** panel.\n  - When new players attempt to join, the GM receives a clear banner notification with options to approve or decline access.\n  - Approved players can be granted trusted tokens so they can reconnect across sessions automatically.\n- **1-Click Sheet Submission (`📤 Submit Sheet to GM`)**:\n  - Connected players can send their complete, live character sheet directly to the GM's campaign file with one click.\n  - The GM can inspect, backup, or roll back player sheets at any point during the campaign.\n\n### 🛡️ How to Monitor the Whole Party in Real Time\nThe top section of the Session tab features the **Party Roster Table**, designed as a live tactical command center for both players and GMs:\n\n- **Vitals & Damage Counters**:\n  - Continuously synchronizes **Bruised** and **Injured** counters across every connected hero.\n  - Automatically computes the cumulative Toughness save penalty (-1 per Bruise/Injury) so players and GM always know exact defensive values.\n- **Combat Totals & Hero Points**:\n  - Displays Total Defense, Flat-Footed Defense, Toughness, Flat-Footed Toughness, and Knockback modifiers.\n  - Tracks each hero's available **Hero Points** pool in real time, broadcasting instant updates when points are expended or rerolls are triggered.\n- **Active Conditions Manager**:\n  - Real-time condition badges for *Bruised*, *Injured*, *Dazed*, *Staggered*, *Disabled*, *Unconscious*, *Dying*, *Entangled*, *Exhausted*, *Fatigued*, *Helpless*, *Prone*, and *Stunned*.\n  - When a hero suffers a condition, it appears on the party table instantly for everyone.\n- **Initiative Order**:\n  - Lists characters sorted by combat initiative to streamline turns.\n- **GM Status Overrides**:\n  - The GM can click into any player row to directly adjust wounds, toggle conditions, or award Hero Points.\n- **Detachable Party Display (`↗ Pop Out`)**:\n  - Click `↗ Pop Out` on the Party Tracker to detach the entire roster into a dedicated floating HUD.\n  - Perfect for multi-monitor GM screens or projecting onto a living-room TV display while keeping your main screen free for character editing.\n\n### ⚔️ Roll20 & Discord Features Included\n\nThe Session tab combines the best tabletop capabilities found on platforms like **Roll20** and **Discord**:\n\n#### Roll20-Style Tabletop Mechanics:\n- **Party HUD & Health Monitoring**: Live roster of all player characters and party NPCs with synchronized wound and condition states.\n- **Interactive d20 Dice Engine**:\n  - Roll directly from character sheets (Abilities, Skills, Feats, Attacks, Saving Throws) or use the interactive sidebar roller.\n  - Full support for standard dice notation (`1d20+12`, `+5`, `-2`, `+1d4`).\n  - Quick adjustment chips (`+1`, `+2`, `+5`, `+10`, `-1`, `-2`, `-5`).\n  - Automatic failure grade calculations (Pass, Bruised, Staggered, Unconscious).\n  - Built-in Hero Point reroll handling (rolls 1-10 receive a +10 bonus).\n- **GM Broadcast & Silent Mode (`📡 Broadcast Output`)**:\n  - GMs can toggle silent rolling mode on or off. In silent mode, rolls remain strictly private to the GM's screen and do not broadcast to players.\n- **Tabletop Slash Commands**:\n  - `/r 1d20+X` or `/roll 1d20+X [Label]`: Execute arbitrary dice rolls.\n  - `/hp` or `✨`: Spend a Hero Point and announce rerolls.\n  - `/w [Player] [Message]` or `/whisper [Character] [Message]`: Secret private messages.\n  - `/ooc [Message]` or `(( Message ))`: Out-of-character table chat.\n  - `/desc [Text]` or `/gm [Text]`: Narrative descriptions and scene framing.\n\n#### Discord-Style Communication Features:\n- **Continuous Single-Line Chat Feed**: Fast, auto-scrolling activity stream presenting dice rolls, combat saves, and player dialogue in clean chronological order.\n- **Responsive Feed Filter Chips**:\n  - Instantly isolate feed entries by clicking `All`, `Atk` (Attacks), `Save` (Saving Throws), `Check` (Skill/Ability checks), `HP` (Hero Point rolls), `Chat` (Public messages), or `Whisper` (Private communications).\n- **Full-Text Feed Search**:\n  - Search entire session histories with phrase matching (`\"exact phrase\"`), term exclusion (`-miss`), and type filters (`type:check`).\n- **@Mention Autocomplete Popover**:\n  - Typing `@` inside the chat bar opens an instant popover listing all connected players and the GM, allowing rapid secret whispers without memorizing handles.\n- **Sound Effects & Cues**:\n  - Audible alerts for dice rolls, critical hits, and condition alerts.\n- **🏰 Campaigns Button & Synced Logs**:\n  - Direct access from the top control row on the Session tab, positioned directly to the left of the active campaign name.\n  - **Browse Synced Campaigns**: Switch between campaigns you've participated in and inspect metadata.\n  - **Most Recently Synced Session Log**: Inspect past rolls and chat messages from any campaign, complete with timestamps, author badges, roll breakdowns, and outcomes.\n  - **Real-Time Log Search & Filter**: Filter history entries by keyword, hero name, or roll type.\n  - **Export Session Log**: Download the complete campaign log as a formatted `.txt` file with one click.\n  - **Per-Campaign Webhooks**: Configure independent Dice Rolls and Session Chat webhooks for that specific campaign.\n- **Dual Webhooks Mirroring**:\n  - Stream session activity out to external channels in real time.\n\n---\n\n## 💬 Multi-Service Webhook Integration (Discord, Slack, Guilded & Mattermost)\n\nMM2CG features deep, automated webhook integration, allowing tabletop sessions to bridge in-game action directly into your group's community chat servers.\n\n### 🌐 Universal Service Compatibility: Discord, Slack, Guilded & Mattermost\nMM2CG webhook payloads are transmitted with multi-service compatibility attributes:\n- `content`: Read by **Discord** and **Guilded** (standard Markdown text formatting).\n- `text`: Read by **Slack**, **Mattermost**, **Google Chat**, and custom HTTP webhooks.\n- `username`: Displays the character and player name as the webhook sender.\nBecause both fields are transmitted simultaneously in the JSON payload, you can paste webhook URLs from Discord, Slack, Guilded, or Mattermost directly into MM2CG without requiring third-party bot proxies!\n\n### 📡 Outbound Webhook Architecture & Why It Is One-Way\n- **How Webhooks Work**:\n  - Incoming webhooks are secure HTTP POST endpoints generated by your chat platform (e.g., `https://discord.com/api/webhooks/...` or `https://hooks.slack.com/services/...`) that accept push messages into a channel.\n  - **Why Webhooks Do Not Read Messages**: Standard incoming webhooks are strictly **one-way (outbound only)**. They allow applications to publish messages into a chat channel, but web browsers cannot read incoming chat messages from that channel through a webhook endpoint without running a privileged bot application with gateway intents.\n  - **The MM2CG Tabletop Solution**: MM2CG uses its built-in, encrypted **Peer-to-Peer VTT** for real-time two-way synchronization between players and GM, while using webhooks as an external broadcast mirror to publish public rolls and table chatter directly into your community servers!\n\n### 🎲 Two Webhooks per Game: Dice Rolls & Session Chat\nEach campaign can configure **TWO separate webhooks**:\n1. **Dice Rolls Webhook (`🎲 Rolls`)**:\n   - Dedicated channel for all attack checks, damage saves, skill checks, initiative, and hero point rerolls.\n   - Formats clean summaries: Character name, roll type, formula breakdown with bold totals, and outcome tags (e.g., `Superman — Toughness Save: 1d20+15 = **28** (Pass)`).\n2. **Session Chat Webhook (`💬 Chat`)**:\n   - Dedicated channel for in-character dialogue, table talk, and GM scene descriptions.\n   - Formats messages with the character and player name as the message author.\n3. **Same Webhook for Both (`🔗 Both`)**:\n   - Check the **\"Use same webhook for both Rolls and Chat\"** box if your group prefers routing all table activity into a single channel (e.g., `#game-table`).\n\n### 🏰 Configured Per Campaign\n- **Independent Routing**: Webhooks are configured individually per campaign in the **🏰 Campaigns** hub on the **Session** tab (or in the GM Hub). GMs and groups running multiple campaigns (e.g., *Freedom League* vs. *Doom City*) can route each game to its own dedicated server channels without cross-contamination.\n\n### 🔒 Confidentiality & Whisper Protection\n- **Zero Leakage**: Secret GM-to-player whispers (`/w`, `/whisper`, `@recipient`) and GM silent rolls are **STRICTLY EXCLUDED** from webhook broadcasts. Only public rolls and public chat are ever transmitted to external webhooks, safeguarding GM secrets and tactical maneuvers.\n\n### 📋 Step-by-Step Webhook Setup Guide\n1. **In Discord, Slack, Guilded, or Mattermost**:\n   - **Discord**: Channel Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.\n   - **Slack**: Apps -> Incoming WebHooks -> Add to Slack -> Choose Channel -> Copy Webhook URL.\n   - **Guilded**: Server Settings -> Integrations -> Webhooks -> Create Webhook -> Copy URL.\n   - **Mattermost**: Integrations -> Incoming Webhooks -> Add Incoming Webhook -> Copy URL.\n2. **In MM2CG**:\n   - Go to the **Session** tab and click **🏰 Campaigns** (or click `⚙ Options > 🏰 Configure Campaign Webhooks...`).\n   - Switch to the **💬 Webhook Integrations** tab.\n   - Paste the URLs into the **🎲 Dice Rolls Webhook** and/or **💬 Session Chat Webhook** fields (or check \"Use same webhook for both\").\n   - Click `🎲 Test Roll Ping` or `💬 Test Chat Ping` to confirm receipt!\n   - Click **💾 Save Campaign Webhooks**.\n\n---\n\n## 🤖 Two-Way Discord Bot Relay (Bidirectional Sync)\n\nWhile webhooks are ideal for simple outbound broadcasts, **true two-way communication** between Discord and your Hero Builder tabletop session requires a dedicated Discord Bot. \n\nMM2CG includes a **standalone, lightweight Node.js Discord Bot Relay** (`discord_bot/` or downloadable as `mm2e-discord-bot.zip`) that establishes real-time bi-directional synchronization between your Discord server channels and your live Hero Builder session.\n\n```\n+------------------------------------+          +--------------------------------------+\n|     M&M 2E Hero Builder VTT        |  HTTP/WS |      MM2E Discord Bot Relay          |\n|  (Browser / GitHub Pages / Local)  |<-------->|       (Local Bridge :18820)          |\n+------------------------------------+  :18820  +--------------------------------------+\n                                                                   ^\n                                                                   | Discord Gateway\n                                                                   v\n                                                        +----------------------+\n                                                        |   Discord Server     |\n                                                        |   Text Channels      |\n                                                        +----------------------+\n```\n\n### 🌟 Key Capabilities\n- **Bidirectional Chat**: Chat messages posted in your Discord channel instantly appear in the live Hero Builder session feed and campaign log with a `[🤖 Discord]` badge. Chat sent in Hero Builder is automatically relayed to Discord with character and player attribution.\n- **Discord Dice Roller**: Players on Discord can roll dice directly into the channel and session feed using `!mm roll 1d20+8 [Check Label]` (supports modifiers, natural 20 critical detection, and natural 1 alerts).\n- **Party Status Queries**: Check the current campaign roster, active session number, and GM info anytime from Discord using `!mm status`.\n- **Hero Points Tracking**: Query active Hero Points for all accepted characters in Discord using `!mm hp`.\n- **Whisper & Silent Roll Protection**: Private whispers (`/w`, `/whisper`) and GM silent rolls are strictly excluded from Discord relays.\n- **Zero Echo Loops**: Inbound and outbound messages carry source identifiers and unique IDs to guarantee zero feedback loops.\n\n---\n\n### 📥 Obtaining the Bot\n\nYou can obtain the Discord Bot in two convenient ways:\n1. **One-Click Download**: Click the **\"📥 Download Bot Package (.zip)\"** button directly inside MM2CG under **🏰 Campaigns > 🤖 Two-Way Discord Bot** (or download `downloads/mm2e-discord-bot.zip` from the project repository).\n2. **Local Folder**: If you cloned or downloaded the repository, the bot is already waiting in the `discord_bot/` directory.\n\n---\n\n### 🚀 Step-by-Step Installation & Setup\n\n#### Prerequisites\n- **Node.js** (v16.14.0 or higher recommended). Download from [nodejs.org](https://nodejs.org/).\n\n#### Step 1: Create Your Bot in the Discord Developer Portal\n1. Navigate to the [Discord Developer Portal](https://discord.com/developers/applications) and sign in.\n2. Click **New Application** in the top right. Give it a name (e.g., `MM2E Tabletop Relay`) and click **Create**.\n3. In the left sidebar, click **Bot**:\n   - Click **Add Bot** (or click **Reset Token** to generate a token).\n   - **Copy your Bot Token** and keep it private! You will paste this into `.env`.\n   - Scroll down to **Privileged Gateway Intents** and enable **Message Content Intent** (required for the bot to read `!mm` commands and chat).\n   - Click **Save Changes**.\n\n#### Step 2: Invite the Bot to Your Discord Server\n1. In the left sidebar, click **OAuth2** > **URL Generator**:\n   - Under **Scopes**, check **`bot`**.\n   - Under **Bot Permissions**, check:\n     - `Read Messages / View Channels`\n     - `Send Messages`\n     - `Send Messages in Threads`\n     - `Embed Links`\n     - `Attach Files`\n     - `Read Message History`\n2. Copy the generated **Invite URL** at the bottom of the page, paste it into your browser, select your Discord server, and click **Authorize**.\n\n#### Step 3: Copy Your Discord Channel ID\n1. In Discord, enable **Developer Mode** (User Settings > Advanced > Developer Mode: ON).\n2. Right-click the channel you want the bot to use (e.g. `#tabletop-rolls` or `#game-chat`) and select **Copy Channel ID**.\n\n#### Step 4: Configure the Bot\n1. In the extracted `discord_bot/` folder, make a copy of `.env.example` and rename it to `.env`:\n   ```bash\n   cp .env.example .env\n   ```\n2. Open `.env` (or `config.json`) in any text editor and fill in your values:\n   ```env\n   # Your Discord Bot Token from Step 1\n   DISCORD_TOKEN=your_bot_token_here\n\n   # Target Channel ID from Step 3\n   CHANNEL_ID=123456789012345678\n\n   # (Optional) Separate channels for rolls and chat:\n   # ROLLS_CHANNEL_ID=\n   # CHAT_CHANNEL_ID=\n\n   # Local bridge port (default: 18820)\n   BRIDGE_PORT=18820\n\n   # Command prefix (default: !mm)\n   PREFIX=!mm\n   ```\n\n#### Step 5: Launch the Bot\n- **Windows**: Simply double-click **`start_bot.bat`**.\n  - The script automatically verifies Node.js, installs dependencies (`npm install`) on first run, checks `.env`, and starts the bot!\n- **macOS / Linux**: Open a terminal in the `discord_bot/` folder and run:\n  ```bash\n  chmod +x start_bot.sh\n  ./start_bot.sh\n  ```\n  *(Or manually: `npm install && npm start`)*\n\nWhen the bot starts successfully, you will see:\n```text\n======================================================================\n [MM2E Bot] Logged in as MM2E Tabletop Relay#1234\n [MM2E Bot] Monitoring channel: 123456789012345678\n [MM2E Bot] Local Bridge Server: http://localhost:18820 / ws://localhost:18820\n======================================================================\n```\n\n#### Step 6: Connect MM2CG to the Bot\n1. Open MM2CG in your browser (whether running on GitHub Pages or locally).\n2. Go to the **Session** tab and click **🏰 Campaigns** (or click **🤖 Discord Bot & Two-Way Setup...** in the Main menu).\n3. Switch to the **🤖 Two-Way Discord Bot** tab.\n4. The status badge will automatically display:\n   - **`🟢 Online (@BotName)`**\n5. Click **💬 Ping Discord** to verify live message transmission!\n\n---\n\n### 📋 Discord Bot Command Reference\n\nPlayers and GMs can use the following commands in the configured Discord channel:\n\n| Command | Arguments | Description | Example |\n| :--- | :--- | :--- | :--- |\n| `!mm roll <formula> [label]` | Formula & check name | Rolls dice with breakdown, modifier math, critical alerts, and broadcasts into both Discord and the Hero Builder session feed. | `!mm roll 1d20+8 Toughness Check` |\n| `!mm roll <formula>` | Formula | Rolls standard dice notation (`1d20+5`, `2d6+4`, `d100`). | `!mm roll 1d20+12 Attack Check` |\n| `!mm chat <message>` | Text message | Relays a message from Discord into the Hero Builder session feed and campaign log. | `!mm chat The hero leaps through the shattered window!` |\n| `!mm status` | None | Displays current campaign name, session number, GM name, and party health overview in Discord. | `!mm status` |\n| `!mm hp` | None | Lists remaining Hero Points for all active characters in the campaign. | `!mm hp` |\n| `!mm help` | None | Displays the bot command guide and usage examples in Discord. | `!mm help` |\n\n---\n\n## 🪟 Pop-Up & Pop-Out Windows Detailed Guide\n\n> **Remember:** Opening any of these windows—or detaching them to a second monitor with `↗ Pop Out`—**does not disrupt, reset, or switch your active tab** in the character editor!\n\n### ⏱ Status & Combat Tracker\n- **Damage & Wound Tracking**:\n  - Increment Bruise and Injury counters.\n  - Automatically computes the cumulative -1 penalty to subsequent Toughness saves.\n- **Conditions Manager**:\n  - One-click toggles for standard 2E conditions: *Bruised*, *Injured*, *Dazed*, *Staggered*, *Disabled*, *Unconscious*, *Dying*, *Entangled*, *Exhausted*, *Fatigued*, *Helpless*, *Prone*, *Stunned*.\n- **Fade Counter**:\n  - Manage rounds remaining for sustained powers, Boost effects, and fading traits.\n- **Integrated Combat Roller**:\n  - Quick-roll Toughness saves against incoming damage DCs with automatic failure grade calculation (Pass, Bruised, Staggered, Unconscious).\n- **Pop-Out Support**: Click `↗ Pop Out` to park your combat status on an auxiliary screen.\n\n### 📊 Reference Tables & Benchmarks\n- **Measurements Table**:\n  - Complete 2E progression table mapping ranks (-5 to 30+) to exact values for **Time**, **Distance**, **Mass / Weight**, **Volume**, and **Carrying Capacity**.\n- **Difficulty Classes (DCs) Guide**:\n  - Standard benchmarks for skill checks: Routine (DC 10), Moderate (DC 15), Hard (DC 20), Superhuman (DC 30), and Cosmic (DC 40+).\n- **Combat Maneuvers Cheat Sheet**:\n  - Immediate rules lookup for All-Out Attack, Power Attack, Accurate Attack, Defensive Attack, Charge, Flanking, Grappling, Feint, Trip, Disarm, Cover, and Concealment.\n- **Pop-Out Support**: Click `↗ Pop Out` for a permanent rules reference window at your game table.\n\n### 👑 GM Campaign Hub\n- **Active Campaign Selector & Deletion Controls**:\n  - Switch active campaigns directly from the GM Hub header dropdown with instant synchronization across docked tabs, detached pop-outs, session monitors, and network peers.\n  - Dedicated `🗑 Delete Campaign` button with explicit confirmation modal safeguard prevents accidental campaign loss while cleanly managing multi-campaign rosters.\n- **Campaign Description & Setting Notes**:\n  - Dedicated description and setting synopsis field for each campaign with auto-save and manual save controls, viewable and editable across both docked and detached pop-out GM dashboards.\n- **Campaign Characters & Party Roster Controls**:\n  - Quickly manage party composition with dedicated `+ Add to Party` and `🚫 Remove from Party` actions for both the GM's active hero and submitted player characters.\n  - Responsive character card grids and enlarged controls guarantee labels remain crystal-clear and never clip or overflow across all display resolutions and font scales.\n- **Campaign Timeline & Session Notes**:\n  - Chronicle game sessions, track in-game dates, and record key plot milestones.\n- **NPC Roster & Quick Switcher**:\n  - Attach full NPC villain and ally sheets directly to your campaign file.\n  - Switch between viewing/editing NPCs and your player character without overwriting either file.\n- **Encounter Combat Roster**:\n  - Track initiative order, player/NPC wounds, and active conditions across entire combat scenes.\n- **Save Points & Instant Rollback**:\n  - Create full campaign state snapshots and roll back to previous save points at any time.\n- **Pop-Out Support**: Click `↗ Pop Out` to run your entire game from a dedicated GM dashboard.\n\n### 🛡️ Party Display Pop-Out\n- **Dedicated HUD**:\n  - Displays a clean, high-contrast dashboard of all player heroes, their Toughness, Defense, conditions, and wounds.\n  - Perfect for projecting on a TV screen or positioning on a secondary GM monitor.\n\n### ⚡ Power Points Breakdown Modal\n- **Transparent Audit**:\n  - Breaks down your character's total budget into Abilities, Combat, Saves, Skills, Feats, and Powers.\n  - Highlights trade-offs and flags any over-budget discrepancies.\n\n### 🗑️ Character & Form Deletion Confirmation Modal\n- **Accidental Deletion Protection**:\n  - Displays the exact target type (Primary Hero, Alternate Form, Mecha, Sidekick, Minion, Summon, Duplicate, Campaign NPC, or Campaign Character) and name.\n  - Explains the specific consequences of deletion (e.g., clearing the active sheet, resetting to a fresh hero, discarding companion forms, or unlinking from campaign roster).\n  - Requires explicit confirmation via a prominent `🗑 Yes, Delete` action before any changes are committed.\n\n### 🔄 Application Update Check Modal\n- **Real-Time Remote Build Detection**:\n  - Live query to GitHub Pages to check for newly published versions.\n  - Displays current running version vs. latest available version.\n  - One-click `🔄 Reload & Update` button automatically flushes browser caches and unregisters Service Workers to load the latest build immediately.\n\n### 🏰 Campaign Hub & Synced Logs Modal\n- **Campaign Archive & Log Viewer**:\n  - View all campaigns you have created or joined, including active status, GM handle, and session counts.\n  - Browse complete session logs with timestamps, roll formulas, and dialogue entries.\n  - Real-time text search and filter across campaign logs.\n  - Download complete logs to formatted `.txt` files with one click.\n  - Configure per-campaign Dice Rolls and Session Chat webhooks.\n\n### ❓ Help & User Guide Modal\n- **Comprehensive Offline Manual**:\n  - Full tab-by-tab documentation of every editor control, house rule, and tabletop feature.\n  - **Live Search Bar**: Search topics in real time with keyword highlighting (`<mark>`) and `Enter`/`Shift+Enter` result cycling.\n  - Accessible at any time via `❓ Help` without disrupting your active character sheet.\n\n### 📋 Hero Lab Import Audit Report\n- **Portfolio Reconciliation**:\n  - When importing a Hero Lab `.por` file, this audit dialog automatically generates a line-by-line report detailing converted traits, recognized modifiers, and any proprietary Hero Lab tags flagged for user review.\n\n### 🖨️ Print & PDF Preview Modal\n- **WYSIWYG Sheet Preview**:\n  - Full preview of your printable character sheet with responsive column formatting.\n  - Checkbox controls to toggle Background, Inventions, Equipment, or Full Power Descriptors.\n  - One-click trigger for system print dialog or Save to PDF (`Ctrl + P`).\n\n---\n\n## 🚀 Getting Started & Local Offline Use\n\n### Run in Any Modern Web Browser\nVisit the live hosted web app: [https://captainload.github.io/mm2e-character-editor/](https://captainload.github.io/mm2e-character-editor/)\n\n### Run Locally (100% Offline & Private)\nThe application is built with standard HTML5, Vanilla JavaScript, and modern CSS—**zero Node.js dependencies, zero build steps, and zero internet connection required**:\n1. Clone or download the repository:\n   ```bash\n   git clone https://github.com/captainload/mm2e-character-editor.git\n   ```\n2. Double-click `Launch Hero Builder.bat` on Windows, or simply open `index.html` in Chrome, Edge, Firefox, or Safari.\n\n---\n\n## 📄 License & Disclaimer\n\nThis is an unofficial, fan-made open source utility created for personal and tabletop gaming use. *Mutants & Masterminds*, the *Mutants & Masterminds* logo, and Green Ronin are trademarks or registered trademarks of Green Ronin Publishing, LLC. All original mechanics and game systems are copyright Green Ronin Publishing.\n";
 function renderReadmeMarkdown(md) {
   if (!md) return '';
   const lines = md.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
@@ -21935,7 +22382,7 @@ function setupAboutModalSearch() {
 }
 window.setupAboutModalSearch = setupAboutModalSearch;
 
-window.openAboutModal = async function() {
+window.openAboutModal = async function(initialSearch = '') {
   const modal = document.getElementById("aboutModal");
   if (!modal) return;
   const bodyEl = document.getElementById("aboutModalBody");
@@ -21948,7 +22395,13 @@ window.openAboutModal = async function() {
 
   const searchInput = document.getElementById("txtAboutSearch");
   if (searchInput) {
-    setTimeout(() => searchInput.focus(), 50);
+    if (initialSearch) {
+      searchInput.value = initialSearch;
+      setTimeout(() => {
+        searchInput.dispatchEvent(new Event('input'));
+      }, 60);
+    }
+    setTimeout(() => searchInput.focus(), 60);
   }
 
   // Only attempt live fetch when running over HTTP / HTTPS (prevents browser CORS errors on file:/// protocol)
@@ -21960,6 +22413,9 @@ window.openAboutModal = async function() {
         if (freshText && freshText.trim() && bodyEl) {
           bodyEl.innerHTML = renderReadmeMarkdown(freshText);
           bodyEl._originalHtml = bodyEl.innerHTML;
+          if (initialSearch && searchInput) {
+            searchInput.dispatchEvent(new Event('input'));
+          }
         }
       }
     } catch (err) {

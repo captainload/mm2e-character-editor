@@ -8,6 +8,8 @@ Desktop.ini
 scratch/
 refactor.js
 backup.js
+sync_readme.js
+verify_discord_bot.js
 
 # Local Backups & Alternate Editions
 _backups/
@@ -15,6 +17,7 @@ backup_*/
 M&M4E files/
 Nightengale_extracted/
 *.zip
+!downloads/*.zip
 
 # Copyrighted Rulebook PDFs & Reference Dumps
 *.pdf
@@ -27,8 +30,9 @@ parsed_effects_raw.json
 
 # Node & Extraction Tools
 node_modules/
-package.json
-package-lock.json
+/package.json
+/package-lock.json
+!discord_bot/package.json
 extract_*.js
 update_descriptions.js
 

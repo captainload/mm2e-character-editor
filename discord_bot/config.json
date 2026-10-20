@@ -1,0 +1,10 @@
+{
+  "token": "",
+  "channelId": "",
+  "rollsChannelId": "",
+  "chatChannelId": "",
+  "bridgePort": 18820,
+  "campaignCode": "",
+  "prefix": "!mm ",
+  "allowAllChannels": false
+}

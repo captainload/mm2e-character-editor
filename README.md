@@ -337,6 +337,142 @@ Each campaign can configure **TWO separate webhooks**:
 
 ---
 
+## 🤖 Two-Way Discord Bot Relay (Bidirectional Sync)
+
+While webhooks are ideal for simple outbound broadcasts, **true two-way communication** between Discord and your Hero Builder tabletop session requires a dedicated Discord Bot. 
+
+MM2CG includes a **standalone, lightweight Node.js Discord Bot Relay** (`discord_bot/` or downloadable as `mm2e-discord-bot.zip`) that establishes real-time bi-directional synchronization between your Discord server channels and your live Hero Builder session.
+
+```
++------------------------------------+          +--------------------------------------+
+|     M&M 2E Hero Builder VTT        |  HTTP/WS |      MM2E Discord Bot Relay          |
+|  (Browser / GitHub Pages / Local)  |<-------->|       (Local Bridge :18820)          |
++------------------------------------+  :18820  +--------------------------------------+
+                                                                   ^
+                                                                   | Discord Gateway
+                                                                   v
+                                                        +----------------------+
+                                                        |   Discord Server     |
+                                                        |   Text Channels      |
+                                                        +----------------------+
+```
+
+### 🌟 Key Capabilities
+- **Bidirectional Chat**: Chat messages posted in your Discord channel instantly appear in the live Hero Builder session feed and campaign log with a `[🤖 Discord]` badge. Chat sent in Hero Builder is automatically relayed to Discord with character and player attribution.
+- **Discord Dice Roller**: Players on Discord can roll dice directly into the channel and session feed using `!mm roll 1d20+8 [Check Label]` (supports modifiers, natural 20 critical detection, and natural 1 alerts).
+- **Party Status Queries**: Check the current campaign roster, active session number, and GM info anytime from Discord using `!mm status`.
+- **Hero Points Tracking**: Query active Hero Points for all accepted characters in Discord using `!mm hp`.
+- **Whisper & Silent Roll Protection**: Private whispers (`/w`, `/whisper`) and GM silent rolls are strictly excluded from Discord relays.
+- **Zero Echo Loops**: Inbound and outbound messages carry source identifiers and unique IDs to guarantee zero feedback loops.
+
+---
+
+### 📥 Obtaining the Bot
+
+You can obtain the Discord Bot in two convenient ways:
+1. **One-Click Download**: Click the **"📥 Download Bot Package (.zip)"** button directly inside MM2CG under **🏰 Campaigns > 🤖 Two-Way Discord Bot** (or download `downloads/mm2e-discord-bot.zip` from the project repository).
+2. **Local Folder**: If you cloned or downloaded the repository, the bot is already waiting in the `discord_bot/` directory.
+
+---
+
+### 🚀 Step-by-Step Installation & Setup
+
+#### Prerequisites
+- **Node.js** (v16.14.0 or higher recommended). Download from [nodejs.org](https://nodejs.org/).
+
+#### Step 1: Create Your Bot in the Discord Developer Portal
+1. Navigate to the [Discord Developer Portal](https://discord.com/developers/applications) and sign in.
+2. Click **New Application** in the top right. Give it a name (e.g., `MM2E Tabletop Relay`) and click **Create**.
+3. In the left sidebar, click **Bot**:
+   - Click **Add Bot** (or click **Reset Token** to generate a token).
+   - **Copy your Bot Token** and keep it private! You will paste this into `.env`.
+   - Scroll down to **Privileged Gateway Intents** and enable **Message Content Intent** (required for the bot to read `!mm` commands and chat).
+   - Click **Save Changes**.
+
+#### Step 2: Invite the Bot to Your Discord Server
+1. In the left sidebar, click **OAuth2** > **URL Generator**:
+   - Under **Scopes**, check **`bot`**.
+   - Under **Bot Permissions**, check:
+     - `Read Messages / View Channels`
+     - `Send Messages`
+     - `Send Messages in Threads`
+     - `Embed Links`
+     - `Attach Files`
+     - `Read Message History`
+2. Copy the generated **Invite URL** at the bottom of the page, paste it into your browser, select your Discord server, and click **Authorize**.
+
+#### Step 3: Copy Your Discord Channel ID
+1. In Discord, enable **Developer Mode** (User Settings > Advanced > Developer Mode: ON).
+2. Right-click the channel you want the bot to use (e.g. `#tabletop-rolls` or `#game-chat`) and select **Copy Channel ID**.
+
+#### Step 4: Configure the Bot
+1. In the extracted `discord_bot/` folder, make a copy of `.env.example` and rename it to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Open `.env` (or `config.json`) in any text editor and fill in your values:
+   ```env
+   # Your Discord Bot Token from Step 1
+   DISCORD_TOKEN=your_bot_token_here
+
+   # Target Channel ID from Step 3
+   CHANNEL_ID=123456789012345678
+
+   # (Optional) Separate channels for rolls and chat:
+   # ROLLS_CHANNEL_ID=
+   # CHAT_CHANNEL_ID=
+
+   # Local bridge port (default: 18820)
+   BRIDGE_PORT=18820
+
+   # Command prefix (default: !mm)
+   PREFIX=!mm
+   ```
+
+#### Step 5: Launch the Bot
+- **Windows**: Simply double-click **`start_bot.bat`**.
+  - The script automatically verifies Node.js, installs dependencies (`npm install`) on first run, checks `.env`, and starts the bot!
+- **macOS / Linux**: Open a terminal in the `discord_bot/` folder and run:
+  ```bash
+  chmod +x start_bot.sh
+  ./start_bot.sh
+  ```
+  *(Or manually: `npm install && npm start`)*
+
+When the bot starts successfully, you will see:
+```text
+======================================================================
+ [MM2E Bot] Logged in as MM2E Tabletop Relay#1234
+ [MM2E Bot] Monitoring channel: 123456789012345678
+ [MM2E Bot] Local Bridge Server: http://localhost:18820 / ws://localhost:18820
+======================================================================
+```
+
+#### Step 6: Connect MM2CG to the Bot
+1. Open MM2CG in your browser (whether running on GitHub Pages or locally).
+2. Go to the **Session** tab and click **🏰 Campaigns** (or click **🤖 Discord Bot & Two-Way Setup...** in the Main menu).
+3. Switch to the **🤖 Two-Way Discord Bot** tab.
+4. The status badge will automatically display:
+   - **`🟢 Online (@BotName)`**
+5. Click **💬 Ping Discord** to verify live message transmission!
+
+---
+
+### 📋 Discord Bot Command Reference
+
+Players and GMs can use the following commands in the configured Discord channel:
+
+| Command | Arguments | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `!mm roll <formula> [label]` | Formula & check name | Rolls dice with breakdown, modifier math, critical alerts, and broadcasts into both Discord and the Hero Builder session feed. | `!mm roll 1d20+8 Toughness Check` |
+| `!mm roll <formula>` | Formula | Rolls standard dice notation (`1d20+5`, `2d6+4`, `d100`). | `!mm roll 1d20+12 Attack Check` |
+| `!mm chat <message>` | Text message | Relays a message from Discord into the Hero Builder session feed and campaign log. | `!mm chat The hero leaps through the shattered window!` |
+| `!mm status` | None | Displays current campaign name, session number, GM name, and party health overview in Discord. | `!mm status` |
+| `!mm hp` | None | Lists remaining Hero Points for all active characters in the campaign. | `!mm hp` |
+| `!mm help` | None | Displays the bot command guide and usage examples in Discord. | `!mm help` |
+
+---
+
 ## 🪟 Pop-Up & Pop-Out Windows Detailed Guide
 
 > **Remember:** Opening any of these windows—or detaching them to a second monitor with `↗ Pop Out`—**does not disrupt, reset, or switch your active tab** in the character editor!

@@ -1,0 +1,26 @@
+{
+  "name": "mm2e-discord-bot",
+  "version": "1.0.0",
+  "description": "Two-Way Discord Relay Bot for Mutants & Masterminds 2E Hero Builder & VTT",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "keywords": [
+    "mutants-and-masterminds",
+    "discord-bot",
+    "vtt",
+    "tabletop-rpg",
+    "dice-roller"
+  ],
+  "author": "Mutants & Masterminds 2E Hero Builder Community",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=16.9.0"
+  }
+}

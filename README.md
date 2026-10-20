@@ -71,6 +71,7 @@ Clicking `⚙ Options` in the top header opens the preferences and house rules c
 - **Sticky Header**: Keep the top status bar pinned while scrolling long sheets, or toggle off for maximum vertical space on small displays.
 - **Font Size Scaling**: Live slider to scale overall application typography across headers, body, fine print, controls, sub-controls, and badges.
 - **Freeze Options Dialog Size**: Keeps the options dropdown at a readable standard size while testing typography sliders.
+- **Widened & Centered Options Pop-Up**: The Options dialog spans 75% of browser width (`75vw`) and is centered horizontally on the screen, with options organized into balanced responsive cards and sub-grids to significantly reduce vertical scrolling.
 
 ### Workspace, Storage & Integrations
 - **Custom Save/Load Folder**: Utilizing the Chromium File System Access API, you can bind a default local folder on your computer for instantaneous one-click saving and loading without standard browser download prompts.
@@ -89,6 +90,7 @@ Clicking `📁 Main ▾` in the top header reveals file, print, and administrati
 - **💾 Save / Save As...**: Saves the current character file with all powers, devices, complications, and companion sheets bundled into a clean, portable `.mm2e` JSON file.
 - **🖨️ Print & PDF Preview...**: Opens the WYSIWYG Print Preview modal with custom toggles to hide or display specific sections, format printer-friendly tables, and produce clean multi-page PDFs (`Ctrl + P`).
 - **👤 Users & Whitelist...**: Configure peer-to-peer VTT permissions, host tokens, player handles, and authorized character IDs for multi-user sessions.
+- **🔄 Check for Updates...**: Queries GitHub Pages in real time to detect new builds. If a newer version is deployed, the update modal displays the current build, latest build, and a one-click `🔄 Reload & Update` button that flushes browser caches and loads the fresh build immediately.
 - **❓ Help & User Guide...**: Opens this complete user guide.
 
 ---
@@ -387,6 +389,12 @@ Each campaign can configure **TWO separate webhooks**:
   - Displays the exact target type (Primary Hero, Alternate Form, Mecha, Sidekick, Minion, Summon, Duplicate, Campaign NPC, or Campaign Character) and name.
   - Explains the specific consequences of deletion (e.g., clearing the active sheet, resetting to a fresh hero, discarding companion forms, or unlinking from campaign roster).
   - Requires explicit confirmation via a prominent `🗑 Yes, Delete` action before any changes are committed.
+
+### 🔄 Application Update Check Modal
+- **Real-Time Remote Build Detection**:
+  - Live query to GitHub Pages to check for newly published versions.
+  - Displays current running version vs. latest available version.
+  - One-click `🔄 Reload & Update` button automatically flushes browser caches and unregisters Service Workers to load the latest build immediately.
 
 ### 🏰 Campaign Hub & Synced Logs Modal
 - **Campaign Archive & Log Viewer**:

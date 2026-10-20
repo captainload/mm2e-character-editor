@@ -85,7 +85,7 @@
         <span class="title-primary">Mutants &amp; Masterminds</span>
         <span class="title-secondary">
           2nd Ed. Hero Builder
-          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 127). Click to check for updates &amp; clear cache.">v1.73 (b127)</span>
+          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 128). Click to check for updates &amp; clear cache.">v1.73 (b128)</span>
         </span>
       </h1>
       
@@ -136,6 +136,10 @@
               <span class="file-menu-icon">👤</span><span class="file-menu-label">Users &amp; Whitelist...</span>
             </button>
             <div class="file-menu-divider"></div>
+            <button type="button" class="file-menu-item" id="btnMainCheckUpdates">
+              <span class="file-menu-icon">🔄</span><span class="file-menu-label">Check for Updates...</span>
+            </button>
+            <div class="file-menu-divider"></div>
             <button type="button" class="file-menu-item" id="btnAboutApp">
               <span class="file-menu-icon">❓</span><span class="file-menu-label">Help &amp; User Guide...</span>
             </button>
@@ -153,111 +157,116 @@
           <button type="button" class="btn btn-secondary" onclick="document.getElementById('optionsModal').classList.remove('show');" style="padding: 2px 8px; font-size: 13px; line-height: 1;" title="Close Options">✕</button>
         </div>
 
-        <!-- Section 1: Display & Interface Settings -->
-        <div class="options-card">
-          <h3>Display &amp; Interface Settings</h3>
-          
-          <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 8px;">
-            <!-- Filled dynamically by JS -->
-          </button>
+        <div class="options-cards-container">
+          <!-- Section 1: Display & Interface Settings -->
+          <div class="options-card">
+            <h3>Display &amp; Interface Settings</h3>
+            
+            <button class="btn btn-secondary" id="btnThemeToggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 8px;">
+              <!-- Filled dynamically by JS -->
+            </button>
 
-          <div style="margin-top: 4px; padding: 4px 0; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-            <label for="chkMenusOnLeft" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Places Main, Options, and Help buttons on the left side of the top bar (traditional UX placement)">
-              Menus on left (traditional UX):
-            </label>
-            <input type="checkbox" id="chkMenusOnLeft" style="cursor: pointer;">
-          </div>
-
-          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
-            <label for="togglePersistentHeader" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
-              Persistent Top Bar:
-            </label>
-            <input type="checkbox" id="togglePersistentHeader" style="cursor: pointer;" checked>
-          </div>
-
-          <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
-            <label for="toggleFixedOptionsDialog" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Keep Options dialog at standard default sizes so controls remain easily readable when adjusting sliders">
-              Freeze Options Dialog Size:
-            </label>
-            <input type="checkbox" id="toggleFixedOptionsDialog" style="cursor: pointer;" checked>
-          </div>
-
-          <!-- Section: Text & Typography -->
-          <div style="font-size: var(--font-size-secondary); font-weight: 700; color: var(--accent-primary); margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
-            Text &amp; Typography
-          </div>
-
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button type="button" class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
-                <label>Headers &amp; Titles:</label>
-              </div>
-              <span class="secondary-text" id="valLabelFont">16px</span>
+            <div style="margin-top: 4px; padding: 4px 0; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+              <label for="chkMenusOnLeft" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Places Main, Options, and Help buttons on the left side of the top bar (traditional UX placement)">
+                Menus on left (traditional UX):
+              </label>
+              <input type="checkbox" id="chkMenusOnLeft" style="cursor: pointer;">
             </div>
-            <input type="range" id="sliderLabelFont" min="14" max="22" value="16">
-          </div>
 
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button type="button" class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
-                <label>Body &amp; Trait Details:</label>
-              </div>
-              <span class="secondary-text" id="valSecondaryFont">14px</span>
+            <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+              <label for="togglePersistentHeader" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;">
+                Persistent Top Bar:
+              </label>
+              <input type="checkbox" id="togglePersistentHeader" style="cursor: pointer;" checked>
             </div>
-            <input type="range" id="sliderSecondaryFont" min="12" max="20" value="14">
-          </div>
 
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button type="button" class="btn btn-secondary" onclick="resetFont('FinePrint', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
-                <label>Fine Print &amp; Footnotes:</label>
-              </div>
-              <span class="secondary-text" id="valFinePrintFont">13px</span>
+            <div style="margin-top: 4px; padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+              <label for="toggleFixedOptionsDialog" style="font-size: var(--font-size-secondary); cursor: pointer; user-select: none;" title="Keep Options dialog at standard default sizes so controls remain easily readable when adjusting sliders">
+                Freeze Options Dialog Size:
+              </label>
+              <input type="checkbox" id="toggleFixedOptionsDialog" style="cursor: pointer;" checked>
             </div>
-            <input type="range" id="sliderFinePrintFont" min="11" max="18" value="13">
-          </div>
 
-          <!-- Section: Controls & Badges -->
-          <div style="font-size: var(--font-size-secondary); font-weight: 700; color: var(--accent-primary); margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
-            Controls &amp; Badges
-          </div>
-
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button type="button" class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
-                <label>Primary Buttons &amp; Inputs:</label>
-              </div>
-              <span class="secondary-text" id="valControlFont">14px</span>
+            <!-- Section: Text & Typography -->
+            <div style="font-size: var(--font-size-secondary); font-weight: 700; color: var(--accent-primary); margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+              Text &amp; Typography
             </div>
-            <input type="range" id="sliderControlFont" min="12" max="24" value="14">
-          </div>
 
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button type="button" class="btn btn-secondary" onclick="resetFont('MinorControl', 15)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
-                <label>Sub-Controls &amp; Dropdowns:</label>
+            <div class="options-font-controls-grid">
+              <div class="font-control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <button type="button" class="btn btn-secondary" onclick="resetFont('Label', 16)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                    <label>Headers &amp; Titles:</label>
+                  </div>
+                  <span class="secondary-text" id="valLabelFont">16px</span>
+                </div>
+                <input type="range" id="sliderLabelFont" min="14" max="22" value="16">
               </div>
-              <span class="secondary-text" id="valMinorControlFont">15px</span>
-            </div>
-            <input type="range" id="sliderMinorControlFont" min="11" max="20" value="15">
-          </div>
 
-          <div class="font-control-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <button type="button" class="btn btn-secondary" onclick="resetFont('Tags', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
-                <label>Tags, Badges &amp; Chips:</label>
+              <div class="font-control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <button type="button" class="btn btn-secondary" onclick="resetFont('Secondary', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                    <label>Body &amp; Trait Details:</label>
+                  </div>
+                  <span class="secondary-text" id="valSecondaryFont">14px</span>
+                </div>
+                <input type="range" id="sliderSecondaryFont" min="12" max="20" value="14">
               </div>
-              <span class="secondary-text" id="valTagFont">13px</span>
+
+              <div class="font-control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <button type="button" class="btn btn-secondary" onclick="resetFont('FinePrint', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                    <label>Fine Print &amp; Footnotes:</label>
+                  </div>
+                  <span class="secondary-text" id="valFinePrintFont">13px</span>
+                </div>
+                <input type="range" id="sliderFinePrintFont" min="11" max="18" value="13">
+              </div>
             </div>
-            <input type="range" id="sliderTagFont" min="11" max="20" value="13">
+
+            <!-- Section: Controls & Badges -->
+            <div style="font-size: var(--font-size-secondary); font-weight: 700; color: var(--accent-primary); margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+              Controls &amp; Badges
+            </div>
+
+            <div class="options-font-controls-grid">
+              <div class="font-control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <button type="button" class="btn btn-secondary" onclick="resetFont('Control', 14)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                    <label>Primary Buttons &amp; Inputs:</label>
+                  </div>
+                  <span class="secondary-text" id="valControlFont">14px</span>
+                </div>
+                <input type="range" id="sliderControlFont" min="12" max="24" value="14">
+              </div>
+
+              <div class="font-control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <button type="button" class="btn btn-secondary" onclick="resetFont('MinorControl', 15)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                    <label>Sub-Controls &amp; Dropdowns:</label>
+                  </div>
+                  <span class="secondary-text" id="valMinorControlFont">15px</span>
+                </div>
+                <input type="range" id="sliderMinorControlFont" min="11" max="20" value="15">
+              </div>
+
+              <div class="font-control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <button type="button" class="btn btn-secondary" onclick="resetFont('Tags', 13)" title="Restore Default" style="padding: 2px 6px; font-size: var(--font-size-minor-controls); margin-right: 6px;">⟲</button>
+                    <label>Tags, Badges &amp; Chips:</label>
+                  </div>
+                  <span class="secondary-text" id="valTagFont">13px</span>
+                </div>
+                <input type="range" id="sliderTagFont" min="11" max="20" value="13">
+              </div>
+            </div>
           </div>
-        </div>
 
         <!-- Section 2: House Rules -->
         <div class="options-card">
@@ -378,7 +387,7 @@
         <div class="options-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <h3 style="margin: 0;">🔄 Version &amp; Updates</h3>
-            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b127)</span>
+            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b128)</span>
           </div>
           <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
             If GitHub was recently updated and your browser is serving an older cached version, click below to unregister stale Service Workers, clear cache, and reload the latest build.
@@ -388,7 +397,8 @@
           </button>
         </div>
       </div>
-    </header>
+    </div>
+  </header>
 
     <!-- Power Point Totals Header -->
     <div class="summary-bar">
@@ -2593,6 +2603,24 @@
         <button type="button" class="btn btn-danger" id="btnExecuteDeleteConfirm" style="background: #ef4444; color: #ffffff; border: 1px solid #dc2626; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
           🗑 Yes, Delete
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Check for Updates Modal Overlay -->
+  <div class="modal-overlay" id="appUpdateModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 90%; max-width: 480px; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: var(--accent-primary);">
+          <span>🔄</span> Application Updates
+        </h3>
+        <button class="info-popup-close" onclick="document.getElementById('appUpdateModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" id="appUpdateModalBody" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; font-size: var(--font-size-secondary);">
+        <!-- Dynamically populated by JS -->
+      </div>
+      <div class="modal-footer" id="appUpdateModalFooter" style="padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <!-- Dynamically populated buttons -->
       </div>
     </div>
   </div>

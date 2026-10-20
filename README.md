@@ -363,6 +363,11 @@ Each campaign can configure **TWO separate webhooks**:
 - **Pop-Out Support**: Click `↗ Pop Out` for a permanent rules reference window at your game table.
 
 ### 👑 GM Campaign Hub
+- **Active Campaign Selector**:
+  - Switch active campaigns directly from the GM Hub header dropdown with instant synchronization across docked tabs, detached pop-outs, session monitors, and network peers.
+- **Campaign Characters & Party Roster Controls**:
+  - Quickly manage party composition with dedicated `+ Add to Party` and `🚫 Remove from Party` actions for both the GM's active hero and submitted player characters.
+  - Responsive character card grids and enlarged controls guarantee labels remain crystal-clear and never clip or overflow across all display resolutions and font scales.
 - **Campaign Timeline & Session Notes**:
   - Chronicle game sessions, track in-game dates, and record key plot milestones.
 - **NPC Roster & Quick Switcher**:

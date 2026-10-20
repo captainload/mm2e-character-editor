@@ -114,7 +114,7 @@
           <span class="secondary-text" style="font-size: var(--font-size-fine-print, 12px); color: var(--text-muted);">(Characters added to party auto-join the session)</span>
         </div>
       </div>
-      <div id="gmCampaignCharactersList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; padding: 2px;">
+      <div id="gmCampaignCharactersList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; padding: 2px;">
         <!-- Populated dynamically -->
       </div>
     </div>
@@ -123,7 +123,7 @@
     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
         <label style="font-weight: 600; font-size: var(--font-size-controls, 14px); color: var(--text-muted);">Campaign:</label>
-        <select id="selGMCampaigns" style="height: 30px; font-weight: bold; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; min-width: 180px;">
+        <select id="selGMCampaigns" onchange="window.handleGMCampaignSelectChange ? window.handleGMCampaignSelectChange(this.value) : (window.opener && window.opener.handleGMCampaignSelectChange && window.opener.handleGMCampaignSelectChange(this.value))" style="height: 30px; font-weight: bold; font-size: var(--font-size-controls, 14px); background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; min-width: 180px;">
           <!-- Populated dynamically -->
         </select>
         <button type="button" class="btn btn-secondary" id="btnGMNewCampaign" style="height: 30px; padding: 0 12px; font-size: var(--font-size-controls, 13px); font-weight: 600;">+ New Campaign</button>
@@ -443,6 +443,9 @@
         selCamps.innerHTML = camps.map(c => `
           <option value="${c.id}" ${activeCamp && activeCamp.id === c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
         `).join('');
+        if (activeCamp) {
+          selCamps.value = activeCamp.id;
+        }
       }
 
       if (!activeCamp) return;
@@ -536,10 +539,20 @@
       }
     }
 
+    function switchGMCampaign(campId) {
+      if (typeof CampaignManager !== 'undefined' && campId) {
+        CampaignManager.setActiveCampaign(campId);
+      }
+      callOpenerOrLocal('handleGMCampaignSelectChange', campId);
+      syncPopoutGMUI();
+    }
+    window.switchGMCampaign = switchGMCampaign;
+    window.handleGMCampaignSelectChange = switchGMCampaign;
+
     // Attach Event Listeners
     document.getElementById("btnGMRefreshPopout")?.addEventListener("click", syncPopoutGMUI);
     document.getElementById("selGMCampaigns")?.addEventListener("change", (e) => {
-      callOpenerOrLocal('switchGMCampaign', e.target.value);
+      switchGMCampaign(e.target.value);
     });
     document.getElementById("btnGMNewCampaign")?.addEventListener("click", () => {
       callOpenerOrLocal('promptCreateNewCampaign');

@@ -24,9 +24,12 @@ The complete, responsive, and non-disruptive character builder, rules reference,
 
 The top navigation header remains pinned at the top of the screen (or can scroll with the page if Sticky Header is toggled off in Options):
 
-- **Active Form / Companion Switcher**:
-  - Instantly switch the active workspace between your primary hero (`🦸 Main Hero`), alternate forms (`🔄 Metamorph / Alternate Forms`), vehicular units (`🤖 Mecha`), trusted allies (`🤝 Sidekicks`), and minion hordes (`👥 Minions`).
+- **Active Form & Character Switcher with Deletion Controls**:
+  - Instantly switch the active workspace between your primary hero (`🦸 Main Hero`), campaign NPCs, saved campaign heroes, alternate forms (`🔄 Metamorph / Alternate Forms`), vehicular units (`🤖 Mecha`), trusted allies (`🤝 Sidekicks`), summonable creatures, and minion hordes (`👥 Minions`).
   - Switching forms loads that entity's dedicated sheet while keeping all parent links intact.
+  - **Inline Delete Buttons (`🗑`)**: Every character, campaign NPC, saved roster hero, and attached alternate form features a dedicated inline `🗑` delete button directly inside the dropdown menu.
+  - **Active Form Banner Delete**: When editing any alternate form or companion, a prominent `🗑 Delete This Form` button appears in the persistent top banner.
+  - **Deletion Warning & Confirmation Safeguards**: Deleting any hero, NPC, or alternate form triggers a dedicated confirmation modal with color-coded badges, character names, and consequence warnings. No character or form is ever deleted accidentally without an explicit confirmation.
 - **Hero Name & Identity**: Quick-edit field for the active hero's codename or true identity.
 - **Power Level (PL) Badge & Cap Indicator**:
   - Displays current campaign Power Level (e.g., PL 10) and automatically enforces standard 2E trade-off limits: Attack + Damage <= 2 x PL, Defense + Toughness <= 2 x PL, and Save Caps.
@@ -197,6 +200,8 @@ The heart of the editor is a robust, modular power creation engine:
   - Configure summonable creatures and clones.
 - **Alternate Forms / Metamorph**:
   - Create radically different character sheets (e.g., Dr. Jekyll & Mr. Hyde, shapeshifters, alien transformations) that switch instantaneously.
+- **Form Management & Safe Deletion**:
+  - Each companion entry features controls to edit the sheet, export as a standalone `.mm2e` file, or delete. Deletion always prompts a confirmation modal to safeguard your build data.
 
 ---
 
@@ -376,6 +381,12 @@ Each campaign can configure **TWO separate webhooks**:
 - **Transparent Audit**:
   - Breaks down your character's total budget into Abilities, Combat, Saves, Skills, Feats, and Powers.
   - Highlights trade-offs and flags any over-budget discrepancies.
+
+### 🗑️ Character & Form Deletion Confirmation Modal
+- **Accidental Deletion Protection**:
+  - Displays the exact target type (Primary Hero, Alternate Form, Mecha, Sidekick, Minion, Summon, Duplicate, Campaign NPC, or Campaign Character) and name.
+  - Explains the specific consequences of deletion (e.g., clearing the active sheet, resetting to a fresh hero, discarding companion forms, or unlinking from campaign roster).
+  - Requires explicit confirmation via a prominent `🗑 Yes, Delete` action before any changes are committed.
 
 ### 🏰 Campaign Hub & Synced Logs Modal
 - **Campaign Archive & Log Viewer**:

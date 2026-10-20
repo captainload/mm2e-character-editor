@@ -85,7 +85,7 @@
         <span class="title-primary">Mutants &amp; Masterminds</span>
         <span class="title-secondary">
           2nd Ed. Hero Builder
-          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 126). Click to check for updates &amp; clear cache.">v1.73 (b126)</span>
+          <span class="app-version-badge" id="lblAppVersion" title="MM2CG Version v1.73 (Build 127). Click to check for updates &amp; clear cache.">v1.73 (b127)</span>
         </span>
       </h1>
       
@@ -378,7 +378,7 @@
         <div class="options-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <h3 style="margin: 0;">🔄 Version &amp; Updates</h3>
-            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b126)</span>
+            <span class="badge" style="font-size: 11px; padding: 2px 6px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.4); font-weight: 600;">v1.73 (b127)</span>
           </div>
           <div class="secondary-text" style="font-size: var(--font-size-fine-print); color: var(--text-muted); margin-bottom: 6px;">
             If GitHub was recently updated and your browser is serving an older cached version, click below to unregister stale Service Workers, clear cache, and reload the latest build.
@@ -394,19 +394,20 @@
     <div class="summary-bar">
       <div style="display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap;">
         <span style="font-weight: 600; white-space: nowrap;" id="lblContextRole">Character/Form:</span>
-        <select id="selActiveCharacterContext" style="height: 28px; font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 8px; cursor: pointer; box-sizing: border-box; flex: 1; min-width: 220px;" title="Switch Active Character / Form">
-          <option value="main">🦸 Main Hero: New Hero (PL 10)</option>
-          <optgroup label="➕ Add Character / Form">
-            <option value="__new_hero__">✨ + New Hero (Fresh Sheet)...</option>
-            <option value="__add_alt_form__">🔄 + New Alternate Form (Metamorph)...</option>
-            <option value="__add_mecha__">🤖 + New Mecha Form...</option>
-            <option value="__add_sidekick__">🤝 + New Sidekick...</option>
-            <option value="__add_companion__">👥 + New Companion (Minion / Summon)...</option>
-            <option value="__add_minion__">👥 + New Minion...</option>
-            <option value="__add_summon__">👥 + New Summoned Creature...</option>
-            <option value="__add_duplicate__">👥 + New Duplicate...</option>
-          </optgroup>
-        </select>
+        <!-- Custom Character & Form Dropdown with Inline Delete Buttons -->
+        <div class="char-dropdown-wrapper" id="charDropdownWrapper" style="position: relative; flex: 1; min-width: 220px;">
+          <button type="button" class="char-dropdown-trigger" id="btnCharDropdownTrigger" style="width: 100%; height: 28px; font-weight: bold; font-size: var(--font-size-controls); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 10px; cursor: pointer; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; text-align: left; gap: 8px;" title="Switch Active Character / Form">
+            <span id="lblCharDropdownActive" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">🦸 Main Hero: New Hero (PL 10)</span>
+            <span style="font-size: 10px; color: var(--text-muted); flex-shrink: 0;">▼</span>
+          </button>
+          
+          <div class="char-dropdown-menu" id="menuCharDropdown">
+            <!-- Rendered dynamically by updateCharacterSelectorUI() -->
+          </div>
+
+          <!-- Hidden fallback select for any external or script listeners -->
+          <select id="selActiveCharacterContext" style="display: none;"></select>
+        </div>
         <span id="lblHeroName" style="display: none;">New Hero</span>
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
           <span>| PL: <span class="badge" id="lblPL">10</span></span>
@@ -427,7 +428,10 @@
         <span id="lblCompanionBannerTitle">👥 Editing Sidekick: Sparrow</span>
         <span id="lblCompanionBannerBudget" class="badge" style="background: rgba(255,255,255,0.25); color: #fff; font-size: var(--font-size-tags);">0 / 50 PP</span>
       </div>
-      <button type="button" class="btn" id="btnReturnToPrimaryHero" style="background: #ffffff; color: #0284c7; font-weight: bold; border: none; padding: 3px 12px; cursor: pointer; border-radius: 4px;">⬅ Return to Main Hero</button>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button type="button" class="btn" id="btnDeleteActiveCompanion" style="background: rgba(239, 68, 68, 0.25); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.6); padding: 3px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Delete this alternate form or companion">🗑 Delete This Form</button>
+        <button type="button" class="btn" id="btnReturnToPrimaryHero" style="background: #ffffff; color: #0284c7; font-weight: bold; border: none; padding: 3px 12px; cursor: pointer; border-radius: 4px;">⬅ Return to Main Hero</button>
+      </div>
     </div>
 
     <!-- Primary Tabs -->
@@ -2553,6 +2557,42 @@
       <!-- Modal Footer -->
       <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); background: var(--bg-card);">
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('sessionCampaignsModal').classList.remove('active')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Character / Form Deletion Confirmation Modal -->
+  <div class="modal-overlay" id="characterDeleteConfirmModal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="info-popup-box" style="width: 90%; max-width: 480px; display: flex; flex-direction: column;">
+      <div class="info-popup-header" style="padding: 10px 16px; background: rgba(239, 68, 68, 0.12); border-bottom: 1px solid rgba(239, 68, 68, 0.3);">
+        <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: #ef4444;">
+          <span>⚠️</span> Confirm Deletion
+        </h3>
+        <button class="info-popup-close" onclick="document.getElementById('characterDeleteConfirmModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="info-popup-body" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; font-size: var(--font-size-secondary);">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <span id="lblDeleteConfirmBadge" class="badge" style="font-size: 11px; padding: 2px 8px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; font-weight: 700;">
+            Alternate Form
+          </span>
+          <strong id="lblDeleteConfirmName" style="font-size: 15px; color: var(--text-main); word-break: break-word;">
+            Fire Form
+          </strong>
+        </div>
+        <div id="lblDeleteConfirmWarningText" style="line-height: 1.5; color: var(--text-main);">
+          Are you sure you want to permanently delete this alternate form? All powers, abilities, and point budgets for this form will be lost.
+        </div>
+        <div style="background: rgba(245, 158, 11, 0.12); border-left: 3px solid #f59e0b; padding: 8px 12px; font-size: var(--font-size-fine-print); color: var(--text-muted); border-radius: 3px;">
+          ⚠️ <strong>Warning:</strong> This action cannot be undone.
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+        <button type="button" class="btn btn-secondary" id="btnCancelDeleteConfirm" onclick="document.getElementById('characterDeleteConfirmModal').classList.remove('active')">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="btnExecuteDeleteConfirm" style="background: #ef4444; color: #ffffff; border: 1px solid #dc2626; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+          🗑 Yes, Delete
+        </button>
       </div>
     </div>
   </div>
